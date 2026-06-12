@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Diamond">
+  <meta name="theme-color" content="#07090c">
+  <meta name="description" content="Diamond Protocol 12-Week Hypertrophy Tracker">
+  <title>Diamond Protocol</title>
+  <link id="apple-icon" rel="apple-touch-icon" href="">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+:root{--bg:#07090c;--sur:#0e1319;--crd:#141b22;--bdr:#1d2733;--acc:#c4ff00;--ag:rgba(196,255,0,.12);--ag2:rgba(196,255,0,.05);--ok:#00e87a;--warn:#ff8c00;--err:#ff4444;--inf:#4a9eff;--t:#dde5ee;--t2:#7b90a8;--t3:#3c4f62}
+#root{height:100%;overflow:hidden}
+.app{max-width:440px;margin:0 auto;height:100dvh;background:var(--bg);position:relative;overflow:hidden;display:flex;flex-direction:column}
+.screen{flex:1;overflow-y:auto;padding-bottom:72px;-webkit-overflow-scrolling:touch}
+.fullscreen{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.topbar{position:sticky;top:0;z-index:20;background:var(--bg);display:flex;align-items:center;justify-content:space-between;padding:env(safe-area-inset-top, 16px) 16px 12px;padding-top:calc(env(safe-area-inset-top, 0px) + 16px);border-bottom:1px solid var(--bdr);flex-shrink:0}
+.logo{font-size:11px;font-weight:800;letter-spacing:.35em;color:var(--acc);text-transform:uppercase}
+.top-badge{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--ag);border:1px solid var(--acc);color:var(--acc)}
+.phase-bar{margin:11px 15px;padding:12px 14px;border-radius:10px;border:1px solid var(--bdr);background:var(--sur);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.phase-bar.deload{border-color:rgba(255,140,0,.45);background:rgba(255,140,0,.04)}
+.phase-bar.peak{border-color:rgba(196,255,0,.45);background:var(--ag2)}
+.ph-name{font-size:13px;font-weight:700}
+.ph-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t2);margin-top:3px}
+.rir-val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--acc)}
+.wksel{display:flex;align-items:center;justify-content:center;gap:20px;padding:10px 16px 4px}
+.wkb{width:40px;height:40px;background:var(--crd);border:1px solid var(--bdr);color:var(--t);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;transition:all .15s;font-family:inherit;flex-shrink:0}
+.wkb:hover:not(:disabled){border-color:var(--acc);color:var(--acc)}
+.wkb:disabled{opacity:.18;cursor:not-allowed}
+.wknum{font-family:'JetBrains Mono',monospace;font-size:54px;font-weight:700;line-height:1;letter-spacing:-.03em;text-align:center}
+.wksub{font-size:9px;letter-spacing:.22em;color:var(--t3);margin-top:2px;text-align:center;text-transform:uppercase}
+.grid12{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;padding:6px 15px 3px}
+.wc{height:24px;border-radius:4px;background:var(--crd);border:1px solid var(--bdr);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
+.wc.cur{border-color:var(--acc);background:var(--ag2)}
+.wc.all{background:rgba(0,232,122,.12);border-color:rgba(0,232,122,.35)}
+.wc.part{background:rgba(196,255,0,.04);border-color:rgba(196,255,0,.2)}
+.wc.dl{border-color:rgba(255,140,0,.3)}
+.wc-n{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;color:var(--t3)}
+.wc.cur .wc-n{color:var(--acc)}
+.wc.all .wc-n{color:var(--ok)}
+.adv-banner{margin:0 15px 8px;padding:9px 13px;background:rgba(0,232,122,.05);border:1px solid rgba(0,232,122,.3);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0}
+.adv-txt{font-size:11px;color:var(--ok);flex:1}
+.adv-btn{font-family:'Syne',sans-serif;font-size:11px;font-weight:800;padding:5px 11px;background:var(--ok);color:#000;border:none;border-radius:6px;cursor:pointer;white-space:nowrap}
+.rec-sec{padding:7px 15px 10px;flex-shrink:0}
+.sec-lbl{font-size:9px;letter-spacing:.22em;color:var(--t3);margin-bottom:5px;text-transform:uppercase}
+.rec-row{display:flex;gap:6px}
+.rc{flex:1;padding:7px 4px;background:var(--crd);border:1px solid var(--bdr);border-radius:6px;color:var(--t2);font-size:10px;font-weight:700;cursor:pointer;text-align:center;transition:all .15s;font-family:'Syne',sans-serif}
+.rc.ok{border-color:var(--ok);color:var(--ok);background:rgba(0,232,122,.06)}
+.rc.nm{border-color:var(--acc);color:var(--acc);background:var(--ag)}
+.rc.bt{border-color:var(--warn);color:var(--warn);background:rgba(255,140,0,.06)}
+.info-banner{margin:0 15px 8px;padding:8px 12px;border-radius:8px;font-size:11px;display:flex;align-items:center;gap:7px;flex-shrink:0}
+.info-banner.warn{background:rgba(255,140,0,.05);border:1px solid rgba(255,140,0,.3);color:var(--warn)}
+.info-banner.err{background:rgba(255,68,68,.05);border:1px solid rgba(255,68,68,.3);color:var(--err)}
+.resume-box{margin:0 15px 10px;padding:11px 13px;background:rgba(74,158,255,.05);border:1px solid rgba(74,158,255,.3);border-radius:9px;flex-shrink:0}
+.rb-title{font-size:13px;font-weight:700;color:var(--inf);margin-bottom:3px}
+.rb-sub{font-size:11px;color:var(--t2);margin-bottom:8px}
+.rb-btns{display:flex;gap:8px}
+.rb-btn{flex:1;padding:8px;border-radius:7px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--bdr);transition:opacity .15s}
+.rb-btn.p{background:var(--inf);color:#000;border-color:var(--inf)}
+.rb-btn.g{background:none;color:var(--t2)}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 15px 16px}
+.sc{background:var(--crd);border:1px solid var(--bdr);border-radius:11px;padding:13px 12px;cursor:pointer;position:relative;overflow:hidden;transition:all .2s}
+.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--acc);opacity:0;transition:opacity .2s}
+.sc:hover::before,.sc:active::before{opacity:1}
+.sc.done{border-color:rgba(0,232,122,.3)}
+.sc.done::before{opacity:1;background:var(--ok)}
+.s-day{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--t3);letter-spacing:.08em;margin-bottom:4px;text-transform:uppercase}
+.s-nm{font-size:17px;font-weight:800;margin-bottom:2px;letter-spacing:-.01em}
+.s-foc{font-size:10px;color:var(--t2);line-height:1.4}
+.s-time{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--acc);margin-top:8px}
+.s-done{position:absolute;top:9px;right:9px;width:16px;height:16px;background:var(--ok);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#000}
+.back-btn{display:flex;align-items:center;gap:6px;padding:11px 15px 3px;border:none;background:none;color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;font-family:'Syne',sans-serif;transition:color .15s;flex-shrink:0}
+.s-hdr{padding:5px 15px 13px;border-bottom:1px solid var(--bdr);flex-shrink:0}
+.s-hdr-nm{font-size:25px;font-weight:800;letter-spacing:-.01em}
+.s-hdr-foc{font-size:13px;color:var(--t2);margin-top:2px}
+.s-hdr-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.mp{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--sur);border:1px solid var(--bdr);color:var(--t2);padding:3px 9px;border-radius:20px}
+.mp.acc{color:var(--acc);border-color:rgba(196,255,0,.35);background:var(--ag2)}
+.mp.warn{color:var(--warn);border-color:rgba(255,140,0,.35)}
+.int-ctrl{display:flex;align-items:center;justify-content:space-between;padding:8px 15px;border-bottom:1px solid var(--bdr);background:var(--sur);flex-shrink:0}
+.int-ctrl-lbl{font-size:11px;font-weight:700;color:var(--t2)}
+.int-count{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--acc)}
+.int-count.full{color:var(--ok)}
+.ex-list{padding:8px 15px}
+.ex-row{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--bdr)}
+.ex-row:last-child{border-bottom:none}
+.ex-n{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t3);min-width:20px;padding-top:1px}
+.ex-body{flex:1}
+.ex-nm{font-size:14px;font-weight:700;margin-bottom:4px}
+.ex-nm.opt{color:var(--t2)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 7px;border-radius:4px;background:var(--sur);border:1px solid var(--bdr);color:var(--t2)}
+.chip.rir{color:var(--acc);border-color:rgba(196,255,0,.3);background:var(--ag2)}
+.chip.avd{color:var(--err);border-color:rgba(255,68,68,.3);background:rgba(255,68,68,.05);margin-top:3px;display:inline-block}
+.chip.dl{color:var(--warn);border-color:rgba(255,140,0,.3)}
+.int-tog-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:5px}
+.int-tog-desc{font-size:10px;color:var(--t2);flex:1;line-height:1.4}
+.int-tog{font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 8px;border-radius:4px;border:1px solid rgba(196,255,0,.3);background:var(--ag2);color:var(--acc);cursor:pointer;transition:all .15s;white-space:nowrap;font-weight:700;letter-spacing:.06em}
+.int-tog.on{background:var(--acc);color:#000;border-color:var(--acc)}
+.int-tog:disabled{opacity:.3;cursor:not-allowed}
+.start-btn{display:block;margin:2px 15px 16px;width:calc(100% - 30px);padding:14px;background:var(--acc);color:#000;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border:none;border-radius:10px;cursor:pointer;transition:all .15s;flex-shrink:0}
+.prog-rec{margin:9px 15px 0;padding:9px 12px;border-radius:8px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:7px;flex-shrink:0}
+.prog-rec.inc{background:rgba(0,232,122,.07);border:1px solid rgba(0,232,122,.3);color:var(--ok)}
+.prog-rec.beat{background:var(--ag2);border:1px solid rgba(196,255,0,.25);color:var(--acc)}
+.prog-rec.keep{background:var(--sur);border:1px solid var(--bdr);color:var(--t2)}
+.prog-rec.first{background:rgba(74,158,255,.06);border:1px solid rgba(74,158,255,.25);color:var(--inf)}
+.wk-prog{height:2px;background:var(--bdr);flex-shrink:0}
+.wk-prog-fill{height:100%;background:var(--acc);transition:width .5s ease}
+.wk-top{display:flex;align-items:center;justify-content:space-between;padding:10px 15px;border-bottom:1px solid var(--bdr);background:var(--bg);flex-shrink:0}
+.wk-sn{font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--t2);text-transform:uppercase}
+.wk-cnt{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3)}
+.ex-card{margin:9px 15px;background:var(--crd);border:1px solid var(--bdr);border-radius:12px;overflow:hidden}
+.ec-hdr{padding:11px 13px 8px;border-bottom:1px solid var(--bdr)}
+.ec-nm{font-size:19px;font-weight:800;margin-bottom:5px;letter-spacing:-.01em}
+.ec-meta{display:flex;flex-wrap:wrap;gap:4px}
+.ec-cues{padding:7px 13px;border-bottom:1px solid var(--bdr);display:flex;flex-wrap:wrap;gap:4px}
+.cue{font-size:10px;color:var(--t2);background:var(--sur);padding:2px 8px;border-radius:20px}
+.int-box{margin:7px 13px;padding:8px 11px;background:var(--ag2);border:1px solid rgba(196,255,0,.2);border-radius:8px}
+.int-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:var(--acc);letter-spacing:.14em;margin-bottom:2px;text-transform:uppercase}
+.int-txt{font-size:12px;color:var(--t2)}
+.avd-box{margin:5px 13px;padding:6px 10px;background:rgba(255,68,68,.04);border:1px solid rgba(255,68,68,.2);border-radius:7px;font-size:11px;color:rgba(255,68,68,.85)}
+.set-trk{padding:9px 13px;border-bottom:1px solid var(--bdr)}
+.stl{font-size:9px;letter-spacing:.18em;color:var(--t3);margin-bottom:6px;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between}
+.dots{display:flex;gap:5px}
+.dot{flex:1;height:3px;border-radius:2px;background:var(--bdr);transition:all .25s}
+.dot.d{background:var(--ok)}
+.dot.c{background:var(--acc);box-shadow:0 0 5px var(--acc)}
+.logged-sets{padding:6px 13px;border-bottom:1px solid var(--bdr);display:flex;flex-wrap:wrap;gap:4px;min-height:32px}
+.ls-chip{font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 8px;background:var(--sur);border:1px solid var(--bdr);border-radius:5px;color:var(--t2);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px}
+.ls-chip.ed{border-color:var(--acc);background:var(--ag);color:var(--acc)}
+.ls-rir{font-size:8px;color:var(--t3)}
+.prev-sec{padding:6px 13px;border-bottom:1px solid var(--bdr)}
+.prev-lbl{font-size:9px;letter-spacing:.15em;color:var(--t3);margin-bottom:3px;text-transform:uppercase}
+.prev-item{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t2);display:flex;gap:5px;margin-bottom:2px;align-items:center}
+.prev-dt{color:var(--t3);min-width:55px;font-size:9px}
+.prev-prog{color:var(--acc);font-size:9px}
+.inp-sec{padding:10px 13px;border-bottom:1px solid var(--bdr)}
+.inp-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.inp-grp{display:flex;flex-direction:column;gap:4px}
+.inp-lbl{font-size:9px;letter-spacing:.2em;color:var(--t3);text-transform:uppercase}
+.nw{display:flex;align-items:center;background:var(--sur);border:1px solid var(--bdr);border-radius:8px;height:48px;overflow:hidden;transition:border-color .15s}
+.nw:focus-within{border-color:rgba(196,255,0,.4)}
+.nb{width:40px;height:100%;background:none;border:none;color:var(--t2);cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:color .15s;font-family:inherit}
+.nb:hover{color:var(--acc)}
+.ni{flex:1;background:none;border:none;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;text-align:center;outline:none;width:0;-moz-appearance:textfield}
+.ni::-webkit-outer-spin-button,.ni::-webkit-inner-spin-button{-webkit-appearance:none}
+.rir-grp{display:flex;flex-direction:column;gap:4px}
+.rir-row{display:flex;gap:4px}
+.rirb{flex:1;height:48px;background:var(--sur);border:1px solid var(--bdr);border-radius:8px;color:var(--t2);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.rirb:hover{border-color:var(--acc);color:var(--acc)}
+.rirb.on{background:var(--acc);color:#000;border-color:var(--acc)}
+.log-area{padding:0 13px 10px}
+.log-btn{display:block;width:100%;padding:13px;background:var(--acc);color:#000;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;border:none;border-radius:8px;cursor:pointer;transition:all .15s}
+.log-btn.upd{background:var(--inf)}
+.onerm-box{margin:6px 13px 0;padding:7px 11px;background:rgba(74,158,255,.05);border:1px solid rgba(74,158,255,.2);border-radius:7px;display:flex;align-items:center;justify-content:space-between}
+.orm-lbl{font-size:11px;color:var(--t2)}
+.orm-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--inf)}
+.wk-nav{display:flex;gap:8px;padding:0 15px 16px;flex-shrink:0}
+.wnb{flex:1;padding:11px;background:none;border:1px solid var(--bdr);color:var(--t2);font-family:'Syne',sans-serif;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;transition:all .15s}
+.wnb.fin{color:var(--err)}
+.timer-ov{position:fixed;inset:0;background:rgba(7,9,12,.97);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:300}
+.t-lbl{font-size:10px;letter-spacing:.3em;color:var(--t2);margin-bottom:18px;text-transform:uppercase}
+.t-ring{position:relative;width:200px;height:200px}
+.t-ring svg{transform:rotate(-90deg)}
+.t-track{fill:none;stroke:var(--bdr);stroke-width:10}
+.t-fill{fill:none;stroke:var(--acc);stroke-width:10;stroke-linecap:round;filter:drop-shadow(0 0 8px var(--acc));transition:stroke-dashoffset .08s linear}
+.t-ctr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.t-secs{font-family:'JetBrains Mono',monospace;font-size:54px;font-weight:700;line-height:1;letter-spacing:-.03em}
+.t-unit{font-size:9px;letter-spacing:.25em;color:var(--t2);margin-top:3px;text-transform:uppercase}
+.t-msg{margin-top:18px;font-size:12px;color:var(--t2);text-align:center}
+.t-skip{margin-top:16px;padding:11px 36px;background:var(--crd);border:1px solid var(--bdr);color:var(--t);font-family:'Syne',sans-serif;font-size:14px;font-weight:700;border-radius:8px;cursor:pointer;transition:all .15s;letter-spacing:.04em}
+.t-skip:hover{border-color:var(--acc);color:var(--acc)}
+.modal-ov{position:fixed;inset:0;background:rgba(7,9,12,.88);display:flex;align-items:center;justify-content:center;z-index:400;padding:20px}
+.modal{background:var(--crd);border:1px solid var(--bdr);border-radius:14px;padding:22px;width:100%;max-width:360px}
+.modal-title{font-size:18px;font-weight:800;margin-bottom:7px}
+.modal-sub{font-size:13px;color:var(--t2);margin-bottom:18px;line-height:1.5}
+.modal-btns{display:flex;gap:8px}
+.mbt{flex:1;padding:12px;border-radius:8px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--bdr);transition:opacity .15s}
+.mbt:hover{opacity:.85}
+.mbt.danger{background:rgba(255,68,68,.08);color:var(--err);border-color:rgba(255,68,68,.3)}
+.mbt.ghost{background:none;color:var(--t2)}
+.done-view{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100dvh;padding:30px 20px;text-align:center;overflow-y:auto}
+.done-icon{font-size:56px;margin-bottom:14px}
+.done-title{font-size:28px;font-weight:800;letter-spacing:-.01em;margin-bottom:4px}
+.done-sub{font-size:14px;color:var(--t2);margin-bottom:20px}
+.done-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:290px;margin-bottom:18px}
+.done-stat{background:var(--crd);border:1px solid var(--bdr);border-radius:10px;padding:12px;text-align:center}
+.dsv{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--acc)}
+.dsl{font-size:10px;color:var(--t2);margin-top:3px}
+.done-orms{width:100%;max-width:290px;margin-bottom:18px}
+.done-orms-lbl{font-size:9px;letter-spacing:.2em;color:var(--t3);margin-bottom:6px;text-transform:uppercase}
+.done-orm-row{display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:var(--crd);border:1px solid var(--bdr);border-radius:8px;margin-bottom:4px}
+.done-orm-nm{font-size:11px;font-weight:700}
+.done-orm-val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--inf)}
+.done-home{padding:13px 36px;background:var(--acc);color:#000;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border:none;border-radius:10px;cursor:pointer}
+.ex-sel-wrap{padding:11px 15px;border-bottom:1px solid var(--bdr);flex-shrink:0}
+.ex-sel-lbl{font-size:9px;letter-spacing:.2em;color:var(--t3);margin-bottom:5px;text-transform:uppercase}
+.ex-sel{width:100%;background:var(--crd);border:1px solid var(--bdr);color:var(--t);font-family:'Syne',sans-serif;font-size:13px;font-weight:600;padding:9px 12px;border-radius:8px;outline:none;appearance:none;-webkit-appearance:none;cursor:pointer}
+.chart-area{padding:12px 15px;border-bottom:1px solid var(--bdr)}
+.chart-lbl{font-size:10px;letter-spacing:.15em;color:var(--t2);margin-bottom:8px;text-transform:uppercase}
+.pstats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:10px 15px;border-bottom:1px solid var(--bdr)}
+.pst{background:var(--crd);border:1px solid var(--bdr);border-radius:9px;padding:10px;text-align:center}
+.pst-v{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;color:var(--acc)}
+.pst-l{font-size:9px;color:var(--t2);margin-top:2px}
+.prog-hist{padding:8px 15px}
+.ph-row{display:flex;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr)}
+.ph-row:last-child{border-bottom:none}
+.ph-dt{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:65px}
+.ph-sets{display:flex;flex-wrap:wrap;gap:4px}
+.ph-s{font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 6px;background:var(--sur);border:1px solid var(--bdr);border-radius:4px;color:var(--t2)}
+.no-data{padding:26px 20px;text-align:center;color:var(--t3);font-size:13px;line-height:1.7}
+.hist-list{padding:10px 15px}
+.h-item{background:var(--crd);border:1px solid var(--bdr);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.h-item:hover{border-color:#263545}
+.h-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);margin-bottom:3px}
+.h-nm{font-size:15px;font-weight:700;margin-bottom:2px}
+.h-det{font-size:11px;color:var(--t2)}
+.h-exp{margin-top:10px;padding-top:10px;border-top:1px solid var(--bdr)}
+.h-ex{margin-bottom:7px}
+.h-ex-nm{font-size:12px;font-weight:700;margin-bottom:3px}
+.h-sets{display:flex;flex-wrap:wrap;gap:4px}
+.h-set{font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 7px;background:var(--sur);border:1px solid var(--bdr);border-radius:4px;color:var(--t2)}
+.empty-msg{padding:40px 20px;text-align:center;color:var(--t3);font-size:13px;line-height:1.8}
+.tool-sec{padding:14px 15px;border-bottom:1px solid var(--bdr)}
+.tool-ttl{font-size:15px;font-weight:800;margin-bottom:2px}
+.tool-sub{font-size:11px;color:var(--t2);margin-bottom:11px}
+.tool-inp-row{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.tool-lbl{font-size:9px;letter-spacing:.12em;color:var(--t3);min-width:48px;text-transform:uppercase}
+.tool-nw{display:flex;align-items:center;background:var(--crd);border:1px solid var(--bdr);border-radius:7px;height:42px;overflow:hidden;flex:1}
+.tool-nb{width:36px;height:100%;background:none;border:none;color:var(--t2);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:color .15s;font-family:inherit}
+.tool-nb:hover{color:var(--acc)}
+.tool-ni{flex:1;background:none;border:none;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;text-align:center;outline:none;width:0;-moz-appearance:textfield}
+.tool-ni::-webkit-outer-spin-button,.tool-ni::-webkit-inner-spin-button{-webkit-appearance:none}
+.tool-result{margin-top:8px;padding:10px 12px;background:var(--sur);border:1px solid var(--bdr);border-radius:8px}
+.plate-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-family:'JetBrains Mono',monospace;font-size:12px}
+.plate-kg{color:var(--acc);font-weight:700;min-width:46px}
+.plate-dots{display:flex;gap:3px;flex-wrap:wrap}
+.pdot{width:10px;height:10px;background:var(--acc);border-radius:2px;opacity:.7}
+.wu-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bdr)}
+.wu-row:last-child{border-bottom:none}
+.wu-wt{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--acc)}
+.wu-reps{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--t2)}
+.wu-pct{font-size:10px;color:var(--t3)}
+.orm-big-wrap{text-align:center;padding:8px}
+.orm-big{font-family:'JetBrains Mono',monospace;font-size:50px;font-weight:700;color:var(--acc);line-height:1}
+.orm-unit{font-size:10px;color:var(--t2);margin-top:4px;letter-spacing:.12em;text-transform:uppercase}
+.data-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.data-btn{padding:11px;border-radius:8px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--bdr);transition:all .15s;text-align:center;background:var(--crd);color:var(--t2)}
+.data-btn:hover{border-color:var(--acc);color:var(--acc)}
+.data-btn.danger:hover{border-color:var(--err);color:var(--err)}
+.ver{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);text-align:center;padding:10px 0 4px}
+.bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:440px;background:var(--sur);border-top:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-around;z-index:100;padding-bottom:env(safe-area-inset-bottom,0);height:calc(64px + env(safe-area-inset-bottom,0))}
+.bn{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:7px 16px;border-radius:8px;transition:all .15s}
+.bn-ic{font-size:19px}
+.bn-lb{font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--t3);text-transform:uppercase;transition:color .15s}
+.bn.on .bn-lb{color:var(--acc)}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:2px}
+
+.whoop-panel{margin:0 15px 10px;background:var(--crd);border:1px solid var(--bdr);border-radius:10px;overflow:hidden;flex-shrink:0}
+.whoop-panel.gr{border-color:rgba(0,232,122,.45)}
+.whoop-panel.yw{border-color:rgba(196,255,0,.45)}
+.whoop-panel.rd{border-color:rgba(255,68,68,.45)}
+.whoop-hdr{display:flex;align-items:center;justify-content:space-between;padding:9px 13px 7px;border-bottom:1px solid var(--bdr)}
+.whoop-nm{font-size:10px;font-weight:800;letter-spacing:.2em;color:var(--t2);text-transform:uppercase}
+.whoop-sync{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3)}
+.whoop-body{display:flex;align-items:center;padding:11px 13px;gap:14px}
+.wr-block{min-width:60px;text-align:center}
+.wr-score{font-family:'JetBrains Mono',monospace;font-size:40px;font-weight:700;line-height:1}
+.wr-score.gr{color:var(--ok)}
+.wr-score.yw{color:var(--acc)}
+.wr-score.rd{color:var(--err)}
+.wr-lbl{font-size:9px;letter-spacing:.15em;color:var(--t2);margin-top:2px;text-transform:uppercase}
+.whoop-stats{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.wst{background:var(--sur);border-radius:7px;padding:7px 5px;text-align:center}
+.wst-v{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--t)}
+.wst-l{font-size:8px;color:var(--t2);margin-top:2px;letter-spacing:.04em;text-transform:uppercase}
+.whoop-nodata{padding:11px 13px;font-size:11px;color:var(--t2)}
+.whoop-loading{padding:14px 13px;text-align:center;font-size:11px;color:var(--t3)}
+.connect-whoop{display:block;margin:0 15px 10px;padding:11px 13px;background:var(--sur);border:1px solid var(--bdr);border-radius:9px;color:var(--t2);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all .15s;flex-shrink:0}
+.connect-whoop:hover{border-color:var(--acc);color:var(--acc)}
+.connect-whoop b{color:var(--acc)}
+.whoop-auto-badge{font-size:9px;padding:2px 7px;border-radius:20px;font-family:'JetBrains Mono',monospace;font-weight:700;letter-spacing:.05em}
+.whoop-auto-badge.gr{background:rgba(0,232,122,.1);color:var(--ok);border:1px solid rgba(0,232,122,.3)}
+.whoop-auto-badge.yw{background:var(--ag);color:var(--acc);border:1px solid rgba(196,255,0,.3)}
+.whoop-auto-badge.rd{background:rgba(255,68,68,.08);color:var(--err);border:1px solid rgba(255,68,68,.3)}
+
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r) {
+    const rd=Array.isArray(r)?r:[r,r,r,r];
+    this.beginPath();
+    this.moveTo(x+rd[0],y); this.lineTo(x+w-rd[1],y);
+    this.arcTo(x+w,y,x+w,y+rd[1],rd[1]); this.lineTo(x+w,y+h-rd[2]);
+    this.arcTo(x+w,y+h,x+w-rd[2],y+h,rd[2]); this.lineTo(x+rd[3],y+h);
+    this.arcTo(x,y+h,x,y+h-rd[3],rd[3]); this.lineTo(x,y+rd[0]);
+    this.arcTo(x,y,x+rd[0],y,rd[0]); this.closePath(); return this;
+  };
+}
+const ic=document.createElement('canvas'); ic.width=ic.height=512;
+const cx=ic.getContext('2d');
+cx.fillStyle='#07090c'; cx.roundRect(0,0,512,512,80); cx.fill();
+cx.fillStyle='#c4ff00'; cx.roundRect(0,0,512,10,[80,80,0,0]); cx.fill();
+cx.fillStyle='#c4ff00'; cx.font='bold 300px system-ui,sans-serif';
+cx.textAlign='center'; cx.textBaseline='middle'; cx.fillText('\u26a1',256,265);
+const iurl=ic.toDataURL('image/png');
+document.getElementById('apple-icon').href=iurl;
+const mf={name:"Diamond Protocol",short_name:"Diamond",description:"12-Week Hypertrophy Tracker",start_url:".",display:"standalone",background_color:"#07090c",theme_color:"#07090c",orientation:"portrait-primary",icons:[{src:iurl,sizes:"512x512",type:"image/png"},{src:iurl,sizes:"192x192",type:"image/png"}]};
+const mb=new Blob([JSON.stringify(mf)],{type:'application/json'});
+const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createObjectURL(mb); document.head.appendChild(ml);
+</script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script type="text/babel" data-presets="react">
+
+const { useState, useEffect, useRef, useCallback } = React;
+
+const LS = {
+  get: k => { try { return localStorage.getItem(k); } catch(e) { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch(e) {} },
+  del: k => { try { localStorage.removeItem(k); } catch(e) {} },
+};
+
+const PHASES = [
+  {weeks:[1,2,3],name:"Accumulation 1",color:"normal"},
+  {weeks:[4],name:"Deload",color:"deload"},
+  {weeks:[5,6,7],name:"Accumulation 2",color:"normal"},
+  {weeks:[8],name:"Deload",color:"deload"},
+  {weeks:[9,10,11],name:"Peak Hypertrophy",color:"peak"},
+  {weeks:[12],name:"Resensitise",color:"deload"},
+];
+const WR = {
+  1:{rir:"2 RIR",rirN:2,i:false},2:{rir:"1-2 RIR",rirN:2,i:false},3:{rir:"1 RIR",rirN:1,i:false},
+  4:{rir:"3-4 RIR",rirN:4,i:false},5:{rir:"2 RIR",rirN:2,i:false},6:{rir:"1-2 RIR",rirN:2,i:false},
+  7:{rir:"1 RIR",rirN:1,i:false},8:{rir:"3-4 RIR",rirN:4,i:false},9:{rir:"0-1 RIR",rirN:1,i:true},
+  10:{rir:"0-1 RIR",rirN:0,i:true},11:{rir:"0-1 RIR",rirN:0,i:true},12:{rir:"3-4 RIR",rirN:4,i:false},
+};
+const DLW = new Set([4,8,12]);
+const SESSIONS = {
+  upperA:{id:"upperA",name:"Upper A",focus:"Heavy Upper Tension",day:"Monday",time:"70-85 min",maxInt:2,exercises:[
+    {id:"ua1",name:"RO-T8 Flat Press",sets:4,rMin:5,rMax:8,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Neutral to semi-pronated","Deep controlled stretch","Elbows 30-45"],avoidFail:true,avoidReason:"Shoulder and triceps fatigue",int:null,orm:true},
+    {id:"ua2",name:"Weighted Pull-Up",sets:4,rMin:5,rMax:8,rirMin:1,rirMax:2,rest:180,handle:"Belt/bodyweight",cues:["Full stretch","3-sec eccentric"],avoidFail:true,avoidReason:"Elbow and biceps tendon fatigue",int:null,orm:true},
+    {id:"ua3",name:"RO-T8 Incline Press",sets:3,rMin:8,rMax:10,rirMin:1,rirMax:1,rest:120,handle:"RO-T8",cues:["30-45 bench","Elbows 30-45"],avoidFail:false,int:{label:"0 RIR",desc:"Final set to 0 RIR, no forced reps"},orm:true},
+    {id:"ua4",name:"Short Bar Row",sets:4,rMin:8,rMax:10,rirMin:1,rirMax:1,rest:120,handle:"RO-T8 short bar",cues:["Pull to lower ribs","Chest-supported preferred"],avoidFail:false,int:{label:"REST-PAUSE",desc:"Failure, 20s rest, 3-5 more reps"},orm:false},
+    {id:"ua5",name:"Cable Lateral Raise",sets:4,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Small KAZ",cues:["Slight lean","Lead with elbow","Scapular plane"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 lengthened partials on final set"},orm:false},
+    {id:"ua6",name:"Triceps Pushdown",sets:3,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:60,handle:"RO-T8/short bar",cues:["Elbows pinned","Natural wrist rotation"],avoidFail:false,int:null,orm:false},
+    {id:"ua7",name:"Cable Crunch",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope/KAZ",opt:true,cues:["Round spine","Elbows to knees"],avoidFail:false,int:null,orm:false},
+  ]},
+  lowerA:{id:"lowerA",name:"Lower A",focus:"Quads and Posterior Chain",day:"Tuesday",time:"85-95 min",maxInt:2,exercises:[
+    {id:"la1",name:"Hack Squat",sets:3,rMin:6,rMax:8,rirMin:1,rirMax:1,rest:180,cues:["3-sec eccentric","1-sec controlled bottom"],avoidFail:true,avoidReason:"No grinders on top sets",int:null,orm:true},
+    {id:"la2",name:"Hack Squat Back-Off",sets:1,rMin:10,rMax:15,rirMin:0,rirMax:1,rest:150,cues:["Drop 15-20% from top set"],avoidFail:false,int:{label:"0 RIR",desc:"Take this single set to 0 RIR"},orm:false},
+    {id:"la3",name:"Romanian Deadlift",sets:3,rMin:8,rMax:10,rirMin:1,rirMax:2,rest:180,cues:["Hips back","3-4 sec eccentric","Spine neutral"],avoidFail:true,avoidReason:"Never to failure",int:null,orm:true},
+    {id:"la4",name:"Leg Press Quad Bias",sets:3,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:120,cues:["Feet low-to-mid","Shoulder-width"],avoidFail:false,int:{label:"PARTIALS",desc:"+8-10 bottom-third partials on final set"},orm:false},
+    {id:"la5",name:"Leg Extension",sets:2,rMin:12,rMax:20,rirMin:0,rirMax:1,rest:68,cues:["1-sec top squeeze","2-3 sec lower","No bounce"],avoidFail:false,int:{label:"FAILURE",desc:"To failure or 10-15 top-half partials"},orm:false},
+    {id:"la6",name:"Seated Leg Curl",sets:3,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,cues:["Full stretch","Controlled curl"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 stretch partials on final set"},orm:false},
+    {id:"la7",name:"Standing Calf Raise",sets:4,rMin:8,rMax:15,rirMin:1,rirMax:1,rest:75,cues:["2-sec deep stretch","Hard top squeeze"],avoidFail:false,int:null,orm:false},
+  ]},
+  upperB:{id:"upperB",name:"Upper B",focus:"Delts, Lats and Arms",day:"Thursday",time:"75-90 min",maxInt:3,exercises:[
+    {id:"ub1",name:"Single-Arm Lat Pulldown",sets:4,rMin:10,rMax:12,rirMin:1,rirMax:1,rest:83,handle:"Small KAZ/RO-T8",cues:["Elbow to hip","Slight lean back"],avoidFail:false,int:null,orm:false},
+    {id:"ub2",name:"Seated Cable Press",sets:3,rMin:10,rMax:12,rirMin:1,rirMax:1,rest:90,handle:"RO-T8",cues:["Bench 70-80","Controlled stretch"],avoidFail:false,int:null,orm:false},
+    {id:"ub3",name:"Seated Cable Flye",sets:3,rMin:12,rMax:15,rirMin:1,rirMax:2,rest:60,handle:"Small KAZ",cues:["Deep stretch","Hands to chin line"],avoidFail:false,int:{label:"PARTIALS",desc:"+8-10 lengthened partials on final set"},orm:false},
+    {id:"ub4",name:"Cable Lateral Raise",sets:4,rMin:12,rMax:20,rirMin:0,rirMax:1,rest:53,handle:"Small KAZ",cues:["Lead with elbow","Hand below elbow"],avoidFail:false,int:{label:"MYO-REPS",desc:"1x20 then 4-5 mini-sets of 4 reps"},orm:false},
+    {id:"ub5",name:"Rear Delt Cable Flye",sets:3,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Small KAZ",cues:["Sweep out into inverted V"],avoidFail:false,int:null,orm:false},
+    {id:"ub6",name:"Lat Cross Extension",sets:3,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Small KAZ/cuffs",cues:["Soft elbow","Freeze angle","Elbow to back pocket"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 short partials on final set"},orm:false},
+    {id:"ub7",name:"Incline DB Curl",sets:3,rMin:10,rMax:12,rirMin:1,rirMax:1,rest:83,handle:"Dumbbells",cues:["45 bench","3-4 sec eccentric"],avoidFail:false,int:{label:"0 RIR",desc:"Take final set to 0 RIR"},orm:true},
+    {id:"ub8",name:"Overhead Triceps Ext",sets:3,rMin:12,rMax:15,rirMin:1,rirMax:1,rest:60,handle:"Small KAZ",cues:["Deep stretch","Slight elbow flare"],avoidFail:false,int:{label:"REST-PAUSE",desc:"Failure, 20s rest, 3-5 more reps"},orm:false},
+  ]},
+  lowerB:{id:"lowerB",name:"Lower B",focus:"Glutes, Hamstrings and Core",day:"Friday",time:"70-85 min",maxInt:2,exercises:[
+    {id:"lb1",name:"Glute Leg Press",sets:3,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:120,cues:["Feet high and wide","Deep controlled stretch"],avoidFail:true,avoidReason:"No ugly grinders",int:null,orm:false},
+    {id:"lb2",name:"Bulgarian Split Squat",sets:3,rMin:8,rMax:12,rirMin:1,rirMax:1,rest:120,cues:["Long stride","Slight forward lean"],avoidFail:true,avoidReason:"Do not take to absolute failure",int:null,orm:false},
+    {id:"lb3",name:"Hip Thrust",sets:3,rMin:8,rMax:12,rirMin:1,rirMax:1,rest:120,cues:["1-sec peak squeeze","Ribs down"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR, no forced reps"},orm:false},
+    {id:"lb4",name:"Adductor Machine",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:68,cues:["Full stretch","Hard squeeze"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 short partials on final set"},orm:false},
+    {id:"lb5",name:"Seated Leg Curl",sets:3,rMin:12,rMax:15,rirMin:1,rirMax:1,rest:90,cues:["Full stretch","Controlled negative"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 stretch partials on final set"},orm:false},
+    {id:"lb6",name:"Cable Crunch",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,cues:["Round spine","Elbows to knees"],avoidFail:false,int:{label:"0 RIR",desc:"Take final set to 0 RIR"},orm:false},
+    {id:"lb7",name:"Seated Calf Raise",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,cues:["Deep stretch","Controlled top"],avoidFail:false,int:null,orm:false},
+  ]},
+};
+const ALL_EX = Object.values(SESSIONS).flatMap(s => s.exercises.map(e => ({id:e.id,name:e.name,session:s.name})));
+const DEF_INTS = {
+  upperA: new Set(["ua3","ua5"]),
+  lowerA: new Set(["la5","la6"]),
+  upperB: new Set(["ub4","ub3","ub8"]),
+  lowerB: new Set(["lb5","lb6"]),
+};
+
+const getPhase = w => PHASES.find(p => p.weeks.includes(w)) || PHASES[0];
+const fmt = s => { const m=Math.floor(s/60), sc=s%60; return m>0 ? `${m}:${String(sc).padStart(2,'0')}` : `${s}s`; };
+const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' ' + new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
+const getDS = (sets,week) => DLW.has(week) ? Math.max(1,Math.ceil(sets*0.6)) : sets;
+
+function calcPlates(target, bar=20) {
+  const avail = [25,20,15,10,5,2.5,1.25];
+  const perSide = (target - bar) / 2;
+  if (perSide < 0) return {ok:false, plates:[]};
+  let rem = perSide; const plates = [];
+  for (const p of avail) { const n=Math.floor(rem/p+0.001); if(n>0){plates.push({kg:p,count:n});rem-=n*p;} }
+  return {ok:rem<0.1, plates};
+}
+
+function calcWarmups(working) {
+  if (!working || working <= 20) return [];
+  const res = [{wt:20,reps:10,pct:"Bar"}];
+  const pcts = working<=60?[0.5,0.75]:working<=100?[0.5,0.65,0.8]:[0.4,0.55,0.7,0.85];
+  for (const p of pcts) { const w=Math.round(working*p/2.5)*2.5; res.push({wt:w,reps:p>=0.8?1:p>=0.65?2:4,pct:`${Math.round(p*100)}%`}); }
+  return res;
+}
+
+function getProgRec(exId, rMax, logs) {
+  for (const s of logs) {
+    const ex = s.exercises?.find(e => e.id === exId);
+    if (!ex?.sets?.length) continue;
+    const top = Math.max(...ex.sets.map(s => s.weight));
+    if (ex.sets.every(s => s.reps >= rMax)) return {type:"inc", msg:`All sets hit ${rMax} reps — increase weight`, wt:top};
+    if (ex.sets.some(s => s.reps >= rMax)) return {type:"beat", msg:"Beat weaker sets, keep weight", wt:top};
+    return {type:"keep", msg:"Keep weight, beat reps", wt:top};
+  }
+  return {type:"first", msg:"First time — establish your working weight"};
+}
+
+function getPrevHist(exId, logs, limit=3) {
+  const res = [];
+  for (const s of logs) {
+    const ex = s.exercises?.find(e => e.id === exId);
+    if (ex?.sets?.length) { res.push({date:s.date, sets:ex.sets, week:s.week}); if(res.length>=limit) break; }
+  }
+  return res;
+}
+
+function playChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [[880,0],[1100,.15],[1320,.3]].forEach(([freq,delay]) => {
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.connect(g); g.connect(ctx.destination); o.frequency.value=freq; o.type='sine';
+      g.gain.setValueAtTime(0, ctx.currentTime+delay);
+      g.gain.linearRampToValueAtTime(.18, ctx.currentTime+delay+.05);
+      g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime+delay+.45);
+      o.start(ctx.currentTime+delay); o.stop(ctx.currentTime+delay+.5);
+    });
+  } catch(e) {}
+}
+
+function SVGChart({ data, color='#c4ff00', height=130 }) {
+  if (!data || data.length < 2) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12}}>Need more sessions to show chart</div>;
+  const vals = data.map(d => d.y);
+  const maxV = Math.max(...vals), minV = Math.min(...vals);
+  const range = maxV - minV || 1;
+  const W=320, H=height, PX=36, PY=14, iW=W-PX*2, iH=H-PY*2;
+  const tx = i => PX + (i/(data.length-1))*iW;
+  const ty = v => H-PY-((v-minV)/range)*iH;
+  const pts = data.map((d,i) => [tx(i), ty(d.y)]);
+  const line = pts.map((p,i) => `${i===0?'M':'L'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+  const area = line + ` L${pts[pts.length-1][0].toFixed(1)} ${H-PY} L${PX} ${H-PY} Z`;
+  const yTicks = [0,0.5,1].map(t => ({v: minV+t*range, y: ty(minV+t*range)}));
+  const step = Math.ceil(data.length/4);
+  const xLabels = data.filter((_,i) => i===0 || i===data.length-1 || i%step===0);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',display:'block'}}>
+      <defs>
+        <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.22"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      {yTicks.map((t,i) => (
+        <g key={i}>
+          <line x1={PX} y1={t.y} x2={W-PX} y2={t.y} stroke="#1d2733" strokeWidth="1" strokeDasharray="3 3"/>
+          <text x={PX-5} y={t.y+3} textAnchor="end" fontSize="9" fill="#3c4f62" fontFamily="JetBrains Mono">{Math.round(t.v)}</text>
+        </g>
+      ))}
+      {xLabels.map((d,i) => {
+        const idx = data.indexOf(d);
+        return <text key={i} x={tx(idx)} y={H-2} textAnchor="middle" fontSize="9" fill="#3c4f62" fontFamily="JetBrains Mono">{d.x}</text>;
+      })}
+      <path d={area} fill="url(#cg)"/>
+      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      {pts.map((p,i) => <circle key={i} cx={p[0]} cy={p[1]} r="3" fill={color}/>)}
+    </svg>
+  );
+}
+
+function App() {
+
+  // ── WHOOP INTEGRATION ─────────────────────────────────
+  const [whoopData, setWhoopData]       = useState(() => { const c=LS.get('whoop_cache'); return c?JSON.parse(c):null; });
+  const [whoopLoading, setWhoopLoading] = useState(false);
+  const whoopConnected = !!LS.get('whoop_access_token');
+
+  const getWhoopCls = score => score >= 67 ? 'gr' : score >= 34 ? 'yw' : 'rd';
+
+  const fmtAgo = ts => {
+    if (!ts) return '';
+    const m = Math.floor((Date.now() - ts) / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    return `${Math.floor(m/60)}h ago`;
+  };
+
+  const parseWhoop = data => {
+    const r = { recovery:null, hrv:null, rhr:null, sleep:null, strain:null };
+    const sleep = data?.sleep?.records?.[0] || data?.sleep?.data?.[0];
+    if (sleep) {
+      const s = sleep.score || sleep;
+      r.recovery = Math.round(s.recovery_score ?? s.readiness ?? 0) || null;
+      r.hrv      = Math.round(s.hrv_rmssd_milli ?? s.hrv_rmssd ?? s.hrv ?? 0) || null;
+      r.rhr      = Math.round(s.resting_heart_rate ?? s.rhr ?? 0) || null;
+      r.sleep    = Math.round(s.sleep_performance_percentage ?? s.sleep_efficiency ?? 0) || null;
+    }
+    const cycle = data?.cycles?.records?.[0] || data?.cycles?.data?.[0];
+    if (cycle) {
+      const s = cycle.score || cycle;
+      if (r.strain === null)   r.strain   = s.strain ? Math.round(s.strain*10)/10 : null;
+      if (r.recovery === null) r.recovery = Math.round(s.recovery_score ?? 0) || null;
+      if (r.hrv === null)      r.hrv      = Math.round(s.hrv_rmssd_milli ?? s.hrv ?? 0) || null;
+      if (r.rhr === null)      r.rhr      = Math.round(s.resting_heart_rate ?? 0) || null;
+    }
+    return r;
+  };
+
+  const applyWhoopRecovery = rec => {
+    if (rec === null) return;
+    if (rec >= 67) setRecovery('excellent');
+    else if (rec >= 34) setRecovery('normal');
+    else setRecovery('beat');
+  };
+
+  const fetchWhoopData = async token => {
+    const t = token || LS.get('whoop_access_token');
+    if (!t) return;
+    setWhoopLoading(true);
+    try {
+      const res = await fetch('/.netlify/functions/whoop-data', { headers: { Authorization: `Bearer ${t}` } });
+      if (res.status === 401) { await refreshWhoopToken(); return; }
+      const raw = await res.json();
+      const parsed = { ...parseWhoop(raw), cachedAt: Date.now() };
+      setWhoopData(parsed);
+      LS.set('whoop_cache', JSON.stringify(parsed));
+      applyWhoopRecovery(parsed.recovery);
+    } catch(e) {
+      const cached = LS.get('whoop_cache');
+      if (cached) { const d=JSON.parse(cached); setWhoopData(d); applyWhoopRecovery(d.recovery); }
+    } finally { setWhoopLoading(false); }
+  };
+
+  const refreshWhoopToken = async () => {
+    const rt = LS.get('whoop_refresh_token');
+    if (!rt) return;
+    try {
+      const res = await fetch('/.netlify/functions/whoop-refresh', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ refresh_token: rt }),
+      });
+      const tokens = await res.json();
+      if (tokens.access_token) {
+        LS.set('whoop_access_token', tokens.access_token);
+        if (tokens.refresh_token) LS.set('whoop_refresh_token', tokens.refresh_token);
+        LS.set('whoop_expires_at', String(Date.now() + (tokens.expires_in||3600)*1000));
+        await fetchWhoopData(tokens.access_token);
+      }
+    } catch(e) {}
+  };
+
+  const disconnectWhoop = () => {
+    ['whoop_access_token','whoop_refresh_token','whoop_expires_at','whoop_cache'].forEach(k => LS.del(k));
+    setWhoopData(null);
+  };
+
+  // Handle OAuth callback (tokens arrive in URL fragment)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes('whoop_access_token')) {
+      const p = new URLSearchParams(hash.substring(1));
+      const at = p.get('whoop_access_token'), rt = p.get('whoop_refresh_token'), ei = p.get('whoop_expires_in');
+      if (at) {
+        LS.set('whoop_access_token', at);
+        if (rt) LS.set('whoop_refresh_token', rt);
+        LS.set('whoop_expires_at', String(Date.now() + parseInt(ei||3600)*1000));
+        window.history.replaceState(null, '', window.location.pathname);
+        fetchWhoopData(at);
+      }
+    } else if (LS.get('whoop_access_token')) {
+      const ea = LS.get('whoop_expires_at');
+      if (ea && Date.now() > parseInt(ea) - 300000) { refreshWhoopToken(); }
+      else { fetchWhoopData(); }
+    }
+    // Check for error
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('whoop_error')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
+
+  const [view, setView]         = useState('home');
+  const [week, setWeek]         = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).week||1:1; });
+  const [recovery, setRecovery] = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).rec||'normal':'normal'; });
+  const [sel, setSel]           = useState(null);
+  const [logs, setLogs]         = useState(() => { const r=LS.get('dp_logs'); return r?JSON.parse(r):[]; });
+  const [wipData, setWipData]   = useState(() => { const r=LS.get('dp_wip'); return r?JSON.parse(r):null; });
+  const [expandLog, setExpandLog] = useState(null);
+  const [progEx, setProgEx]     = useState(null);
+  const [activeInts, setActiveInts] = useState(new Set());
+  const [exIdx, setExIdx]       = useState(0);
+  const [curSet, setCurSet]     = useState(0);
+  const [setData, setSetData]   = useState({});
+  const [wt, setWt]             = useState(60);
+  const [rp, setRp]             = useState(8);
+  const [rir, setRir]           = useState(1);
+  const [editIdx, setEditIdx]   = useState(null);
+  const [skipConfirm, setSkipConfirm] = useState(false);
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const startRef = useRef(null);
+  const [timerOn, setTimerOn]   = useState(false);
+  const [timerSecs, setTimerSecs] = useState(0);
+  const [timerTotal, setTimerTotal] = useState(0);
+  const [timerDone, setTimerDone] = useState(false);
+  const [timerMsg, setTimerMsg] = useState('');
+  const afterRef = useRef(null);
+  const [plateTgt, setPlateTgt] = useState(100);
+  const [warmWt, setWarmWt]     = useState(100);
+  const [ormWt, setOrmWt]       = useState(100);
+  const [ormRp, setOrmRp]       = useState(5);
+
+  useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery})); }, [week, recovery]);
+  useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
+
+  useEffect(() => {
+    if (!timerOn) return;
+    const iv = setInterval(() => {
+      setTimerSecs(p => { if(p<=1){clearInterval(iv);setTimerOn(false);setTimerDone(true);return 0;} return p-1; });
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [timerOn]);
+
+  useEffect(() => {
+    if (!timerDone) return;
+    setTimerDone(false);
+    const cb = afterRef.current; afterRef.current = null;
+    if (cb) cb();
+  }, [timerDone]);
+
+  const startTimer = (secs, msg, cb) => { afterRef.current=cb; setTimerMsg(msg||''); setTimerTotal(secs); setTimerSecs(secs); setTimerDone(false); setTimerOn(true); };
+  const skipTimer = () => { setTimerOn(false); setTimerDone(false); const cb=afterRef.current; afterRef.current=null; if(cb)cb(); };
+
+  const getLastWt = exId => { for(const l of logs){const e=l.exercises?.find(x=>x.id===exId);if(e?.sets?.length)return e.sets[e.sets.length-1].weight||0;} return 0; };
+  const saveWip = (sid, data, ei, cs) => { const d={sessionId:sid,week,startTime:startRef.current,exIdx:ei,curSet:cs,setData:data}; LS.set('dp_wip',JSON.stringify(d)); setWipData(d); };
+  const clearWip = () => { LS.del('dp_wip'); setWipData(null); };
+
+  const startWorkout = sid => {
+    const ex0 = SESSIONS[sid].exercises[0];
+    setSel(sid); setExIdx(0); setCurSet(0); setSetData({});
+    setWt(getLastWt(ex0.id)||60); setRp(ex0.rMin); setRir(WR[week].rirN);
+    setEditIdx(null); startRef.current=Date.now();
+    clearWip(); setView('workout');
+  };
+
+  const resumeWorkout = () => {
+    if (!wipData) return;
+    setSel(wipData.sessionId); setExIdx(wipData.exIdx||0); setCurSet(wipData.curSet||0);
+    setSetData(wipData.setData||{});
+    const sess=SESSIONS[wipData.sessionId]; const ex=sess.exercises[wipData.exIdx||0];
+    const last=(wipData.setData?.[ex.id]||[]);
+    setWt(last.length?last[last.length-1].weight:getLastWt(ex.id)||60);
+    setRp(ex.rMin); setRir(WR[wipData.week||week].rirN);
+    startRef.current=wipData.startTime||Date.now();
+    setWeek(wipData.week||week); setView('workout'); setWipData(null);
+  };
+
+  const saveAndFinish = newData => {
+    const sess=SESSIONS[sel];
+    const dur=Math.round((Date.now()-(startRef.current||Date.now()))/60000);
+    const log={date:new Date().toISOString(),sessionId:sel,sessionName:sess.name,week,duration:dur,
+      exercises:sess.exercises.map(ex=>({id:ex.id,name:ex.name,sets:(newData||setData)[ex.id]||[]})).filter(ex=>ex.sets.length>0)};
+    setLogs(prev => [log,...prev].slice(0,200));
+    clearWip(); setView('complete');
+  };
+
+  const logSet = () => {
+    const sess=SESSIONS[sel]; const ex=sess.exercises[exIdx];
+    const effSets=getDS(ex.sets,week);
+    const newSet={weight:parseFloat(wt)||0, reps:parseInt(rp)||0, rir};
+    if (editIdx !== null) {
+      const arr=[...(setData[ex.id]||[])]; arr[editIdx]=newSet;
+      const nd={...setData,[ex.id]:arr}; setSetData(nd); setEditIdx(null);
+      setWt(arr[arr.length-1].weight); setRp(ex.rMin); setRir(WR[week].rirN);
+      saveWip(sel,nd,exIdx,curSet); return;
+    }
+    const prev=setData[ex.id]||[];
+    const newSets=[...prev,newSet];
+    const nd={...setData,[ex.id]:newSets}; setSetData(nd);
+    const nextExIdx=exIdx+1;
+    if (newSets.length >= effSets) {
+      const cb = () => {
+        if (nextExIdx >= sess.exercises.length) { saveAndFinish(nd); }
+        else {
+          const nx=sess.exercises[nextExIdx];
+          setExIdx(nextExIdx); setCurSet(0); setEditIdx(null);
+          setWt(getLastWt(nx.id)||60); setRp(nx.rMin); setRir(WR[week].rirN);
+          saveWip(sel,nd,nextExIdx,0);
+        }
+      };
+      startTimer(ex.rest, 'Next exercise when ready', cb);
+    } else {
+      setCurSet(newSets.length);
+      saveWip(sel,nd,exIdx,newSets.length);
+      startTimer(ex.rest, 'Rest, then next set', null);
+    }
+  };
+
+  const doSkipEx = () => {
+    setSkipConfirm(false);
+    const sess=SESSIONS[sel]; const nx=exIdx+1;
+    if (nx >= sess.exercises.length) { saveAndFinish(setData); }
+    else {
+      const nextEx=sess.exercises[nx];
+      setExIdx(nx); setCurSet(0); setEditIdx(null);
+      setWt(getLastWt(nextEx.id)||60); setRp(nextEx.rMin); setRir(WR[week].rirN);
+      saveWip(sel,setData,nx,0);
+    }
+  };
+
+  const exportData = () => {
+    const data={version:'2.0',exported:new Date().toISOString(),logs,config:{week,recovery}};
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`diamond-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  };
+
+  const importData = () => {
+    const input=document.createElement('input'); input.type='file'; input.accept='.json';
+    input.onchange = e => {
+      const file=e.target.files[0]; if(!file)return;
+      const reader=new FileReader();
+      reader.onload = ev => {
+        try {
+          const data=JSON.parse(ev.target.result);
+          if (Array.isArray(data.logs)) { setLogs(data.logs); }
+          if (data.config) { if(data.config.week)setWeek(data.config.week); if(data.config.recovery)setRecovery(data.config.recovery); }
+          alert(`Imported ${data.logs?.length||0} sessions successfully.`);
+        } catch(err) { alert('Could not read file. Make sure it is a valid Diamond Protocol backup.'); }
+      };
+      reader.readAsText(file);
+    };
+    document.body.appendChild(input); input.click(); document.body.removeChild(input);
+  };
+
+  const clearAllData = () => {
+    setClearConfirm(false);
+    setLogs([]); setWeek(1); setRecovery('normal');
+    LS.del('dp_logs'); LS.del('dp_wip'); LS.del('dp_cfg');
+    setWipData(null);
+  };
+
+  const phase=getPhase(week), wr=WR[week];
+  const showInt=wr.i, isDeload=DLW.has(week);
+  const today=new Date().toDateString();
+  const doneToday=new Set(logs.filter(l=>new Date(l.date).toDateString()===today).map(l=>l.sessionId));
+  const weekDone=new Set(logs.filter(l=>l.week===week).map(l=>l.sessionId));
+  const allDone=weekDone.size>=4;
+  const sess=sel?SESSIONS[sel]:null;
+  const curEx=sess?sess.exercises[exIdx]:null;
+  const effSets=curEx?getDS(curEx.sets,week):0;
+  const loggedSetsArr=curEx?(setData[curEx.id]||[]):[];
+  const prevHist=curEx?getPrevHist(curEx.id,logs,3):[];
+  const progRec=curEx?getProgRec(curEx.id,curEx.rMax,logs):null;
+  const R=88, CIRC=2*Math.PI*R;
+  const dashOff=CIRC*(1-(timerTotal>0?timerSecs/timerTotal:0));
+  const totalSets=Object.values(setData).reduce((a,s)=>a+s.length,0);
+  const dur=startRef.current?Math.round((Date.now()-startRef.current)/60000):0;
+  const ormHL=sess?sess.exercises.filter(ex=>ex.orm).map(ex=>{
+    const sets=setData[ex.id]||[]; if(!sets.length)return null;
+    const best=sets.reduce((a,s)=>epley(s.weight,s.reps)>epley(a.weight,a.reps)?s:a,sets[0]);
+    return {name:ex.name, orm:epley(best.weight,best.reps)};
+  }).filter(Boolean):[];
+  const progHist=progEx?getPrevHist(progEx,logs,20):[];
+  const progChartData=progHist.slice().reverse().map(h=>({x:fmtShort(h.date),y:Math.max(...h.sets.map(s=>s.weight))}));
+  const prWeight=progChartData.length?Math.max(...progChartData.map(d=>d.y)):0;
+  const lastWeight=progChartData.length?progChartData[progChartData.length-1].y:0;
+  const plateRes=calcPlates(plateTgt);
+  const warmups=calcWarmups(warmWt);
+
+  return (
+    <div className="app">
+      {timerOn && (
+        <div className="timer-ov">
+          <div className="t-lbl">Rest Period</div>
+          <div className="t-ring">
+            <svg width="200" height="200" viewBox="0 0 200 200">
+              <circle className="t-track" cx="100" cy="100" r={R}/>
+              <circle className="t-fill" cx="100" cy="100" r={R} strokeDasharray={CIRC} strokeDashoffset={dashOff}/>
+            </svg>
+            <div className="t-ctr"><div className="t-secs">{fmt(timerSecs)}</div><div className="t-unit">remaining</div></div>
+          </div>
+          <div className="t-msg">{timerMsg}</div>
+          <button className="t-skip" onClick={() => {playChime();skipTimer();}}>Skip Rest</button>
+        </div>
+      )}
+
+      {skipConfirm && (
+        <div className="modal-ov">
+          <div className="modal">
+            <div className="modal-title">Skip Exercise?</div>
+            <div className="modal-sub">Skip {curEx?.name}? Unlogged sets will not be saved.</div>
+            <div className="modal-btns">
+              <button className="mbt ghost" onClick={() => setSkipConfirm(false)}>Cancel</button>
+              <button className="mbt danger" onClick={doSkipEx}>Skip</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clearConfirm && (
+        <div className="modal-ov">
+          <div className="modal">
+            <div className="modal-title">Clear All Data?</div>
+            <div className="modal-sub">This permanently deletes all workout history, logs and settings. Export a backup first if you want to keep your data.</div>
+            <div className="modal-btns">
+              <button className="mbt ghost" onClick={() => setClearConfirm(false)}>Cancel</button>
+              <button className="mbt danger" onClick={clearAllData}>Clear Everything</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {view === 'home' && (
+        <div className="screen">
+          <div className="topbar"><span className="logo">Diamond Protocol</span><span className="top-badge">W{week} / 12</span></div>
+          <div className={`phase-bar ${phase.color}`}>
+            <div><div className="ph-name">{phase.name}</div><div className="ph-sub">{isDeload?"50-60% vol, no failure":showInt?"Intensifiers active, selective failure":"Straight sets only, no failure"}</div></div>
+            <div className="rir-val">{wr.rir}</div>
+          </div>
+          <div className="wksel">
+            <button className="wkb" disabled={week===1} onClick={() => setWeek(w=>Math.max(1,w-1))}>&#8249;</button>
+            <div><div className="wknum">{week}</div><div className="wksub">of 12 weeks</div></div>
+            <button className="wkb" disabled={week===12} onClick={() => setWeek(w=>Math.min(12,w+1))}>&#8250;</button>
+          </div>
+          <div className="grid12">
+            {Array.from({length:12},(_,i) => {
+              const w2=i+1;
+              const ws=new Set(logs.filter(l=>l.week===w2).map(l=>l.sessionId));
+              const cls=w2===week?'cur':ws.size>=4?'all':ws.size>0?'part':DLW.has(w2)?'dl':'';
+              return <div key={w2} className={`wc ${cls}`} onClick={() => setWeek(w2)}><span className="wc-n">{w2}</span></div>;
+            })}
+          </div>
+          {allDone && week < 12 && (
+            <div className="adv-banner">
+              <span className="adv-txt">All 4 sessions done — Week {week} complete</span>
+              <button className="adv-btn" onClick={() => setWeek(w=>Math.min(12,w+1))}>Week {week+1} &#8250;</button>
+            </div>
+          )}
+          {wipData && (
+            <div className="resume-box">
+              <div className="rb-title">Resume workout?</div>
+              <div className="rb-sub">Unfinished {SESSIONS[wipData.sessionId]?.name} session.</div>
+              <div className="rb-btns">
+                <button className="rb-btn p" onClick={resumeWorkout}>Resume</button>
+                <button className="rb-btn g" onClick={clearWip}>Discard</button>
+              </div>
+            </div>
+          )}
+          <div className="rec-sec">
+            <div className="sec-lbl">Recovery Status</div>
+            <div className="rec-row">
+              {[['excellent','ok','Excellent'],['normal','nm','Normal'],['beat','bt','Beat Up']].map(([k,cls,label]) => (
+                <button key={k} className={`rc${recovery===k?' '+cls:''}`} onClick={() => setRecovery(k)}>{label}</button>
+              ))}
+            </div>
+          </div>
+          {isDeload && <div className="info-banner warn">Deload week — sets auto-reduced to 60%</div>}
+          {recovery==='beat' && <div className="info-banner err">Beat up — drop volume 25-40%, skip intensifiers</div>}
+          {/* WHOOP Biometrics */}
+          {whoopConnected ? (
+            <div className={`whoop-panel${whoopData?.recovery!=null?' '+getWhoopCls(whoopData.recovery):''}`}>
+              <div className="whoop-hdr">
+                <span className="whoop-nm">&#9889; WHOOP{whoopData?.recovery!=null&&<span className={`whoop-auto-badge ${getWhoopCls(whoopData.recovery)}`} style={{marginLeft:8}}>{whoopData.recovery>=67?'Green':'Yellow'}</span>}</span>
+                <span className="whoop-sync">{whoopLoading?'Syncing...':fmtAgo(whoopData?.cachedAt)}</span>
+              </div>
+              {whoopLoading&&!whoopData?<div className="whoop-loading">Loading recovery data...</div>
+              :whoopData?.recovery!=null?(
+                <div className="whoop-body">
+                  <div className="wr-block">
+                    <div className={`wr-score ${getWhoopCls(whoopData.recovery)}`}>{whoopData.recovery}%</div>
+                    <div className="wr-lbl">Recovery</div>
+                  </div>
+                  <div className="whoop-stats">
+                    {whoopData.hrv!=null&&<div className="wst"><div className="wst-v">{whoopData.hrv}</div><div className="wst-l">HRV ms</div></div>}
+                    {whoopData.rhr!=null&&<div className="wst"><div className="wst-v">{whoopData.rhr}</div><div className="wst-l">RHR bpm</div></div>}
+                    {whoopData.sleep!=null&&<div className="wst"><div className="wst-v">{whoopData.sleep}%</div><div className="wst-l">Sleep</div></div>}
+                    {whoopData.strain!=null&&<div className="wst"><div className="wst-v">{whoopData.strain}</div><div className="wst-l">Strain</div></div>}
+                  </div>
+                </div>
+              ):<div className="whoop-nodata">No recovery data yet — check back after your next sleep cycle.</div>}
+            </div>
+          ):(
+            <button className="connect-whoop" onClick={()=>window.location.href='/.netlify/functions/whoop-auth'}>
+              Connect <b>WHOOP</b> to auto-sync your recovery
+            </button>
+          )}
+          <div className="sec-lbl" style={{padding:'0 15px 6px'}}>Sessions</div>
+          <div className="sg">
+            {Object.values(SESSIONS).map(s => (
+              <div key={s.id} className={`sc${doneToday.has(s.id)?' done':''}`}
+                onClick={() => {setSel(s.id);setActiveInts(showInt?new Set(DEF_INTS[s.id]):new Set());setView('session');}}>
+                {doneToday.has(s.id) && <div className="s-done">&#10003;</div>}
+                <div className="s-day">{s.day}</div>
+                <div className="s-nm">{s.name}</div>
+                <div className="s-foc">{s.focus}</div>
+                <div className="s-time">{s.time}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'session' && sess && (
+        <div className="screen">
+          <button className="back-btn" onClick={() => setView('home')}>&#8592; Back</button>
+          <div className="s-hdr">
+            <div className="s-hdr-nm">{sess.name}</div>
+            <div className="s-hdr-foc">{sess.focus}</div>
+            <div className="s-hdr-meta">
+              <span className="mp">{sess.day}</span><span className="mp">{sess.time}</span><span className="mp">{wr.rir}</span>
+              {showInt && <span className="mp acc">Intensifiers ON</span>}
+              {isDeload && <span className="mp warn">Deload</span>}
+            </div>
+          </div>
+          {showInt && (
+            <div className="int-ctrl">
+              <span className="int-ctrl-lbl">Intensifiers active</span>
+              <span className={`int-count${activeInts.size>=sess.maxInt?' full':''}`}>{activeInts.size} / {sess.maxInt}</span>
+            </div>
+          )}
+          <div className="ex-list">
+            {sess.exercises.map((ex, i) => {
+              const adj = getDS(ex.sets, week);
+              const rec = getProgRec(ex.id, ex.rMax, logs);
+              return (
+                <div key={ex.id} className="ex-row">
+                  <div className="ex-n">{i+1}</div>
+                  <div className="ex-body">
+                    <div className={`ex-nm${ex.opt?' opt':''}`}>{ex.name}{ex.opt?' (opt)':''}</div>
+                    <div className="chips">
+                      {adj!==ex.sets ? <span className="chip dl">{adj}x (deload)</span> : <span className="chip">{ex.sets}x</span>}
+                      <span className="chip">{ex.rMin}-{ex.rMax} reps</span>
+                      <span className="chip rir">{ex.rirMin===ex.rirMax?ex.rirMin:`${ex.rirMin}-${ex.rirMax}`} RIR</span>
+                      <span className="chip">{fmt(ex.rest)} rest</span>
+                      {ex.handle && <span className="chip">{ex.handle}</span>}
+                    </div>
+                    {ex.avoidFail && <div><span className="chip avd">{ex.avoidReason}</span></div>}
+                    {rec.type==='inc' && <div style={{fontSize:10,color:'var(--ok)',marginTop:4}}>&#9650; Increase weight — all sets hit top range</div>}
+                    {rec.type==='beat' && <div style={{fontSize:10,color:'var(--acc)',marginTop:4}}>&#8594; Beat reps on weaker sets</div>}
+                    {showInt && ex.int && (
+                      <div className="int-tog-row">
+                        <span className="int-tog-desc">{ex.int.label}: {ex.int.desc}</span>
+                        <button
+                          className={`int-tog${activeInts.has(ex.id)?' on':''}`}
+                          disabled={!activeInts.has(ex.id) && activeInts.size>=sess.maxInt}
+                          onClick={() => {const s=new Set(activeInts);s.has(ex.id)?s.delete(ex.id):s.add(ex.id);setActiveInts(s);}}>
+                          {activeInts.has(ex.id)?'ON':'OFF'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button className="start-btn" onClick={() => startWorkout(sel)}>Start Workout &#8594;</button>
+        </div>
+      )}
+
+      {view === 'workout' && sess && curEx && (() => {
+        return (
+          <div className="fullscreen">
+            <div className="wk-prog"><div className="wk-prog-fill" style={{width:`${(exIdx/sess.exercises.length)*100}%`}}/></div>
+            <div className="wk-top"><span className="wk-sn">{sess.name} Wk{week}</span><span className="wk-cnt">{exIdx+1}/{sess.exercises.length}</span></div>
+            {progRec && (
+              <div className={`prog-rec ${progRec.type}`}>
+                {progRec.type==='inc'&&'&#9650;'}{progRec.type==='beat'&&'&#8594;'}{progRec.type==='keep'&&'&#8594;'}{progRec.type==='first'&&'&#9679;'} {progRec.msg}
+              </div>
+            )}
+            <div className="ex-card">
+              <div className="ec-hdr">
+                <div className="ec-nm">{curEx.name}{curEx.opt?' (opt)':''}</div>
+                <div className="ec-meta">
+                  <span className="chip">{effSets} sets</span>
+                  <span className="chip">{curEx.rMin}-{curEx.rMax} reps</span>
+                  <span className="chip rir">{curEx.rirMin===curEx.rirMax?curEx.rirMin:`${curEx.rirMin}-${curEx.rirMax}`} RIR</span>
+                  <span className="chip">{fmt(curEx.rest)} rest</span>
+                  {curEx.handle && <span className="chip">{curEx.handle}</span>}
+                </div>
+              </div>
+              <div className="ec-cues">{curEx.cues.map((c,i) => <span key={i} className="cue">{c}</span>)}</div>
+              {activeInts.has(curEx.id) && curEx.int && (
+                <div className="int-box"><div className="int-lbl">{curEx.int.label}</div><div className="int-txt">{curEx.int.desc}</div></div>
+              )}
+              {curEx.avoidFail && <div className="avd-box">{curEx.avoidReason}</div>}
+              <div className="set-trk">
+                <div className="stl">
+                  <span>{editIdx!==null?`Editing Set ${editIdx+1}`:`Set ${loggedSetsArr.length+1} of ${effSets}`}</span>
+                  <span style={{color:'var(--t3)',fontFamily:'JetBrains Mono,monospace',fontSize:9}}>{loggedSetsArr.length}/{effSets} done</span>
+                </div>
+                <div className="dots">
+                  {Array.from({length:effSets}).map((_,i) => (
+                    <div key={i} className={`dot${i<loggedSetsArr.length?' d':i===loggedSetsArr.length&&editIdx===null?' c':''}`}/>
+                  ))}
+                </div>
+              </div>
+              {loggedSetsArr.length > 0 && (
+                <div className="logged-sets">
+                  {loggedSetsArr.map((s,i) => (
+                    <div key={i} className={`ls-chip${editIdx===i?' ed':''}`}
+                      onClick={() => {if(editIdx===i){setEditIdx(null);}else{setEditIdx(i);setWt(s.weight);setRp(s.reps);setRir(s.rir??WR[week].rirN);}}}>
+                      <span>{s.weight}kg&#215;{s.reps}</span>
+                      <span className="ls-rir">{s.rir}RIR</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {prevHist.length > 0 && (
+                <div className="prev-sec">
+                  <div className="prev-lbl">Previous sessions</div>
+                  {prevHist.map((h,i) => (
+                    <div key={i} className="prev-item">
+                      <span className="prev-dt">{fmtShort(h.date)}</span>
+                      <span>{h.sets.map(s=>`${s.weight}&#215;${s.reps}`).join('  ')}</span>
+                      {i===0 && progRec?.type==='inc' && <span className="prev-prog">add weight</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="inp-sec">
+                <div className="inp-row">
+                  <div className="inp-grp">
+                    <div className="inp-lbl">Weight kg</div>
+                    <div className="nw">
+                      <button className="nb" onClick={() => setWt(v=>Math.max(0,parseFloat(v||0)-2.5))}>&#8722;</button>
+                      <input className="ni" type="number" inputMode="decimal" value={wt} onChange={e=>setWt(e.target.value)}/>
+                      <button className="nb" onClick={() => setWt(v=>parseFloat(v||0)+2.5)}>+</button>
+                    </div>
+                  </div>
+                  <div className="inp-grp">
+                    <div className="inp-lbl">Reps</div>
+                    <div className="nw">
+                      <button className="nb" onClick={() => setRp(v=>Math.max(1,parseInt(v||1)-1))}>&#8722;</button>
+                      <input className="ni" type="number" inputMode="numeric" value={rp} onChange={e=>setRp(e.target.value)}/>
+                      <button className="nb" onClick={() => setRp(v=>parseInt(v||0)+1)}>+</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="rir-grp">
+                  <div className="inp-lbl">RIR — reps in reserve</div>
+                  <div className="rir-row">
+                    {[0,1,2,3,'4+'].map(r => (
+                      <button key={r} className={`rirb${rir===r?' on':''}`} onClick={() => setRir(r)}>{r}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {curEx.orm && parseInt(rp)>0 && parseFloat(wt)>0 && (
+                <div className="onerm-box">
+                  <span className="orm-lbl">Est. 1RM</span>
+                  <span className="orm-val">{epley(parseFloat(wt),parseInt(rp))}kg</span>
+                </div>
+              )}
+              <div className="log-area">
+                <button className={`log-btn${editIdx!==null?' upd':''}`} onClick={logSet}>
+                  {editIdx!==null?`Update Set ${editIdx+1}`:`Log Set ${loggedSetsArr.length+1}`}
+                </button>
+              </div>
+            </div>
+            <div className="wk-nav">
+              <button className="wnb" onClick={() => setSkipConfirm(true)}>Skip Exercise</button>
+              <button className="wnb fin" onClick={() => saveAndFinish(setData)}>End Workout</button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {view === 'complete' && (
+        <div className="done-view">
+          <div className="done-icon">&#9889;</div>
+          <div className="done-title">Session Done</div>
+          <div className="done-sub">{sess?.name} — Week {week}</div>
+          <div className="done-grid">
+            <div className="done-stat"><div className="dsv">{totalSets}</div><div className="dsl">Sets Logged</div></div>
+            <div className="done-stat"><div className="dsv">{dur}</div><div className="dsl">Minutes</div></div>
+            <div className="done-stat"><div className="dsv">{Object.keys(setData).length}</div><div className="dsl">Exercises</div></div>
+            <div className="done-stat"><div className="dsv">{week}</div><div className="dsl">Week</div></div>
+          </div>
+          {ormHL.length > 0 && (
+            <div className="done-orms">
+              <div className="done-orms-lbl">Estimated 1RMs today</div>
+              {ormHL.map((o,i) => (
+                <div key={i} className="done-orm-row">
+                  <span className="done-orm-nm">{o.name}</span>
+                  <span className="done-orm-val">{o.orm}kg</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <button className="done-home" onClick={() => setView('home')}>Back to Program</button>
+        </div>
+      )}
+
+      {view === 'progress' && (
+        <div className="screen">
+          <div className="topbar"><span className="logo">Progress</span></div>
+          <div className="ex-sel-wrap">
+            <div className="ex-sel-lbl">Select Exercise</div>
+            <select className="ex-sel" value={progEx||''} onChange={e=>setProgEx(e.target.value)}>
+              <option value="">Choose an exercise</option>
+              {ALL_EX.map(e => <option key={e.id} value={e.id}>{e.name} ({e.session})</option>)}
+            </select>
+          </div>
+          {progEx && progChartData.length > 1 && (
+            <>
+              <div className="chart-area">
+                <div className="chart-lbl">Max weight per session (kg)</div>
+                <SVGChart data={progChartData} height={130}/>
+              </div>
+              <div className="pstats">
+                <div className="pst"><div className="pst-v">{prWeight}kg</div><div className="pst-l">PR Weight</div></div>
+                <div className="pst"><div className="pst-v">{lastWeight}kg</div><div className="pst-l">Last Session</div></div>
+                <div className="pst"><div className="pst-v">{progChartData.length}</div><div className="pst-l">Sessions</div></div>
+              </div>
+            </>
+          )}
+          {progEx && (
+            <div className="prog-hist">
+              {progHist.length===0
+                ? <div className="no-data">No data yet.<br/>Log a session to see progress.</div>
+                : progHist.map((h,i) => (
+                    <div key={i} className="ph-row">
+                      <span className="ph-dt">{fmtShort(h.date)}</span>
+                      <div className="ph-sets">{h.sets.map((s,j) => <span key={j} className="ph-s">{s.weight}&#215;{s.reps}</span>)}</div>
+                    </div>
+                  ))
+              }
+            </div>
+          )}
+          {!progEx && <div className="empty-msg">Select an exercise above to see your progression chart and history.</div>}
+        </div>
+      )}
+
+      {view === 'history' && (
+        <div className="screen">
+          <div className="topbar"><span className="logo">History</span><span className="top-badge">{logs.length} sessions</span></div>
+          {logs.length === 0
+            ? <div className="empty-msg">No sessions logged yet.<br/>Complete a workout to see it here.</div>
+            : <div className="hist-list">
+                {logs.map((log,i) => (
+                  <div key={i} className="h-item" onClick={() => setExpandLog(expandLog===i?null:i)}>
+                    <div className="h-date">{fmtDate(log.date)} — Week {log.week}</div>
+                    <div className="h-nm">{log.sessionName}</div>
+                    <div className="h-det">{log.exercises.length} exercises · {log.duration||'?'} min · {log.exercises.reduce((a,e)=>a+e.sets.length,0)} sets</div>
+                    {expandLog===i && (
+                      <div className="h-exp">
+                        {log.exercises.map((ex,j) => (
+                          <div key={j} className="h-ex">
+                            <div className="h-ex-nm">{ex.name}</div>
+                            <div className="h-sets">{ex.sets.map((s,k) => <span key={k} className="h-set">{s.weight}kg&#215;{s.reps}{s.rir!=null?` @${s.rir}RIR`:''}</span>)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+          }
+        </div>
+      )}
+
+      {view === 'tools' && (
+        <div className="screen">
+          <div className="topbar"><span className="logo">Tools</span></div>
+          <div className="tool-sec">
+            <div className="tool-ttl">Plate Calculator</div>
+            <div className="tool-sub">20kg bar · standard plates</div>
+            <div className="tool-inp-row">
+              <span className="tool-lbl">Target</span>
+              <div className="tool-nw">
+                <button className="tool-nb" onClick={() => setPlateTgt(v=>Math.max(20,parseFloat(v||20)-2.5))}>&#8722;</button>
+                <input className="tool-ni" type="number" inputMode="decimal" value={plateTgt} onChange={e=>setPlateTgt(e.target.value)}/>
+                <button className="tool-nb" onClick={() => setPlateTgt(v=>parseFloat(v||20)+2.5)}>+</button>
+              </div>
+              <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:12,color:'var(--t2)',minWidth:20}}>kg</span>
+            </div>
+            <div className="tool-result">
+              {plateRes.ok
+                ? plateRes.plates.length===0
+                  ? <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:12,color:'var(--t2)'}}>Bar only — 20kg</div>
+                  : <>
+                      <div style={{fontSize:9,letterSpacing:'.15em',color:'var(--t3)',marginBottom:6,textTransform:'uppercase'}}>Each side:</div>
+                      {plateRes.plates.map((p,i) => (
+                        <div key={i} className="plate-row">
+                          <span className="plate-kg">{p.kg}kg &#215; {p.count}</span>
+                          <div className="plate-dots">{Array.from({length:Math.min(p.count,8)}).map((_,j) => <div key={j} className="pdot"/>)}</div>
+                        </div>
+                      ))}
+                    </>
+                : <div style={{color:'var(--err)',fontSize:12}}>Cannot make {plateTgt}kg with standard plates</div>
+              }
+            </div>
+          </div>
+          <div className="tool-sec">
+            <div className="tool-ttl">Warm-Up Sets</div>
+            <div className="tool-sub">Ramp to your working weight</div>
+            <div className="tool-inp-row">
+              <span className="tool-lbl">Working</span>
+              <div className="tool-nw">
+                <button className="tool-nb" onClick={() => setWarmWt(v=>Math.max(20,parseFloat(v||20)-2.5))}>&#8722;</button>
+                <input className="tool-ni" type="number" inputMode="decimal" value={warmWt} onChange={e=>setWarmWt(e.target.value)}/>
+                <button className="tool-nb" onClick={() => setWarmWt(v=>parseFloat(v||20)+2.5)}>+</button>
+              </div>
+              <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:12,color:'var(--t2)',minWidth:20}}>kg</span>
+            </div>
+            <div className="tool-result">
+              {warmups.map((w,i) => <div key={i} className="wu-row"><span className="wu-wt">{w.wt}kg</span><span className="wu-reps">{w.reps} reps</span><span className="wu-pct">{w.pct}</span></div>)}
+              <div className="wu-row" style={{borderTop:'1px solid var(--acc)',marginTop:4,paddingTop:8}}>
+                <span className="wu-wt" style={{color:'var(--acc)'}}>{warmWt}kg</span>
+                <span className="wu-reps" style={{color:'var(--t)'}}>Working set</span>
+                <span className="wu-pct" style={{color:'var(--acc)'}}>100%</span>
+              </div>
+            </div>
+          </div>
+          <div className="tool-sec">
+            <div className="tool-ttl">1RM Estimator</div>
+            <div className="tool-sub">Epley formula</div>
+            <div className="tool-inp-row">
+              <span className="tool-lbl">Weight</span>
+              <div className="tool-nw">
+                <button className="tool-nb" onClick={() => setOrmWt(v=>Math.max(0,parseFloat(v||0)-2.5))}>&#8722;</button>
+                <input className="tool-ni" type="number" inputMode="decimal" value={ormWt} onChange={e=>setOrmWt(e.target.value)}/>
+                <button className="tool-nb" onClick={() => setOrmWt(v=>parseFloat(v||0)+2.5)}>+</button>
+              </div>
+              <span style={{fontFamily:'JetBrains Mono,monospace',fontSize:12,color:'var(--t2)',minWidth:20}}>kg</span>
+            </div>
+            <div className="tool-inp-row">
+              <span className="tool-lbl">Reps</span>
+              <div className="tool-nw">
+                <button className="tool-nb" onClick={() => setOrmRp(v=>Math.max(1,parseInt(v||1)-1))}>&#8722;</button>
+                <input className="tool-ni" type="number" inputMode="numeric" value={ormRp} onChange={e=>setOrmRp(e.target.value)}/>
+                <button className="tool-nb" onClick={() => setOrmRp(v=>parseInt(v||0)+1)}>+</button>
+              </div>
+            </div>
+            <div className="tool-result">
+              <div className="orm-big-wrap">
+                <div className="orm-big">{epley(ormWt,ormRp)}</div>
+                <div className="orm-unit">kg estimated 1RM</div>
+              </div>
+            </div>
+          </div>
+          <div className="tool-sec">
+            <div className="tool-ttl">WHOOP</div>
+            <div className="tool-sub">{whoopConnected?'Connected — recovery syncs automatically on app open':'Connect to pull recovery, HRV and sleep data automatically'}</div>
+            {whoopConnected?(
+              <div>
+                {whoopData?.recovery!=null&&<div style={{fontFamily:'JetBrains Mono,monospace',fontSize:12,color:'var(--ok)',marginBottom:10}}>&#10003; Recovery {whoopData.recovery}% · HRV {whoopData.hrv}ms · RHR {whoopData.rhr}bpm</div>}
+                <div className="data-btns" style={{gridTemplateColumns:'1fr'}}>
+                  <button className="data-btn" onClick={()=>fetchWhoopData()}>&#8635; Refresh Now</button>
+                  <button className="data-btn danger" onClick={disconnectWhoop}>Disconnect WHOOP</button>
+                </div>
+              </div>
+            ):(
+              <div className="data-btns" style={{gridTemplateColumns:'1fr'}}>
+                <button className="data-btn" onClick={()=>window.location.href='/.netlify/functions/whoop-auth'}>Connect WHOOP</button>
+              </div>
+            )}
+          </div>
+          <div className="tool-sec">
+            <div className="tool-ttl">Data</div>
+            <div className="tool-sub">Export a backup before any app update. Import restores full history.</div>
+            <div className="data-btns">
+              <button className="data-btn" onClick={exportData}>&#8595; Export Backup</button>
+              <button className="data-btn" onClick={importData}>&#8593; Import Backup</button>
+              <button className="data-btn danger" onClick={() => setClearConfirm(true)}>&#128465; Clear All Data</button>
+            </div>
+            <div className="ver">Diamond Protocol v2.0 — data stored in localStorage</div>
+          </div>
+        </div>
+      )}
+
+      {view !== 'workout' && view !== 'complete' && (
+        <div className="bnav">
+          {[['home','&#127947;','Program'],['progress','&#128200;','Progress'],['history','&#128203;','History'],['tools','&#128295;','Tools']].map(([v,icon,label]) => (
+            <div key={v} className={`bn${view===v?' on':''}`} onClick={() => setView(v)}>
+              <span className="bn-ic" dangerouslySetInnerHTML={{__html:icon}}/>
+              <span className="bn-lb">{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+
+  </script>
+</body>
+</html>

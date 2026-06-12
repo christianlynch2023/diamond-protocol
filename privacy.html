@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Diamond Protocol</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #07090c;
+      color: #dde5ee;
+      font-family: 'Syne', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      padding: 40px 20px 80px;
+    }
+    .wrap {
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    .logo {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .35em;
+      color: #c4ff00;
+      text-transform: uppercase;
+      margin-bottom: 48px;
+      display: block;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -.01em;
+      margin-bottom: 8px;
+    }
+    .updated {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #3c4f62;
+      margin-bottom: 40px;
+    }
+    .section {
+      margin-bottom: 36px;
+      padding-bottom: 36px;
+      border-bottom: 1px solid #1d2733;
+    }
+    .section:last-of-type {
+      border-bottom: none;
+    }
+    h2 {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #c4ff00;
+      margin-bottom: 12px;
+    }
+    p {
+      font-size: 14px;
+      line-height: 1.75;
+      color: #7b90a8;
+      margin-bottom: 12px;
+    }
+    p:last-child { margin-bottom: 0; }
+    ul {
+      padding-left: 20px;
+      margin-bottom: 12px;
+    }
+    li {
+      font-size: 14px;
+      line-height: 1.75;
+      color: #7b90a8;
+      margin-bottom: 4px;
+    }
+    strong { color: #dde5ee; font-weight: 700; }
+    .highlight {
+      background: rgba(196,255,0,.05);
+      border: 1px solid rgba(196,255,0,.2);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin-bottom: 12px;
+    }
+    .highlight p { color: #dde5ee; margin: 0; font-size: 13px; }
+    a { color: #c4ff00; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <span class="logo">Diamond Protocol</span>
+
+    <h1>Privacy Policy</h1>
+    <div class="updated">Last updated: June 2026</div>
+
+    <div class="highlight">
+      <p><strong>Short version:</strong> Diamond Protocol is a personal workout tracking app. It connects to WHOOP to read your recovery data. All your data stays on your own device. Nothing is sold, shared, or sent to any third party.</p>
+    </div>
+
+    <div class="section">
+      <h2>1. What Diamond Protocol is</h2>
+      <p>Diamond Protocol is a personal fitness tracking application designed to log workouts, track progression, and integrate biometric recovery data from wearable devices. The application runs locally in your browser and stores all data on your device using browser localStorage.</p>
+      <p>Diamond Protocol is a personal application. It has no user accounts, no registration, and no server-side data storage.</p>
+    </div>
+
+    <div class="section">
+      <h2>2. Data we access from WHOOP</h2>
+      <p>When you connect your WHOOP account, Diamond Protocol requests access to the following data via the WHOOP API v2:</p>
+      <ul>
+        <li><strong>Recovery data</strong> — recovery score, heart rate variability (HRV), resting heart rate, respiratory rate, skin temperature, blood oxygen (SpO2 where available)</li>
+        <li><strong>Sleep data</strong> — sleep duration, sleep stages, sleep performance score</li>
+        <li><strong>Strain data</strong> — daily cardiovascular strain score</li>
+        <li><strong>Cycle data</strong> — physiological cycle information</li>
+      </ul>
+      <p>This data is used solely to personalise your workout recommendations within the app — for example, automatically adjusting training volume and intensity based on your recovery score.</p>
+    </div>
+
+    <div class="section">
+      <h2>3. How data is stored</h2>
+      <p>All data accessed from WHOOP, along with your workout logs, is stored exclusively in your browser's <strong>localStorage</strong> on your own device. This means:</p>
+      <ul>
+        <li>No data is transmitted to or stored on any external server operated by Diamond Protocol</li>
+        <li>No database or cloud storage is used by Diamond Protocol itself</li>
+        <li>Your data remains entirely under your control on your own device</li>
+        <li>Data is processed locally in your browser</li>
+      </ul>
+      <p>WHOOP API calls are made directly from your browser to WHOOP's servers using your OAuth access token, in accordance with WHOOP's own privacy policy and terms of service.</p>
+    </div>
+
+    <div class="section">
+      <h2>4. Data sharing and third parties</h2>
+      <p>Diamond Protocol does <strong>not</strong>:</p>
+      <ul>
+        <li>Sell your data to any third party</li>
+        <li>Share your data with any third party</li>
+        <li>Use your data for advertising or marketing purposes</li>
+        <li>Transmit your health or biometric data to any server outside of WHOOP's own infrastructure</li>
+        <li>Use analytics, tracking pixels, or third-party data collection tools</li>
+      </ul>
+      <p>The only third-party service this application communicates with is WHOOP, using the official WHOOP Developer API, and only at your explicit direction when you initiate a data sync.</p>
+    </div>
+
+    <div class="section">
+      <h2>5. OAuth authentication and tokens</h2>
+      <p>Connecting to WHOOP uses the standard OAuth 2.0 authorisation flow. Your WHOOP username and password are never seen or stored by Diamond Protocol — authentication is handled entirely by WHOOP's own login system.</p>
+      <p>OAuth access tokens and refresh tokens returned by WHOOP are stored in your browser's localStorage on your device. They are used solely to make authenticated requests to the WHOOP API on your behalf.</p>
+      <p>You can revoke Diamond Protocol's access to your WHOOP data at any time through your WHOOP account settings under Connected Apps.</p>
+    </div>
+
+    <div class="section">
+      <h2>6. Data deletion</h2>
+      <p>You can delete all locally stored data at any time:</p>
+      <ul>
+        <li><strong>Within the app:</strong> Tools → Data → Clear All Data</li>
+        <li><strong>Via your browser:</strong> Clear site data / localStorage in your browser settings</li>
+        <li><strong>WHOOP access:</strong> Revoke access via your WHOOP account → Connected Apps</li>
+      </ul>
+      <p>Deleting locally stored data removes all workout history, settings, and cached WHOOP data from your device permanently.</p>
+    </div>
+
+    <div class="section">
+      <h2>7. Children's privacy</h2>
+      <p>Diamond Protocol is not intended for use by anyone under the age of 18. No data is knowingly collected from minors.</p>
+    </div>
+
+    <div class="section">
+      <h2>8. Changes to this policy</h2>
+      <p>If this privacy policy changes materially, the updated date at the top of this page will reflect that. Because Diamond Protocol is a personal application with no user accounts, we are unable to notify users of changes directly.</p>
+    </div>
+
+    <div class="section">
+      <h2>9. Contact</h2>
+      <p>Diamond Protocol is a personal application. If you have questions about this privacy policy or how your data is handled, you can raise them via the application's source or through the platform where you obtained this application.</p>
+    </div>
+  </div>
+</body>
+</html>
