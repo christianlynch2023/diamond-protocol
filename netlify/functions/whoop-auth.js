@@ -2,8 +2,8 @@ exports.handler = async () => {
   const clientId = process.env.WHOOP_CLIENT_ID;
   const redirectUri = process.env.WHOOP_REDIRECT_URI;
 
-  console.log('CLIENT_ID set:', !!clientId);
-  console.log('REDIRECT_URI:', redirectUri);
+  const state = Math.random().toString(36).substring(2, 18) +
+                Math.random().toString(36).substring(2, 18);
 
   const scope = 'read:recovery read:cycles read:sleep read:workout read:body_measurement offline';
   const params = new URLSearchParams({
@@ -11,14 +11,15 @@ exports.handler = async () => {
     redirect_uri: redirectUri,
     response_type: 'code',
     scope,
+    state,
   });
-
-  const authUrl = `https://api.prod.whoop.com/oauth/oauth2/auth?${params}`;
-  console.log('Auth URL:', authUrl);
 
   return {
     statusCode: 302,
-    headers: { Location: authUrl, 'Cache-Control': 'no-cache' },
+    headers: {
+      Location: `https://api.prod.whoop.com/oauth/oauth2/auth?${params}`,
+      'Cache-Control': 'no-cache',
+    },
     body: '',
   };
 };
