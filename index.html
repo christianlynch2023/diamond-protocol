@@ -372,6 +372,40 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .target-val{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;color:var(--acc);line-height:1}
 .target-note{font-size:11px;color:var(--t2)}
 
+
+.review-wrap{width:100%;max-width:320px;margin-bottom:18px}
+.review-btn{display:block;width:100%;padding:13px;background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.35);color:var(--inf);font-family:'Syne',sans-serif;font-size:13px;font-weight:700;border-radius:10px;cursor:pointer}
+.review-btn:disabled{opacity:.5;cursor:not-allowed}
+.review-panel{margin-top:10px;background:rgba(74,158,255,.04);border:1px solid rgba(74,158,255,.2);border-radius:10px;padding:14px;text-align:left}
+.review-tag{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--inf);letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px}
+.review-text{font-size:12px;color:var(--t2);line-height:1.75;white-space:pre-wrap;text-align:left}
+.review-loading{text-align:center;padding:14px 0;color:var(--t3);font-size:12px}
+
+
+.pain-sec{padding:0 13px 10px}
+.pain-lbl{font-size:9px;letter-spacing:.2em;color:var(--t3);text-transform:uppercase;margin-bottom:6px}
+.pain-row{display:flex;gap:6px}
+.painb{flex:1;height:40px;background:var(--sur);border:1px solid var(--bdr);border-radius:8px;color:var(--t2);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
+.painb.on{border-color:var(--ok);color:var(--ok);background:rgba(0,232,122,.06)}
+.painb.on.warn{border-color:var(--warn);color:var(--warn);background:rgba(255,140,0,.06)}
+.painb.on.sharp{border-color:var(--err);color:var(--err);background:rgba(255,68,68,.06)}
+.h-pain{font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:6px;text-transform:uppercase}
+.h-pain.mild{color:var(--warn);background:rgba(255,140,0,.1)}
+.h-pain.sharp{color:var(--err);background:rgba(255,68,68,.1)}
+
+
+.rec-trend-sec{padding:13px 15px;border-bottom:1px solid var(--bdr)}
+.deload-card{padding:11px 13px;border-radius:9px;border:1px solid var(--bdr);background:var(--sur)}
+.deload-card.deload{border-color:rgba(255,68,68,.4);background:rgba(255,68,68,.05)}
+.deload-card.moderate{border-color:rgba(255,140,0,.4);background:rgba(255,140,0,.05)}
+.deload-card.fresh{border-color:rgba(0,232,122,.4);background:rgba(0,232,122,.05)}
+.deload-lbl{font-size:13px;font-weight:800;margin-bottom:3px}
+.deload-card.deload .deload-lbl{color:var(--err)}
+.deload-card.moderate .deload-lbl{color:var(--warn)}
+.deload-card.fresh .deload-lbl{color:var(--ok)}
+.deload-msg{font-size:11px;color:var(--t2);line-height:1.55}
+.deload-stats{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);margin-top:7px}
+
 </style>
 </head>
 <body>
@@ -640,11 +674,52 @@ function SVGChart({ data, color='#c4ff00', height=130 }) {
   );
 }
 
+function parseWhoopHistory(rec) {
+  const records = rec?.records || rec?.data || [];
+  return records.map(r => {
+    const s = r.score || r;
+    const date = (r.created_at || r.updated_at || '').slice(0, 10);
+    if (!date) return null;
+    return {
+      date,
+      recovery: Math.round(s.recovery_score ?? 0) || null,
+      hrv: Math.round(s.hrv_rmssd_milli ?? s.hrv ?? 0) || null,
+      rhr: Math.round(s.resting_heart_rate ?? 0) || null,
+    };
+  }).filter(x => x && x.recovery != null);
+}
+function mergeHistory(a, b) {
+  const map = {};
+  [...(a || []), ...(b || [])].forEach(e => { if (e && e.date) map[e.date] = e; });
+  return Object.values(map).sort((x, y) => x.date < y.date ? -1 : 1).slice(-60);
+}
+function computeDeloadReadiness(history, week) {
+  if (!history || history.length < 6) return { level: 'unknown', msg: 'Need about a week of WHOOP data to assess fatigue.' };
+  const sorted = [...history].sort((x, y) => x.date < y.date ? -1 : 1);
+  const recent = sorted.slice(-7);
+  const base = sorted.length >= 14 ? sorted.slice(-14, -7) : sorted.slice(0, -7);
+  const avg = (arr, k) => { const v = arr.map(e => e[k]).filter(n => n != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const rRec = avg(recent, 'recovery'), bRec = avg(base, 'recovery');
+  const rHrv = avg(recent, 'hrv'), bHrv = avg(base, 'hrv');
+  let signals = 0; const reasons = [];
+  if (rRec != null && bRec != null && (rRec - bRec) <= -8) { signals++; reasons.push('recovery down ' + Math.round(bRec - rRec) + ' pts'); }
+  if (rHrv != null && bHrv != null && ((rHrv - bHrv) / bHrv * 100) <= -10) { signals++; reasons.push('HRV down ' + Math.round((bHrv - rHrv) / bHrv * 100) + '%'); }
+  if (rRec != null && rRec < 40) { signals++; reasons.push('recovery sitting low'); }
+  const endOfBlock = [3, 7, 11].includes(week);
+  let level, msg;
+  if (signals >= 2) { level = 'deload'; msg = 'Fatigue is accumulating (' + reasons.join(', ') + '). Consider a deload or cut volume 30-40% this week.'; }
+  else if (signals === 1) { level = 'moderate'; msg = 'Early fatigue signal (' + reasons.join(', ') + '). Hold volume, prioritise sleep, and watch your performance.'; }
+  else { level = 'fresh'; msg = endOfBlock ? 'Recovery is holding well — you could push one more hard week before deloading.' : 'Recovery is holding well — keep progressing as planned.'; }
+  if (endOfBlock && level === 'moderate') { level = 'deload'; msg = 'End of an accumulation block and ' + reasons.join(', ') + ' — a deload is well timed now.'; }
+  return { level, msg, rRec: rRec != null ? Math.round(rRec) : null, bRec: bRec != null ? Math.round(bRec) : null, rHrv: rHrv != null ? Math.round(rHrv) : null, bHrv: bHrv != null ? Math.round(bHrv) : null };
+}
+
 function App() {
 
   // ── WHOOP INTEGRATION ─────────────────────────────────
   const [whoopData, setWhoopData]       = useState(() => { const c=LS.get('whoop_cache'); return c?JSON.parse(c):null; });
   const [whoopLoading, setWhoopLoading] = useState(false);
+  const [whoopHistory, setWhoopHistory] = useState(() => { try { return JSON.parse(LS.get('whoop_history') || '[]'); } catch(e) { return []; } });
   const whoopConnected = !!LS.get('whoop_access_token');
 
   const getWhoopCls = score => score >= 67 ? 'gr' : score >= 34 ? 'yw' : 'rd';
@@ -696,6 +771,11 @@ function App() {
       const parsed = { ...parseWhoop(raw), cachedAt: Date.now() };
       setWhoopData(parsed);
       LS.set('whoop_cache', JSON.stringify(parsed));
+      const newHist = parseWhoopHistory(raw.recovery);
+      const todayEntry = parsed.recovery != null ? [{ date: new Date().toISOString().slice(0,10), recovery: parsed.recovery, hrv: parsed.hrv, rhr: parsed.rhr }] : [];
+      if (newHist.length || todayEntry.length) {
+        setWhoopHistory(prev => { const merged = mergeHistory(prev, [...newHist, ...todayEntry]); LS.set('whoop_history', JSON.stringify(merged)); return merged; });
+      }
       applyWhoopRecovery(parsed.recovery);
     } catch(e) {
       const cached = LS.get('whoop_cache');
@@ -764,6 +844,7 @@ function App() {
   const [exIdx, setExIdx]       = useState(0);
   const [curSet, setCurSet]     = useState(0);
   const [setData, setSetData]   = useState({});
+  const [painData, setPainData] = useState({});
   const [wt, setWt]             = useState(60);
   const [rp, setRp]             = useState(8);
   const [rir, setRir]           = useState(1);
@@ -771,6 +852,7 @@ function App() {
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const startRef = useRef(null);
+  const painRef = useRef({});
   const [timerOn, setTimerOn]   = useState(false);
   const [timerSecs, setTimerSecs] = useState(0);
   const [timerTotal, setTimerTotal] = useState(0);
@@ -784,6 +866,8 @@ function App() {
   const [apiKey, setApiKey]           = useState(() => LS.get('anthropic_key') || '');
   const [briefing, setBriefing]       = useState(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
+  const [review, setReview]           = useState(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const [bodyMetrics, setBodyMetrics] = useState(() => { try { return JSON.parse(LS.get('body_metrics') || '[]'); } catch(e) { return []; } });
   const [protocolLog, setProtocolLog] = useState(() => { try { return JSON.parse(LS.get('protocol_log') || '[]'); } catch(e) { return []; } });
   const [newWt, setNewWt]             = useState('');
@@ -825,7 +909,7 @@ function App() {
   const skipTimer = () => { setTimerOn(false); setTimerDone(false); const cb=afterRef.current; afterRef.current=null; if(cb)cb(); };
 
   const getLastWt = exId => { for(const l of logs){const e=l.exercises?.find(x=>x.id===exId);if(e?.sets?.length)return e.sets[e.sets.length-1].weight||0;} return 0; };
-  const saveWip = (sid, data, ei, cs) => { const d={sessionId:sid,week,startTime:startRef.current,exIdx:ei,curSet:cs,setData:data}; LS.set('dp_wip',JSON.stringify(d)); setWipData(d); };
+  const saveWip = (sid, data, ei, cs) => { const d={sessionId:sid,week,startTime:startRef.current,exIdx:ei,curSet:cs,setData:data,painData:painRef.current}; LS.set('dp_wip',JSON.stringify(d)); setWipData(d); };
   const clearWip = () => { LS.del('dp_wip'); setWipData(null); };
 
   const startWorkout = sid => {
@@ -834,6 +918,7 @@ function App() {
     const _t0 = getTarget(ex0, logs, week);
     setWt(_t0.weight||60); setRp(_t0.reps||ex0.rMin); setRir(WR[week].rirN);
     setEditIdx(null); startRef.current=Date.now();
+    setPainData({}); painRef.current={};
     clearWip(); setView('workout');
   };
 
@@ -846,6 +931,7 @@ function App() {
     setWt(last.length?last[last.length-1].weight:getLastWt(ex.id)||60);
     setRp(ex.rMin); setRir(WR[wipData.week||week].rirN);
     startRef.current=wipData.startTime||Date.now();
+    setPainData(wipData.painData||{}); painRef.current=wipData.painData||{};
     setWeek(wipData.week||week); setView('workout'); setWipData(null);
   };
 
@@ -853,9 +939,9 @@ function App() {
     const sess=SESSIONS[sel];
     const dur=Math.round((Date.now()-(startRef.current||Date.now()))/60000);
     const log={date:new Date().toISOString(),sessionId:sel,sessionName:sess.name,week,duration:dur,
-      exercises:sess.exercises.map(ex=>({id:ex.id,name:ex.name,sets:(newData||setData)[ex.id]||[]})).filter(ex=>ex.sets.length>0)};
+      exercises:sess.exercises.map(ex=>({id:ex.id,name:ex.name,sets:(newData||setData)[ex.id]||[],pain:painRef.current[ex.id]||0})).filter(ex=>ex.sets.length>0)};
     setLogs(prev => [log,...prev].slice(0,200));
-    clearWip(); setView('complete');
+    clearWip(); setReview(null); setView('complete');
   };
 
   const logSet = () => {
@@ -956,7 +1042,9 @@ function App() {
       ?`Recovery ${whoopData.recovery}% | HRV ${whoopData.hrv}ms | RHR ${whoopData.rhr}bpm | Sleep ${whoopData.sleep}%`
       :'No Whoop data available';
     const bodyStr=bodyMetrics.length?`Latest weight: ${bodyMetrics[0].weight}kg (${fmtShort(bodyMetrics[0].date)})`:'No body metrics logged';
-    const prompt=`You are a personal strength coach for a 47-year-old male on an optimised TRT protocol (TRT, HCG, tren 35mg/week, HGH 14IU/week). He follows the Diamond Protocol 12-week hypertrophy programme.\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. Direct, no fluff.`;
+    const painFlags=[]; logs.slice(0,3).forEach(l=>(l.exercises||[]).forEach(ex=>{ if(ex.pain) painFlags.push(`${ex.name} (${ex.pain===2?'sharp':'mild'}, ${fmtShort(l.date)})`); }));
+    const painStr=painFlags.length?painFlags.join('; '):'none reported recently';
+    const prompt=`You are a personal strength coach for a 47-year-old male on an optimised TRT protocol (TRT, HCG, tren 35mg/week, HGH 14IU/week). He follows the Diamond Protocol 12-week hypertrophy programme.\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\nRecent joint/tendon pain: ${painStr}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. If sharp joint or tendon pain is flagged on any lift, recommend a machine or cable alternative for it today. Direct, no fluff.`;
     try {
       const res=await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
@@ -968,6 +1056,36 @@ function App() {
       setBriefing({text,session:sess.name});
     } catch(e){ setBriefing({text:'Error: '+e.message,session:sess.name}); }
     finally{ setBriefingLoading(false); }
+  };
+
+  const getReview = async () => {
+    const key = LS.get('anthropic_key');
+    if (!key) { alert('Add your Anthropic API key in Tools \u2192 AI Coaching first'); return; }
+    const last = logs[0];
+    if (!last) return;
+    setReviewLoading(true); setReview(null);
+    const lines = last.exercises.map(ex => {
+      const hist = getPrevHist(ex.id, logs, 2);
+      const prev = hist[1];
+      const cur = ex.sets.map(s => `${s.weight}x${s.reps}@${s.rir}RIR`).join(', ');
+      const prevStr = prev ? prev.sets.map(s => `${s.weight}x${s.reps}`).join(', ') : 'no previous data';
+      const painTag = ex.pain ? ` [${ex.pain===2?'SHARP PAIN':'niggle'} flagged]` : '';
+      return `- ${ex.name}: today ${cur} | last time ${prevStr}${painTag}`;
+    }).join('\n');
+    const wr2 = WR[last.week]; const ph = getPhase(last.week);
+    const whStr = whoopData?.recovery != null ? `Recovery ${whoopData.recovery}%, HRV ${whoopData.hrv}ms` : 'no Whoop data';
+    const prompt = `You are a personal strength coach reviewing a just-completed session for a 47-year-old male on an optimised TRT protocol (TRT, HCG, tren 35mg/week, HGH 14IU/week), following the Diamond Protocol 12-week hypertrophy programme.\n\nSESSION JUST COMPLETED: ${last.sessionName} - Week ${last.week} (${ph.name}, target ${wr2.rir})\nDuration: ${last.duration} min | Recovery context: ${whStr}\n\nEXERCISE RESULTS (today vs last time):\n${lines}\n\nWrite a concise post-session review in 2-3 short paragraphs. Cover: (1) what clearly progressed today (specific lifts that added weight or reps), (2) anything that stalled or regressed and the likely reason, (3) 2-3 specific, actionable adjustments for next time this session comes around - exact weights or rep targets where possible. If any lift has sharp pain flagged, recommend swapping it for a joint-friendly alternative next time. Be direct and encouraging but honest. Talk like a coach who tracks every set.`;
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 650, messages: [{ role: 'user', content: prompt }] })
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text || 'Could not generate review. Check your API key in Tools.';
+      setReview(text);
+    } catch (e) { setReview('Error: ' + e.message); }
+    finally { setReviewLoading(false); }
   };
 
   const addBodyMetric = () => {
@@ -1074,6 +1192,7 @@ function App() {
   const lastWeight=progChartData.length?progChartData[progChartData.length-1].y:0;
   const curVol=weekMuscleVolume(logs,week);
   const volSeries=weeklyVolumeSeries(logs,volMuscle);
+  const deloadInfo=computeDeloadReadiness(whoopHistory,week);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
@@ -1166,6 +1285,7 @@ function App() {
           </div>
           {isDeload && <div className="info-banner warn">Deload week — sets auto-reduced to 60%</div>}
           {recovery==='beat' && <div className="info-banner err">Beat up — drop volume 25-40%, skip intensifiers</div>}
+          {whoopConnected && deloadInfo.level==='deload' && <div className="info-banner err">Fatigue rising across your WHOOP data — a deload is recommended. See Progress.</div>}
           {/* WHOOP Biometrics */}
           {whoopConnected ? (
             <div className={`whoop-panel${whoopData?.recovery!=null?' '+getWhoopCls(whoopData.recovery):''}`}>
@@ -1374,6 +1494,16 @@ function App() {
                   </div>
                 </div>
               </div>
+              <div className="pain-sec">
+                <div className="pain-lbl">Joint / tendon discomfort</div>
+                <div className="pain-row">
+                  {[[0,'None'],[1,'Niggle'],[2,'Sharp']].map(([v,l]) => {
+                    const sel=(painData[curEx.id]||0)===v;
+                    const extra=v===2?' sharp':v===1?' warn':'';
+                    return <button key={v} className={`painb${sel?' on'+extra:''}`} onClick={()=>{const np={...painData,[curEx.id]:v};setPainData(np);painRef.current=np;}}>{l}</button>;
+                  })}
+                </div>
+              </div>
               {curEx.orm && parseInt(rp)>0 && parseFloat(wt)>0 && (
                 <div className="onerm-box">
                   <span className="orm-lbl">Est. 1RM</span>
@@ -1416,6 +1546,18 @@ function App() {
               ))}
             </div>
           )}
+          <div className="review-wrap">
+            <button className="review-btn" disabled={reviewLoading} onClick={getReview}>
+              {reviewLoading ? 'Reviewing your session...' : '⚡ Get AI Session Review'}
+            </button>
+            {reviewLoading && <div className="review-loading">Comparing today against your history...</div>}
+            {review && (
+              <div className="review-panel">
+                <div className="review-tag">Coach Review</div>
+                <div className="review-text">{review}</div>
+              </div>
+            )}
+          </div>
           <button className="done-home" onClick={() => setView('home')}>Back to Program</button>
         </div>
       )}
@@ -1459,6 +1601,33 @@ function App() {
                 ? <SVGChart data={volSeries} height={130}/>
                 : <div className="mv-empty">Log at least two weeks to see the trend.</div>}
             </div>
+          </div>
+          <div className="rec-trend-sec">
+            <div className="mv-head">
+              <span className="mv-ttl">Recovery & Fatigue</span>
+              <span className="mv-wk">WHOOP</span>
+            </div>
+            {whoopHistory.length < 2 ? (
+              <div className="mv-empty">{whoopConnected ? 'Building your recovery trend — check back after a few more days of WHOOP data.' : 'Connect WHOOP on the Program tab to track recovery and fatigue.'}</div>
+            ) : (
+              <>
+                <div className={`deload-card ${deloadInfo.level}`}>
+                  <div className="deload-lbl">{deloadInfo.level==='deload'?'Deload Recommended':deloadInfo.level==='moderate'?'Watch Fatigue':deloadInfo.level==='fresh'?'Recovered':'Building Data'}</div>
+                  <div className="deload-msg">{deloadInfo.msg}</div>
+                  {deloadInfo.rRec!=null && deloadInfo.bRec!=null && (
+                    <div className="deload-stats">7-day recovery {deloadInfo.rRec}% vs {deloadInfo.bRec}% baseline{deloadInfo.rHrv!=null?` \u00b7 HRV ${deloadInfo.rHrv} vs ${deloadInfo.bHrv}ms`:''}</div>
+                  )}
+                </div>
+                <div className="chart-lbl" style={{marginTop:14}}>Recovery — last {Math.min(whoopHistory.length,30)} readings</div>
+                <SVGChart data={whoopHistory.slice(-30).map(h=>({x:h.date.slice(5),y:h.recovery}))} height={120} color="#00e87a"/>
+                {whoopHistory.filter(h=>h.hrv!=null).length>1 && (
+                  <>
+                    <div className="chart-lbl" style={{marginTop:12}}>HRV trend (ms)</div>
+                    <SVGChart data={whoopHistory.slice(-30).filter(h=>h.hrv!=null).map(h=>({x:h.date.slice(5),y:h.hrv}))} height={110} color="#4a9eff"/>
+                  </>
+                )}
+              </>
+            )}
           </div>
           <div className="ex-sel-wrap">
             <div className="ex-sel-lbl">Select Exercise</div>
@@ -1512,7 +1681,7 @@ function App() {
                       <div className="h-exp">
                         {log.exercises.map((ex,j) => (
                           <div key={j} className="h-ex">
-                            <div className="h-ex-nm">{ex.name}</div>
+                            <div className="h-ex-nm">{ex.name}{ex.pain?<span className={`h-pain ${ex.pain===2?'sharp':'mild'}`}>{ex.pain===2?'sharp pain':'niggle'}</span>:null}</div>
                             <div className="h-sets">{ex.sets.map((s,k) => <span key={k} className="h-set">{s.weight}kg&#215;{s.reps}{s.rir!=null?` @${s.rir}RIR`:''}</span>)}</div>
                           </div>
                         ))}
