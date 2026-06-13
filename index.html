@@ -406,6 +406,9 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .deload-msg{font-size:11px;color:var(--t2);line-height:1.55}
 .deload-stats{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);margin-top:7px}
 
+
+.h-whoop{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--inf);margin-top:5px}
+
 </style>
 </head>
 <body>
@@ -714,12 +717,40 @@ function computeDeloadReadiness(history, week) {
   return { level, msg, rRec: rRec != null ? Math.round(rRec) : null, bRec: bRec != null ? Math.round(bRec) : null, rHrv: rHrv != null ? Math.round(rHrv) : null, bHrv: bHrv != null ? Math.round(bHrv) : null };
 }
 
+function parseWhoopWorkouts(raw) {
+  const records = raw?.records || raw?.data || [];
+  return records.map(w => {
+    const s = w.score || w;
+    return {
+      start: w.start || w.during?.lower || null,
+      end: w.end || w.during?.upper || w.start || null,
+      strain: s.strain != null ? Math.round(s.strain * 10) / 10 : null,
+      avgHr: s.average_heart_rate != null ? Math.round(s.average_heart_rate) : null,
+      maxHr: s.max_heart_rate != null ? Math.round(s.max_heart_rate) : null,
+      kcal: s.kilojoule != null ? Math.round(s.kilojoule / 4.184) : null,
+    };
+  }).filter(w => w.start && w.strain != null);
+}
+function matchWorkout(log, workouts) {
+  if (!workouts || !workouts.length || !log.date) return null;
+  const end = new Date(log.date).getTime();
+  const start = end - (log.duration || 60) * 60000;
+  let best = null, bestOv = 0;
+  for (const w of workouts) {
+    const ws = new Date(w.start).getTime(), we = new Date(w.end || w.start).getTime();
+    const ov = Math.min(end, we) - Math.max(start, ws);
+    if (ov > bestOv) { bestOv = ov; best = w; }
+  }
+  return bestOv > 5 * 60000 ? best : null;
+}
+
 function App() {
 
   // ── WHOOP INTEGRATION ─────────────────────────────────
   const [whoopData, setWhoopData]       = useState(() => { const c=LS.get('whoop_cache'); return c?JSON.parse(c):null; });
   const [whoopLoading, setWhoopLoading] = useState(false);
   const [whoopHistory, setWhoopHistory] = useState(() => { try { return JSON.parse(LS.get('whoop_history') || '[]'); } catch(e) { return []; } });
+  const [whoopWorkouts, setWhoopWorkouts] = useState(() => { try { return JSON.parse(LS.get('whoop_workouts') || '[]'); } catch(e) { return []; } });
   const whoopConnected = !!LS.get('whoop_access_token');
 
   const getWhoopCls = score => score >= 67 ? 'gr' : score >= 34 ? 'yw' : 'rd';
@@ -776,6 +807,8 @@ function App() {
       if (newHist.length || todayEntry.length) {
         setWhoopHistory(prev => { const merged = mergeHistory(prev, [...newHist, ...todayEntry]); LS.set('whoop_history', JSON.stringify(merged)); return merged; });
       }
+      const wos = parseWhoopWorkouts(raw.workouts);
+      if (wos.length) { setWhoopWorkouts(wos); LS.set('whoop_workouts', JSON.stringify(wos)); }
       applyWhoopRecovery(parsed.recovery);
     } catch(e) {
       const cached = LS.get('whoop_cache');
@@ -1677,6 +1710,7 @@ function App() {
                     <div className="h-date">{fmtDate(log.date)} — Week {log.week}</div>
                     <div className="h-nm">{log.sessionName}</div>
                     <div className="h-det">{log.exercises.length} exercises · {log.duration||'?'} min · {log.exercises.reduce((a,e)=>a+e.sets.length,0)} sets</div>
+                    {(() => { const w = matchWorkout(log, whoopWorkouts); return w ? <div className="h-whoop">&#9889; {w.strain} strain{w.avgHr?` \u00b7 ${w.avgHr} avg HR`:''}{w.maxHr?` \u00b7 ${w.maxHr} max`:''}{w.kcal?` \u00b7 ${w.kcal} cal`:''}</div> : null; })()}
                     {expandLog===i && (
                       <div className="h-exp">
                         {log.exercises.map((ex,j) => (
