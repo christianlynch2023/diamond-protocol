@@ -454,6 +454,7 @@ document.getElementById('apple-icon').href=iurl;
 const mf={name:"Diamond Protocol",short_name:"Diamond",description:"12-Week Hypertrophy Tracker",start_url:".",display:"standalone",background_color:"#07090c",theme_color:"#07090c",orientation:"portrait-primary",icons:[{src:iurl,sizes:"512x512",type:"image/png"},{src:iurl,sizes:"192x192",type:"image/png"}]};
 const mb=new Blob([JSON.stringify(mf)],{type:'application/json'});
 const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createObjectURL(mb); document.head.appendChild(ml);
+if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(()=>{}); }); }
 </script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -803,6 +804,29 @@ const CORE_EX = {
   upperB: new Set(['ub1','ub2','ub4','ub7','ub8']),
   lowerB: new Set(['lb1','lb2','lb5','lb7']),
 };
+
+function mergeLogs(a, b) {
+  const seen = new Set(); const out = [];
+  for (const l of [...(a || []), ...(b || [])]) {
+    if (!l || !l.date) continue;
+    const key = l.date + '|' + (l.sessionId || '');
+    if (seen.has(key)) continue;
+    seen.add(key); out.push(l);
+  }
+  out.sort((x, y) => x.date < y.date ? 1 : -1);
+  return out.slice(0, 200);
+}
+function mergeByKey(a, b, keyFn) {
+  const seen = new Set(); const out = [];
+  for (const e of [...(a || []), ...(b || [])]) {
+    if (!e) continue;
+    const k = keyFn(e);
+    if (seen.has(k)) continue;
+    seen.add(k); out.push(e);
+  }
+  out.sort((x, y) => (x.date || '') < (y.date || '') ? 1 : -1);
+  return out;
+}
 
 function App() {
 
@@ -1207,11 +1231,18 @@ function App() {
       const res = await fetch('/.netlify/functions/sync-data', { headers: { 'x-sync-code': c } });
       const data = await res.json();
       if (data && Array.isArray(data.logs)) {
+        // Merge cloud with current local so offline sessions are never lost
+        const mergedLogs = mergeLogs(logs, data.logs);
+        const mergedBody = mergeByKey(bodyMetrics, Array.isArray(data.bodyMetrics) ? data.bodyMetrics : [], e => e.date + '|' + e.weight);
+        const mergedProt = mergeByKey(protocolLog, Array.isArray(data.protocolLog) ? data.protocolLog : [], e => e.date + '|' + e.compound + '|' + e.dose);
         skipPush.current = true;
-        setLogs(data.logs);
+        setLogs(mergedLogs);
+        setBodyMetrics(mergedBody);
+        setProtocolLog(mergedProt);
         if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); }
-        setBodyMetrics(Array.isArray(data.bodyMetrics) ? data.bodyMetrics : []);
-        setProtocolLog(Array.isArray(data.protocolLog) ? data.protocolLog : []);
+        // Push the merged superset back so the cloud gets any offline sessions too
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery }, bodyMetrics: mergedBody, protocolLog: mergedProt, updatedAt: Date.now() });
+        fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot }).catch(() => {});
         setCloudStatus('synced');
         return true;
       }
