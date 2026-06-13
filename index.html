@@ -435,6 +435,19 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .meas-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--inf)}
 .meas-unit{font-size:10px;color:var(--t3);margin-left:3px}
 
+
+.readiness-card{margin:0 15px 10px;padding:12px 14px;border-radius:11px;border:1px solid var(--bdr);background:var(--sur);flex-shrink:0}
+.readiness-card.green{border-color:rgba(0,232,122,.4);background:rgba(0,232,122,.05)}
+.readiness-card.amber{border-color:rgba(255,140,0,.4);background:rgba(255,140,0,.05)}
+.readiness-card.red{border-color:rgba(255,68,68,.4);background:rgba(255,68,68,.05)}
+.rd-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.18em;color:var(--t3);text-transform:uppercase;margin-bottom:4px}
+.rd-mode{font-size:14px;font-weight:800;letter-spacing:.02em;margin-bottom:5px}
+.readiness-card.green .rd-mode{color:var(--ok)}
+.readiness-card.amber .rd-mode{color:var(--warn)}
+.readiness-card.red .rd-mode{color:var(--err)}
+.rd-action{font-size:12px;color:var(--t);line-height:1.55;margin-bottom:6px}
+.rd-factors{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);line-height:1.5}
+
 </style>
 </head>
 <body>
@@ -838,6 +851,61 @@ function mergeByKey(a, b, keyFn) {
 
 const MEAS_SITES = ['Waist','Chest','Shoulders','Neck','Hips','Left Arm','Right Arm','Left Thigh','Right Thigh','Calf'];
 
+function computeReadiness(recovery, whoopData, deloadInfo, logs, week) {
+  const lastLog = logs && logs[0];
+  const recentPain = (lastLog?.exercises || []).filter(e => e.pain).map(e => ({ name: e.name, level: e.pain }));
+  const sharpPain = recentPain.some(p => p.level === 2);
+  const nigglePain = recentPain.some(p => p.level === 1);
+  const sharpName = recentPain.find(p => p.level === 2)?.name;
+  const rec = whoopData?.recovery;
+  const recLow = rec != null && rec < 34;
+  const recHigh = rec != null && rec >= 67;
+  const sleep = whoopData?.sleep;
+  const sleepPoor = sleep != null && sleep < 70;
+  const sleepGreat = sleep != null && sleep >= 85;
+  const subjBeat = recovery === 'beat';
+  const subjExcellent = recovery === 'excellent';
+  const trend = deloadInfo?.level;
+  const deloadWk = [4, 8, 12].includes(week);
+  const peakWk = [9, 10, 11].includes(week);
+
+  const factors = [];
+  let major = 0, minor = 0, pos = 0;
+  if (subjBeat) { major++; factors.push('you flagged feeling beat up'); }
+  if (recLow) { major++; factors.push('WHOOP recovery red (' + rec + '%)'); }
+  if (trend === 'deload') { major++; factors.push('fatigue trend building'); }
+  if (sleepPoor) { minor++; factors.push('poor sleep (' + sleep + '%)'); }
+  if (trend === 'moderate') { minor++; factors.push('early fatigue signal'); }
+  if (nigglePain) { minor++; factors.push('joint niggle flagged last session'); }
+  if (subjExcellent) { pos++; factors.push('you feel fresh'); }
+  if (recHigh) { pos++; factors.push('WHOOP recovery green (' + rec + '%)'); }
+  if (trend === 'fresh') pos++;
+  if (sleepGreat) { pos++; factors.push('strong sleep (' + sleep + '%)'); }
+
+  const ORDER = ['red_stop', 'red_min', 'amber', 'green_standard', 'green_push'];
+  let mode;
+  if (deloadWk) mode = 'amber';
+  else if (major >= 3 || (sharpPain && major >= 2)) mode = 'red_stop';
+  else if (major >= 2) mode = 'red_min';
+  else if (major === 1 || minor >= 2) mode = 'amber';
+  else if (pos >= 2) mode = 'green_push';
+  else mode = 'green_standard';
+  if (sharpPain && ORDER.indexOf(mode) > ORDER.indexOf('amber')) mode = 'amber';
+  if (peakWk && mode === 'green_standard' && pos >= 1 && major === 0 && !sharpPain) mode = 'green_push';
+
+  const META = {
+    green_push:     { title: 'Green \u00b7 Push',        cls: 'green', action: 'Full session. Push your top sets and add load wherever your targets call for it. Intensifiers on if this week programmes them.' },
+    green_standard: { title: 'Green \u00b7 Standard',    cls: 'green', action: 'Full session as planned. Hit your targets with honest reps in reserve, no extra volume.' },
+    amber:          { title: 'Amber \u00b7 Modify',      cls: 'amber', action: deloadWk ? 'Deload week. Keep the main lifts light, cut accessory volume, and stay well short of failure.' : 'Train, but modify. Keep your main compounds, trim one or two isolation sets, and stay a rep or two shy of failure.' },
+    red_min:        { title: 'Red \u00b7 Minimum Dose',  cls: 'red',   action: 'Minimum effective dose. Run the 30-minute version, skip intensifiers, leave 2-3 in reserve, and chase a pump rather than a PR.' },
+    red_stop:       { title: 'Red \u00b7 Recover',       cls: 'red',   action: "Back off today. Mobility, a walk, or easy cardio, or just rest. This mix of signals isn't the day to grind." },
+  };
+  const meta = META[mode];
+  let action = meta.action;
+  if (sharpPain && sharpName && mode === 'amber') action += ' Swap ' + sharpName + ' for a joint-friendly alternative.';
+  return { mode, cls: meta.cls, title: meta.title, action, factors };
+}
+
 function App() {
 
   // ── WHOOP INTEGRATION ─────────────────────────────────
@@ -1180,7 +1248,7 @@ function App() {
     const bodyStr=bodyMetrics.length?`Latest weight: ${bodyMetrics[0].weight}kg (${fmtShort(bodyMetrics[0].date)})`:'No body metrics logged';
     const painFlags=[]; logs.slice(0,3).forEach(l=>(l.exercises||[]).forEach(ex=>{ if(ex.pain) painFlags.push(`${ex.name} (${ex.pain===2?'sharp':'mild'}, ${fmtShort(l.date)})`); }));
     const painStr=painFlags.length?painFlags.join('; '):'none reported recently';
-    const prompt=`You are a personal strength coach for a 47-year-old male on an optimised TRT protocol (TRT, HCG, tren 35mg/week, HGH 14IU/week). He follows the Diamond Protocol 12-week hypertrophy programme.\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\nRecent joint/tendon pain: ${painStr}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. If sharp joint or tendon pain is flagged on any lift, recommend a machine or cable alternative for it today. Direct, no fluff.`;
+    const prompt=`You are a personal strength coach for a 47-year-old male on an optimised TRT protocol (TRT, HCG, tren 35mg/week, HGH 14IU/week). He follows the Diamond Protocol 12-week hypertrophy programme.\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\nRecent joint/tendon pain: ${painStr}\nToday's readiness call: ${readiness.title} - ${readiness.action}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. If sharp joint or tendon pain is flagged on any lift, recommend a machine or cable alternative for it today. Keep your guidance consistent with today's readiness call above and explain its reasoning in your own words. Direct, no fluff.`;
     try {
       const res=await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
@@ -1359,6 +1427,7 @@ function App() {
   const plateaus=detectPlateaus(logs);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
   const measSeries=measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value}));
+  const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
@@ -1495,6 +1564,12 @@ function App() {
               Connect <b>WHOOP</b> to auto-sync your recovery
             </button>
           )}
+          <div className={`readiness-card ${readiness.cls}`}>
+            <div className="rd-label">Today's call</div>
+            <div className="rd-mode">{readiness.title}</div>
+            <div className="rd-action">{readiness.action}</div>
+            {readiness.factors.length > 0 && <div className="rd-factors">{readiness.factors.join(' \u00b7 ')}</div>}
+          </div>
           <div className="sec-lbl" style={{padding:'0 15px 6px'}}>Sessions</div>
           <div className="sg">
             {Object.values(SESSIONS).map(s => (
