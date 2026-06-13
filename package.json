@@ -1,0 +1,8 @@
+{
+  "name": "diamond-protocol",
+  "version": "1.0.0",
+  "description": "Diamond Protocol workout tracker",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
