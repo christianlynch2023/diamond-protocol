@@ -427,6 +427,14 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .ex-row.ex-dim{opacity:.32}
 .core-tag{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.05em;padding:1px 6px;border-radius:10px;margin-left:6px;text-transform:uppercase;color:var(--acc);background:var(--ag2);border:1px solid rgba(196,255,0,.3)}
 
+
+.meas-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:12px}
+.meas-cell{background:var(--crd);border:1px solid var(--bdr);border-radius:8px;padding:9px 11px;cursor:pointer;transition:border-color .15s}
+.meas-cell:hover{border-color:var(--inf)}
+.meas-site{font-size:10px;color:var(--t2);margin-bottom:2px}
+.meas-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--inf)}
+.meas-unit{font-size:10px;color:var(--t3);margin-left:3px}
+
 </style>
 </head>
 <body>
@@ -828,6 +836,8 @@ function mergeByKey(a, b, keyFn) {
   return out;
 }
 
+const MEAS_SITES = ['Waist','Chest','Shoulders','Neck','Hips','Left Arm','Right Arm','Left Thigh','Right Thigh','Calf'];
+
 function App() {
 
   // ── WHOOP INTEGRATION ─────────────────────────────────
@@ -990,6 +1000,11 @@ function App() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [bodyMetrics, setBodyMetrics] = useState(() => { try { return JSON.parse(LS.get('body_metrics') || '[]'); } catch(e) { return []; } });
   const [protocolLog, setProtocolLog] = useState(() => { try { return JSON.parse(LS.get('protocol_log') || '[]'); } catch(e) { return []; } });
+  const [measurements, setMeasurements] = useState(() => { try { return JSON.parse(LS.get('body_measurements') || '[]'); } catch(e) { return []; } });
+  const [mSite, setMSite] = useState('Waist');
+  const [mVal, setMVal] = useState('');
+  const [showAddMeas, setShowAddMeas] = useState(false);
+  const [mViewSite, setMViewSite] = useState('Waist');
   const [newWt, setNewWt]             = useState('');
   const [newWtNote, setNewWtNote]     = useState('');
   const [showAddBody, setShowAddBody] = useState(false);
@@ -1009,6 +1024,7 @@ function App() {
   useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
   useEffect(()=>{LS.set('body_metrics',JSON.stringify(bodyMetrics));},[bodyMetrics]);
   useEffect(()=>{LS.set('protocol_log',JSON.stringify(protocolLog));},[protocolLog]);
+  useEffect(()=>{LS.set('body_measurements',JSON.stringify(measurements));},[measurements]);
 
   useEffect(() => {
     if (!timerOn) return;
@@ -1215,6 +1231,13 @@ function App() {
     setNewWt('');setNewWtNote('');setShowAddBody(false);
   };
 
+  const addMeasurement = () => {
+    if (!mVal) return;
+    const entry = { date: new Date().toISOString(), site: mSite, value: parseFloat(mVal) };
+    setMeasurements(prev => [entry, ...prev].slice(0, 500));
+    setMVal(''); setShowAddMeas(false);
+  };
+
   const addProtocol = () => {
     if (!pDose) return;
     const e={date:new Date().toISOString(),compound:pCmp,dose:parseFloat(pDose),unit:pUnit,notes:pNote};
@@ -1235,13 +1258,15 @@ function App() {
         const mergedLogs = mergeLogs(logs, data.logs);
         const mergedBody = mergeByKey(bodyMetrics, Array.isArray(data.bodyMetrics) ? data.bodyMetrics : [], e => e.date + '|' + e.weight);
         const mergedProt = mergeByKey(protocolLog, Array.isArray(data.protocolLog) ? data.protocolLog : [], e => e.date + '|' + e.compound + '|' + e.dose);
+        const mergedMeas = mergeByKey(measurements, Array.isArray(data.measurements) ? data.measurements : [], e => e.date + '|' + e.site + '|' + e.value);
         skipPush.current = true;
         setLogs(mergedLogs);
         setBodyMetrics(mergedBody);
         setProtocolLog(mergedProt);
+        setMeasurements(mergedMeas);
         if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); }
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery }, bodyMetrics: mergedBody, protocolLog: mergedProt, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, updatedAt: Date.now() });
         fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot }).catch(() => {});
         setCloudStatus('synced');
         return true;
@@ -1256,7 +1281,7 @@ function App() {
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, updatedAt: Date.now() });
       await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       setCloudStatus('synced');
     } catch (e) { setCloudStatus('error'); }
@@ -1281,7 +1306,7 @@ function App() {
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -1332,6 +1357,8 @@ function App() {
   const volSeries=weeklyVolumeSeries(logs,volMuscle);
   const deloadInfo=computeDeloadReadiness(whoopHistory,week);
   const plateaus=detectPlateaus(logs);
+  const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
+  const measSeries=measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value}));
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
@@ -2057,6 +2084,58 @@ function App() {
                 </div>
               ))}
               {bodyMetrics.length===0&&<div className="empty-msg">No entries yet — log your first weigh-in above.</div>}
+            </div>
+          </div>
+
+          <div className="body-sec">
+            <div className="body-ttl">Measurements</div>
+            <div className="body-sub">Track circumference to separate muscle gain from fat and water</div>
+            {Object.keys(latestBySite).length > 0 && (
+              <div className="meas-grid">
+                {MEAS_SITES.filter(s => latestBySite[s]).map(s => (
+                  <div key={s} className="meas-cell" onClick={() => setMViewSite(s)}>
+                    <div className="meas-site">{s}</div>
+                    <div className="meas-val">{latestBySite[s].value}<span className="meas-unit">cm</span></div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {measSeries.length > 1 && (
+              <div style={{marginTop:2,marginBottom:10}}>
+                <div className="chart-lbl">{mViewSite} — trend (cm)</div>
+                <SVGChart data={measSeries} height={120} color="#4a9eff"/>
+              </div>
+            )}
+            <button className="add-toggle" onClick={() => setShowAddMeas(v => !v)}>
+              <span>Log a measurement</span><span className="plus">{showAddMeas ? '\u2212' : '+'}</span>
+            </button>
+            {showAddMeas && (
+              <div className="body-form">
+                <div className="bf-row">
+                  <div className="bf-grp">
+                    <div className="bf-lbl">Site</div>
+                    <select className="bf-sel" value={mSite} onChange={e => setMSite(e.target.value)}>
+                      {MEAS_SITES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="bf-grp">
+                    <div className="bf-lbl">Measurement (cm)</div>
+                    <input className="bf-in" type="number" inputMode="decimal" placeholder="e.g. 40.5" value={mVal} onChange={e => setMVal(e.target.value)}/>
+                  </div>
+                </div>
+                <button className="bf-save" onClick={addMeasurement}>Save</button>
+              </div>
+            )}
+            <div className="body-list">
+              {measurements.slice(0, 30).map((m, i) => (
+                <div key={i} className="bl-row">
+                  <span className="bl-date">{fmtShort(m.date)}</span>
+                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{m.site}</span>
+                  <span className="bl-val">{m.value}cm</span>
+                  <button className="bl-del" onClick={() => setMeasurements(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
+                </div>
+              ))}
+              {measurements.length === 0 && <div className="empty-msg">No measurements yet.<br/>Log your first site above.</div>}
             </div>
           </div>
 
