@@ -343,6 +343,29 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .sync-status.syncing{color:var(--inf);border-color:rgba(74,158,255,.3)}
 .sync-status.error{color:var(--err);border-color:rgba(255,68,68,.3)}
 
+
+.mv-sec{padding:13px 15px;border-bottom:1px solid var(--bdr)}
+.mv-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.mv-ttl{font-size:15px;font-weight:800}
+.mv-wk{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3)}
+.mv-sub{font-size:11px;color:var(--t2);margin-bottom:13px}
+.mv-row{margin-bottom:11px}
+.mv-row-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.mv-name{font-size:12px;font-weight:700;color:var(--t)}
+.mv-count{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t2);display:flex;align-items:center;gap:6px}
+.mv-count b{color:var(--t)}
+.mv-track{height:7px;background:var(--crd);border:1px solid var(--bdr);border-radius:4px;overflow:hidden}
+.mv-fill{height:100%;border-radius:3px;transition:width .4s}
+.mv-fill.low{background:var(--warn)}
+.mv-fill.ok{background:var(--ok)}
+.mv-fill.high{background:var(--inf)}
+.mv-tag{font-size:8px;font-weight:700;letter-spacing:.04em;padding:2px 6px;border-radius:10px;text-transform:uppercase}
+.mv-tag.low{color:var(--warn);background:rgba(255,140,0,.1)}
+.mv-tag.ok{color:var(--ok);background:rgba(0,232,122,.1)}
+.mv-tag.high{color:var(--inf);background:rgba(74,158,255,.1)}
+.mv-trend-sel{margin:5px 0 10px}
+.mv-empty{padding:18px 0;text-align:center;color:var(--t3);font-size:12px;line-height:1.6}
+
 </style>
 </head>
 <body>
@@ -446,6 +469,31 @@ const DEF_INTS = {
   lowerB: new Set(["lb5","lb6"]),
 };
 
+const MUSCLES = {
+  chest:    {name:'Chest',      min:10, max:18},
+  back:     {name:'Back / Lats',min:10, max:18},
+  sideDelt: {name:'Side Delts', min:12, max:20},
+  rearDelt: {name:'Rear Delts', min:8,  max:16},
+  biceps:   {name:'Biceps',     min:8,  max:16},
+  triceps:  {name:'Triceps',    min:8,  max:16},
+  quads:    {name:'Quads',      min:8,  max:16},
+  hams:     {name:'Hamstrings', min:6,  max:14},
+  glutes:   {name:'Glutes',     min:6,  max:14},
+  calves:   {name:'Calves',     min:8,  max:16},
+  abs:      {name:'Abs / Core', min:6,  max:16, optional:true},
+  adductors:{name:'Adductors',  min:4,  max:12, optional:true},
+};
+const EX_MUSCLE = {
+  ua1:{p:'chest',s:'triceps'}, ua2:{p:'back',s:'biceps'}, ua3:{p:'chest',s:'triceps'},
+  ua4:{p:'back'}, ua5:{p:'sideDelt'}, ua6:{p:'triceps'}, ua7:{p:'abs'},
+  la1:{p:'quads'}, la2:{p:'quads'}, la3:{p:'hams',s:'glutes'}, la4:{p:'quads'},
+  la5:{p:'quads'}, la6:{p:'hams'}, la7:{p:'calves'},
+  ub1:{p:'back',s:'biceps'}, ub2:{p:'chest',s:'sideDelt'}, ub3:{p:'chest'},
+  ub4:{p:'sideDelt'}, ub5:{p:'rearDelt'}, ub6:{p:'back'}, ub7:{p:'biceps'}, ub8:{p:'triceps'},
+  lb1:{p:'glutes',s:'quads'}, lb2:{p:'quads',s:'glutes'}, lb3:{p:'glutes',s:'hams'},
+  lb4:{p:'adductors'}, lb5:{p:'hams'}, lb6:{p:'abs'}, lb7:{p:'calves'},
+};
+
 const getPhase = w => PHASES.find(p => p.weeks.includes(w)) || PHASES[0];
 const fmt = s => { const m=Math.floor(s/60), sc=s%60; return m>0 ? `${m}:${String(sc).padStart(2,'0')}` : `${s}s`; };
 const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' ' + new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
@@ -468,6 +516,33 @@ function calcWarmups(working) {
   const pcts = working<=60?[0.5,0.75]:working<=100?[0.5,0.65,0.8]:[0.4,0.55,0.7,0.85];
   for (const p of pcts) { const w=Math.round(working*p/2.5)*2.5; res.push({wt:w,reps:p>=0.8?1:p>=0.65?2:4,pct:`${Math.round(p*100)}%`}); }
   return res;
+}
+
+function weekMuscleVolume(logs, wk) {
+  const v = {};
+  for (const l of logs) {
+    if (l.week !== wk) continue;
+    for (const ex of (l.exercises || [])) {
+      const m = EX_MUSCLE[ex.id]; if (!m) continue;
+      const sets = ex.sets?.length || 0;
+      v[m.p] = (v[m.p] || 0) + sets;
+      if (m.s) v[m.s] = (v[m.s] || 0) + sets * 0.5;
+    }
+  }
+  return v;
+}
+function weeklyVolumeSeries(logs, muscle) {
+  const byWeek = {};
+  for (const l of logs) {
+    for (const ex of (l.exercises || [])) {
+      const m = EX_MUSCLE[ex.id]; if (!m) continue;
+      const sets = ex.sets?.length || 0;
+      if (muscle === 'all') { byWeek[l.week] = (byWeek[l.week] || 0) + sets; }
+      else { let add = 0; if (m.p === muscle) add += sets; if (m.s === muscle) add += sets * 0.5; if (add) byWeek[l.week] = (byWeek[l.week] || 0) + add; }
+    }
+  }
+  const weeks = Object.keys(byWeek).map(Number).sort((a,b) => a-b);
+  return weeks.map(w => ({ x: 'W' + w, y: Math.round(byWeek[w] * 10) / 10 }));
 }
 
 function getProgRec(exId, rMax, logs) {
@@ -663,6 +738,7 @@ function App() {
   const [wipData, setWipData]   = useState(() => { const r=LS.get('dp_wip'); return r?JSON.parse(r):null; });
   const [expandLog, setExpandLog] = useState(null);
   const [progEx, setProgEx]     = useState(null);
+  const [volMuscle, setVolMuscle] = useState('all');
   const [activeInts, setActiveInts] = useState(new Set());
   const [exIdx, setExIdx]       = useState(0);
   const [curSet, setCurSet]     = useState(0);
@@ -971,6 +1047,8 @@ function App() {
   const progChartData=progHist.slice().reverse().map(h=>({x:fmtShort(h.date),y:Math.max(...h.sets.map(s=>s.weight))}));
   const prWeight=progChartData.length?Math.max(...progChartData.map(d=>d.y)):0;
   const lastWeight=progChartData.length?progChartData[progChartData.length-1].y:0;
+  const curVol=weekMuscleVolume(logs,week);
+  const volSeries=weeklyVolumeSeries(logs,volMuscle);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
@@ -1313,6 +1391,43 @@ function App() {
       {view === 'progress' && (
         <div className="screen">
           <div className="topbar"><span className="logo">Progress</span></div>
+          <div className="mv-sec">
+            <div className="mv-head">
+              <span className="mv-ttl">Weekly Volume</span>
+              <span className="mv-wk">Week {week}</span>
+            </div>
+            <div className="mv-sub">Hard sets per muscle this week vs hypertrophy target range</div>
+            {Object.keys(curVol).length === 0 ? (
+              <div className="mv-empty">No sets logged for Week {week} yet.<br/>Complete a session to see your volume.</div>
+            ) : (
+              Object.entries(MUSCLES).map(([key, mus]) => {
+                const done = Math.round((curVol[key] || 0) * 10) / 10;
+                if (done === 0 && mus.optional) return null;
+                const status = done < mus.min ? 'low' : done > mus.max ? 'high' : 'ok';
+                const pct = Math.min(done / mus.max, 1) * 100;
+                const tag = status === 'low' ? 'Low' : status === 'high' ? 'High' : 'On target';
+                return (
+                  <div key={key} className="mv-row">
+                    <div className="mv-row-top">
+                      <span className="mv-name">{mus.name}</span>
+                      <span className="mv-count"><b>{done}</b> / {mus.min}-{mus.max}<span className={`mv-tag ${status}`}>{tag}</span></span>
+                    </div>
+                    <div className="mv-track"><div className={`mv-fill ${status}`} style={{width: pct + '%'}}/></div>
+                  </div>
+                );
+              })
+            )}
+            <div style={{marginTop:16}}>
+              <div className="chart-lbl">Weekly hard sets — trend</div>
+              <select className="ex-sel mv-trend-sel" value={volMuscle} onChange={e => setVolMuscle(e.target.value)}>
+                <option value="all">All muscles (total)</option>
+                {Object.entries(MUSCLES).map(([k, m]) => <option key={k} value={k}>{m.name}</option>)}
+              </select>
+              {volSeries.length > 1
+                ? <SVGChart data={volSeries} height={130}/>
+                : <div className="mv-empty">Log at least two weeks to see the trend.</div>}
+            </div>
+          </div>
           <div className="ex-sel-wrap">
             <div className="ex-sel-lbl">Select Exercise</div>
             <select className="ex-sel" value={progEx||''} onChange={e=>setProgEx(e.target.value)}>
