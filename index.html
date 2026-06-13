@@ -294,6 +294,49 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .whoop-auto-badge.yw{background:var(--ag);color:var(--acc);border:1px solid rgba(196,255,0,.3)}
 .whoop-auto-badge.rd{background:rgba(255,68,68,.08);color:var(--err);border:1px solid rgba(255,68,68,.3)}
 
+
+.briefing-wrap{padding:10px 15px 14px;border-bottom:1px solid var(--bdr)}
+.briefing-btn{display:block;width:100%;padding:12px;background:rgba(74,158,255,.07);border:1px solid rgba(74,158,255,.3);color:var(--inf);font-family:'Syne',sans-serif;font-size:13px;font-weight:700;border-radius:9px;cursor:pointer;transition:all .15s;text-align:center}
+.briefing-btn:hover{background:rgba(74,158,255,.14)}
+.briefing-btn:disabled{opacity:.45;cursor:not-allowed}
+.briefing-panel{margin-top:9px;background:rgba(74,158,255,.04);border:1px solid rgba(74,158,255,.2);border-radius:9px;padding:13px}
+.briefing-tag{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--inf);letter-spacing:.14em;text-transform:uppercase;margin-bottom:7px}
+.briefing-text{font-size:12px;color:var(--t2);line-height:1.75;white-space:pre-wrap}
+.briefing-loading{text-align:center;padding:18px 0;color:var(--t3);font-size:12px}
+.body-sec{padding:13px 15px;border-bottom:1px solid var(--bdr)}
+.body-ttl{font-size:15px;font-weight:800;margin-bottom:2px}
+.body-sub{font-size:11px;color:var(--t2);margin-bottom:10px}
+.add-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 0;background:none;border:none;color:var(--t2);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:4px}
+.add-toggle .plus{color:var(--acc);font-size:20px;line-height:1;font-weight:400}
+.body-form{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.bf-row{display:flex;gap:8px}
+.bf-grp{display:flex;flex-direction:column;gap:4px;flex:1}
+.bf-lbl{font-size:9px;letter-spacing:.18em;color:var(--t3);text-transform:uppercase}
+.bf-in{background:var(--crd);border:1px solid var(--bdr);border-radius:7px;padding:9px 11px;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:14px;outline:none;width:100%;-moz-appearance:textfield}
+.bf-in::-webkit-outer-spin-button,.bf-in::-webkit-inner-spin-button{-webkit-appearance:none}
+.bf-in:focus{border-color:rgba(196,255,0,.4)}
+.bf-sel{background:var(--crd);border:1px solid var(--bdr);color:var(--t);font-family:'Syne',sans-serif;font-size:12px;font-weight:600;padding:9px 10px;border-radius:7px;outline:none;appearance:none;-webkit-appearance:none;cursor:pointer;width:100%}
+.bf-save{padding:10px 16px;background:var(--acc);color:#000;font-family:'Syne',sans-serif;font-size:12px;font-weight:800;border:none;border-radius:7px;cursor:pointer;white-space:nowrap}
+.body-list{display:flex;flex-direction:column}
+.bl-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr)}
+.bl-row:last-child{border-bottom:none}
+.bl-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:68px}
+.bl-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--acc)}
+.bl-note{font-size:10px;color:var(--t2);flex:1;margin:0 8px}
+.bl-del{background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;padding:4px}
+.p-row{display:flex;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr)}
+.p-row:last-child{border-bottom:none}
+.p-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:68px;padding-top:1px}
+.p-body{flex:1}
+.p-cmp{font-size:12px;font-weight:700;color:var(--t)}
+.p-dose{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--acc);margin-top:1px}
+.p-note{font-size:10px;color:var(--t2);margin-top:1px}
+.p-del{background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;padding:4px}
+.api-row{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.api-in{width:100%;background:var(--crd);border:1px solid var(--bdr);border-radius:7px;padding:9px 11px;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:11px;outline:none}
+.api-in:focus{border-color:rgba(196,255,0,.4)}
+.api-note{font-size:10px;color:var(--t3);line-height:1.5}
+
 </style>
 </head>
 <body>
@@ -635,9 +678,24 @@ function App() {
   const [warmWt, setWarmWt]     = useState(100);
   const [ormWt, setOrmWt]       = useState(100);
   const [ormRp, setOrmRp]       = useState(5);
+  const [apiKey, setApiKey]           = useState(() => LS.get('anthropic_key') || '');
+  const [briefing, setBriefing]       = useState(null);
+  const [briefingLoading, setBriefingLoading] = useState(false);
+  const [bodyMetrics, setBodyMetrics] = useState(() => { try { return JSON.parse(LS.get('body_metrics') || '[]'); } catch(e) { return []; } });
+  const [protocolLog, setProtocolLog] = useState(() => { try { return JSON.parse(LS.get('protocol_log') || '[]'); } catch(e) { return []; } });
+  const [newWt, setNewWt]             = useState('');
+  const [newWtNote, setNewWtNote]     = useState('');
+  const [showAddBody, setShowAddBody] = useState(false);
+  const [showAddProt, setShowAddProt] = useState(false);
+  const [pCmp, setPCmp]               = useState('TRT');
+  const [pDose, setPDose]             = useState('');
+  const [pUnit, setPUnit]             = useState('mg');
+  const [pNote, setPNote]             = useState('');
 
   useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery})); }, [week, recovery]);
   useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
+  useEffect(()=>{LS.set('body_metrics',JSON.stringify(bodyMetrics));},[bodyMetrics]);
+  useEffect(()=>{LS.set('protocol_log',JSON.stringify(protocolLog));},[protocolLog]);
 
   useEffect(() => {
     if (!timerOn) return;
@@ -765,6 +823,53 @@ function App() {
     setLogs([]); setWeek(1); setRecovery('normal');
     LS.del('dp_logs'); LS.del('dp_wip'); LS.del('dp_cfg');
     setWipData(null);
+  };
+
+
+  const getBriefing = async sessionId => {
+    const key = LS.get('anthropic_key');
+    if (!key) { alert('Add your Anthropic API key in Tools first'); return; }
+    const sess = SESSIONS[sessionId]; const wr = WR[week]; const ph = getPhase(week);
+    setBriefingLoading(true); setBriefing(null);
+    const progLines = sess.exercises.map(ex=>{
+      const rec=getProgRec(ex.id,ex.rMax,logs);
+      const prev=getPrevHist(ex.id,logs,1)[0];
+      const ps=prev?prev.sets.map(s=>`${s.weight}kg x${s.reps}`).join(', '):'first time';
+      return `- ${ex.name}: ${rec.msg} (last: ${ps})`;
+    }).join('\n');
+    const recent=logs.slice(0,4).map(l=>
+      `${new Date(l.date).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})} - ${l.sessionName}: ${l.exercises.map(e=>e.name+' '+e.sets.map(s=>s.weight+'x'+s.reps).join('/')).join(', ')}`
+    ).join('\n')||'No sessions logged yet';
+    const whStr=whoopData?.recovery!=null
+      ?`Recovery ${whoopData.recovery}% | HRV ${whoopData.hrv}ms | RHR ${whoopData.rhr}bpm | Sleep ${whoopData.sleep}%`
+      :'No Whoop data available';
+    const bodyStr=bodyMetrics.length?`Latest weight: ${bodyMetrics[0].weight}kg (${fmtShort(bodyMetrics[0].date)})`:'No body metrics logged';
+    const prompt=`You are a personal strength coach for a 47-year-old male on an optimised TRT protocol (TRT, HCG, tren 35mg/week, HGH 14IU/week). He follows the Diamond Protocol 12-week hypertrophy programme.\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. Direct, no fluff.`;
+    try {
+      const res=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:700,messages:[{role:'user',content:prompt}]})
+      });
+      const data=await res.json();
+      const text=data.content?.[0]?.text||'Could not generate briefing. Check your API key in Tools.';
+      setBriefing({text,session:sess.name});
+    } catch(e){ setBriefing({text:'Error: '+e.message,session:sess.name}); }
+    finally{ setBriefingLoading(false); }
+  };
+
+  const addBodyMetric = () => {
+    if (!newWt) return;
+    const e={date:new Date().toISOString(),weight:parseFloat(newWt),notes:newWtNote};
+    setBodyMetrics(prev=>[e,...prev].slice(0,200));
+    setNewWt('');setNewWtNote('');setShowAddBody(false);
+  };
+
+  const addProtocol = () => {
+    if (!pDose) return;
+    const e={date:new Date().toISOString(),compound:pCmp,dose:parseFloat(pDose),unit:pUnit,notes:pNote};
+    setProtocolLog(prev=>[e,...prev].slice(0,500));
+    setPDose('');setPNote('');setShowAddProt(false);
   };
 
   const phase=getPhase(week), wr=WR[week];
@@ -980,6 +1085,18 @@ function App() {
                 </div>
               );
             })}
+          </div>
+          <div className="briefing-wrap">
+            <button className="briefing-btn" disabled={briefingLoading} onClick={()=>getBriefing(sel)}>
+              {briefingLoading?'Generating briefing...':'⚡ Get AI Coaching Briefing'}
+            </button>
+            {briefingLoading&&<div className="briefing-loading">Analysing your data...</div>}
+            {briefing&&briefing.session===SESSIONS[sel]?.name&&(
+              <div className="briefing-panel">
+                <div className="briefing-tag">AI Briefing — {briefing.session}</div>
+                <div className="briefing-text">{briefing.text}</div>
+              </div>
+            )}
           </div>
           <button className="start-btn" onClick={() => startWorkout(sel)}>Start Workout &#8594;</button>
         </div>
@@ -1285,6 +1402,16 @@ function App() {
             )}
           </div>
           <div className="tool-sec">
+            <div className="tool-ttl">AI Coaching</div>
+            <div className="tool-sub">Enter your Anthropic API key to enable the pre-session briefing feature</div>
+            <div className="api-row">
+              <div className="bf-lbl">Anthropic API Key</div>
+              <input className="api-in" type="password" placeholder="sk-ant-..." value={apiKey}
+                onChange={e=>{setApiKey(e.target.value);LS.set('anthropic_key',e.target.value);}}/>
+              <div className="api-note">Stored locally on your device only. Get yours at console.anthropic.com</div>
+            </div>
+          </div>
+          <div className="tool-sec">
             <div className="tool-ttl">Data</div>
             <div className="tool-sub">Export a backup before any app update. Import restores full history.</div>
             <div className="data-btns">
@@ -1297,9 +1424,101 @@ function App() {
         </div>
       )}
 
+
+      {view==='body'&&(
+        <div className="screen">
+          <div className="topbar"><span className="logo">Body</span></div>
+
+          <div className="body-sec">
+            <div className="body-ttl">Body Weight</div>
+            <div className="body-sub">Weekly weigh-in — track alongside your training block</div>
+            {bodyMetrics.length>1&&(
+              <div style={{marginBottom:10}}>
+                <SVGChart data={bodyMetrics.slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.weight}))} height={120}/>
+              </div>
+            )}
+            <button className="add-toggle" onClick={()=>setShowAddBody(v=>!v)}>
+              <span>Log weight</span><span className="plus">{showAddBody?'−':'+'}</span>
+            </button>
+            {showAddBody&&(
+              <div className="body-form">
+                <div className="bf-row">
+                  <div className="bf-grp">
+                    <div className="bf-lbl">Weight (kg)</div>
+                    <input className="bf-in" type="number" inputMode="decimal" placeholder="89.5" value={newWt} onChange={e=>setNewWt(e.target.value)}/>
+                  </div>
+                  <div className="bf-grp">
+                    <div className="bf-lbl">Notes</div>
+                    <input className="bf-in" type="text" placeholder="e.g. fasted" value={newWtNote} onChange={e=>setNewWtNote(e.target.value)}/>
+                  </div>
+                </div>
+                <button className="bf-save" onClick={addBodyMetric}>Save</button>
+              </div>
+            )}
+            <div className="body-list">
+              {bodyMetrics.slice(0,20).map((m,i)=>(
+                <div key={i} className="bl-row">
+                  <span className="bl-date">{fmtShort(m.date)}</span>
+                  <span className="bl-val">{m.weight}kg</span>
+                  <span className="bl-note">{m.notes}</span>
+                  <button className="bl-del" onClick={()=>setBodyMetrics(prev=>prev.filter((_,j)=>j!==i))}>&#215;</button>
+                </div>
+              ))}
+              {bodyMetrics.length===0&&<div className="empty-msg">No entries yet — log your first weigh-in above.</div>}
+            </div>
+          </div>
+
+          <div className="body-sec">
+            <div className="body-ttl">Protocol Log</div>
+            <div className="body-sub">Track TRT, HCG, Tren and HGH doses alongside training</div>
+            <button className="add-toggle" onClick={()=>setShowAddProt(v=>!v)}>
+              <span>Log a dose</span><span className="plus">{showAddProt?'−':'+'}</span>
+            </button>
+            {showAddProt&&(
+              <div className="body-form">
+                <div className="bf-row">
+                  <div className="bf-grp">
+                    <div className="bf-lbl">Compound</div>
+                    <select className="bf-sel" value={pCmp} onChange={e=>setPCmp(e.target.value)}>
+                      {['TRT','HCG','Tren','HGH','Other'].map(c=><option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="bf-grp">
+                    <div className="bf-lbl">Dose</div>
+                    <input className="bf-in" type="number" inputMode="decimal" placeholder="Amount" value={pDose} onChange={e=>setPDose(e.target.value)}/>
+                  </div>
+                  <div className="bf-grp" style={{maxWidth:64}}>
+                    <div className="bf-lbl">Unit</div>
+                    <select className="bf-sel" value={pUnit} onChange={e=>setPUnit(e.target.value)}>
+                      {['mg','iu','mcg','ml'].map(u=><option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <input className="bf-in" type="text" placeholder="Notes (optional)" value={pNote} onChange={e=>setPNote(e.target.value)} style={{marginTop:0}}/>
+                <button className="bf-save" onClick={addProtocol}>Save</button>
+              </div>
+            )}
+            <div className="body-list">
+              {protocolLog.slice(0,40).map((p,i)=>(
+                <div key={i} className="p-row">
+                  <span className="p-date">{fmtShort(p.date)}</span>
+                  <div className="p-body">
+                    <div className="p-cmp">{p.compound}</div>
+                    <div className="p-dose">{p.dose}{p.unit}</div>
+                    {p.notes&&<div className="p-note">{p.notes}</div>}
+                  </div>
+                  <button className="p-del" onClick={()=>setProtocolLog(prev=>prev.filter((_,j)=>j!==i))}>&#215;</button>
+                </div>
+              ))}
+              {protocolLog.length===0&&<div className="empty-msg">No entries yet — log your first dose above.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {view !== 'workout' && view !== 'complete' && (
         <div className="bnav">
-          {[['home','&#127947;','Program'],['progress','&#128200;','Progress'],['history','&#128203;','History'],['tools','&#128295;','Tools']].map(([v,icon,label]) => (
+          {[['home','&#127947;','Program'],['progress','&#128200;','Progress'],['history','&#128203;','History'],['body','&#9878;','Body'],['tools','&#128295;','Tools']].map(([v,icon,label]) => (
             <div key={v} className={`bn${view===v?' on':''}`} onClick={() => setView(v)}>
               <span className="bn-ic" dangerouslySetInnerHTML={{__html:icon}}/>
               <span className="bn-lb">{label}</span>
