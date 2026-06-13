@@ -337,6 +337,12 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .api-in:focus{border-color:rgba(196,255,0,.4)}
 .api-note{font-size:10px;color:var(--t3);line-height:1.5}
 
+
+.sync-status{font-family:'JetBrains Mono',monospace;font-size:11px;margin-bottom:10px;padding:8px 11px;border-radius:7px;background:var(--sur);border:1px solid var(--bdr);color:var(--t2)}
+.sync-status.synced{color:var(--ok);border-color:rgba(0,232,122,.3);background:rgba(0,232,122,.05)}
+.sync-status.syncing{color:var(--inf);border-color:rgba(74,158,255,.3)}
+.sync-status.error{color:var(--err);border-color:rgba(255,68,68,.3)}
+
 </style>
 </head>
 <body>
@@ -691,6 +697,12 @@ function App() {
   const [pDose, setPDose]             = useState('');
   const [pUnit, setPUnit]             = useState('mg');
   const [pNote, setPNote]             = useState('');
+  const [syncCode, setSyncCode]       = useState(() => LS.get('sync_code') || '');
+  const [syncCodeInput, setSyncCodeInput] = useState('');
+  const [cloudStatus, setCloudStatus] = useState('idle');
+  const syncTimer = useRef(null);
+  const skipPush  = useRef(false);
+  const syncMounted = useRef(false);
 
   useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery})); }, [week, recovery]);
   useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
@@ -871,6 +883,68 @@ function App() {
     setProtocolLog(prev=>[e,...prev].slice(0,500));
     setPDose('');setPNote('');setShowAddProt(false);
   };
+
+
+  const pullFromCloud = async (code) => {
+    const c = code || syncCode || LS.get('sync_code');
+    if (!c) return false;
+    setCloudStatus('syncing');
+    try {
+      const res = await fetch('/.netlify/functions/sync-data', { headers: { 'x-sync-code': c } });
+      const data = await res.json();
+      if (data && Array.isArray(data.logs)) {
+        skipPush.current = true;
+        setLogs(data.logs);
+        if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); }
+        setBodyMetrics(Array.isArray(data.bodyMetrics) ? data.bodyMetrics : []);
+        setProtocolLog(Array.isArray(data.protocolLog) ? data.protocolLog : []);
+        setCloudStatus('synced');
+        return true;
+      }
+      setCloudStatus('synced');
+      return false;
+    } catch (e) { setCloudStatus('error'); return false; }
+  };
+
+  const syncNow = async (codeArg) => {
+    const c = codeArg || syncCode || LS.get('sync_code');
+    if (!c) return;
+    setCloudStatus('syncing');
+    try {
+      const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, updatedAt: Date.now() });
+      await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
+      setCloudStatus('synced');
+    } catch (e) { setCloudStatus('error'); }
+  };
+
+  const connectSync = async () => {
+    const c = (syncCodeInput || '').trim();
+    if (c.length < 8) { alert('Sync code must be at least 8 characters. Pick something private and memorable.'); return; }
+    LS.set('sync_code', c); setSyncCode(c); setSyncCodeInput('');
+    const found = await pullFromCloud(c);
+    if (!found) { await syncNow(c); }
+  };
+
+  const disconnectSync = () => { LS.del('sync_code'); setSyncCode(''); setCloudStatus('idle'); };
+
+  // Pull cloud data once on load if a sync code is stored
+  useEffect(() => { const c = LS.get('sync_code'); if (c) pullFromCloud(c); }, []);
+
+  // Debounced auto-push whenever training data changes
+  useEffect(() => {
+    if (!syncCode) return;
+    clearTimeout(syncTimer.current);
+    if (!syncMounted.current) { syncMounted.current = true; return; }
+    if (skipPush.current) { skipPush.current = false; return; }
+    const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, updatedAt: Date.now() });
+    syncTimer.current = setTimeout(async () => {
+      setCloudStatus('syncing');
+      try {
+        await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': syncCode }, body: snapshot });
+        setCloudStatus('synced');
+      } catch (e) { setCloudStatus('error'); }
+    }, 3000);
+  }, [logs, bodyMetrics, protocolLog, week, recovery, syncCode]);
 
   const phase=getPhase(week), wr=WR[week];
   const showInt=wr.i, isDeload=DLW.has(week);
@@ -1398,6 +1472,29 @@ function App() {
             ):(
               <div className="data-btns" style={{gridTemplateColumns:'1fr'}}>
                 <button className="data-btn" onClick={()=>window.location.href='/.netlify/functions/whoop-auth'}>Connect WHOOP</button>
+              </div>
+            )}
+          </div>
+          <div className="tool-sec">
+            <div className="tool-ttl">Cloud Sync</div>
+            <div className="tool-sub">Back up your full training history to the cloud so it survives clearing Safari or switching phones. Enter the same code on another device to restore everything.</div>
+            {syncCode ? (
+              <div>
+                <div className={`sync-status ${cloudStatus}`}>
+                  {cloudStatus==='syncing'?'Syncing…':cloudStatus==='error'?'Sync error — will retry on next change':cloudStatus==='synced'?'✓ Backed up to cloud':'Connected'}
+                </div>
+                <div className="data-btns" style={{gridTemplateColumns:'1fr 1fr'}}>
+                  <button className="data-btn" onClick={()=>syncNow()}>&#8593; Sync Now</button>
+                  <button className="data-btn" onClick={()=>pullFromCloud()}>&#8595; Restore</button>
+                </div>
+                <button className="data-btn danger" style={{width:'100%',marginTop:8}} onClick={disconnectSync}>Disconnect Sync</button>
+              </div>
+            ) : (
+              <div className="api-row">
+                <div className="bf-lbl">Sync Code (min 8 characters)</div>
+                <input className="api-in" type="text" autoCapitalize="none" autoCorrect="off" placeholder="choose a private code" value={syncCodeInput} onChange={e=>setSyncCodeInput(e.target.value)}/>
+                <div className="api-note">Pick something private and memorable. Anyone with this exact code can read your data, so don't share it.</div>
+                <button className="bf-save" style={{marginTop:6}} onClick={connectSync}>Enable Cloud Sync</button>
               </div>
             )}
           </div>
