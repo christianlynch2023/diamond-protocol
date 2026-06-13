@@ -409,6 +409,24 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 
 .h-whoop{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--inf);margin-top:5px}
 
+
+.plateau-sec{padding:13px 15px;border-bottom:1px solid var(--bdr)}
+.plateau-row{display:flex;flex-direction:column;gap:2px;padding:9px 11px;background:rgba(255,140,0,.05);border:1px solid rgba(255,140,0,.25);border-radius:8px;margin-bottom:7px}
+.plateau-name{font-size:13px;font-weight:700;color:var(--warn)}
+.plateau-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t2)}
+.plateau-tip{font-size:10px;color:var(--t3);line-height:1.5;margin-top:4px}
+
+
+.swap-list{display:flex;flex-direction:column;gap:7px;margin-bottom:14px}
+.swap-opt{padding:12px;background:var(--sur);border:1px solid var(--bdr);border-radius:8px;color:var(--t);font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;text-align:left;transition:all .15s}
+.swap-opt:hover{border-color:var(--acc);color:var(--acc)}
+.cond-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 15px;border-bottom:1px solid var(--bdr)}
+.cond-lbl{font-size:12px;font-weight:700;color:var(--t2)}
+.cond-btn{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;padding:6px 12px;border-radius:7px;border:1px solid var(--bdr);background:var(--crd);color:var(--t2);cursor:pointer}
+.cond-btn.on{border-color:var(--acc);color:var(--acc);background:var(--ag2)}
+.ex-row.ex-dim{opacity:.32}
+.core-tag{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.05em;padding:1px 6px;border-radius:10px;margin-left:6px;text-transform:uppercase;color:var(--acc);background:var(--ag2);border:1px solid rgba(196,255,0,.3)}
+
 </style>
 </head>
 <body>
@@ -744,6 +762,48 @@ function matchWorkout(log, workouts) {
   return bestOv > 5 * 60000 ? best : null;
 }
 
+function detectPlateaus(logs) {
+  const byEx = {};
+  for (const l of logs) {
+    for (const ex of (l.exercises || [])) {
+      if (!ex.sets?.length) continue;
+      const best = Math.max(...ex.sets.map(s => epley(s.weight, s.reps)));
+      (byEx[ex.id] = byEx[ex.id] || { name: ex.name, vals: [] }).vals.push(best);
+    }
+  }
+  const stalled = [];
+  for (const id in byEx) {
+    const v = byEx[id].vals;
+    if (v.length < 4) continue;
+    const peak = Math.max(...v);
+    let stuck = 0;
+    for (const x of v) { if (x >= peak - 0.001) break; stuck++; }
+    if (stuck >= 3) stalled.push({ name: byEx[id].name, sessions: stuck, lastE1rm: Math.round(v[0]), peakE1rm: Math.round(peak) });
+  }
+  return stalled.sort((a, b) => b.sessions - a.sessions);
+}
+
+const ALT_BY_MUSCLE = {
+  chest:[{name:'Machine Chest Press'},{name:'Pec Deck'},{name:'Dumbbell Press'},{name:'Cable Press'}],
+  back:[{name:'Lat Pulldown'},{name:'Chest-Supported Row'},{name:'Cable Row'},{name:'Machine Row'}],
+  sideDelt:[{name:'DB Lateral Raise'},{name:'Machine Lateral Raise'},{name:'Cable Y-Raise'}],
+  rearDelt:[{name:'Reverse Pec Deck'},{name:'Face Pull'},{name:'DB Rear Delt Flye'}],
+  biceps:[{name:'Cable Curl'},{name:'DB Curl'},{name:'Preacher Curl'},{name:'Hammer Curl'}],
+  triceps:[{name:'Cable Pushdown'},{name:'Overhead Cable Ext'},{name:'Dip Machine'},{name:'Skull Crusher'}],
+  quads:[{name:'Leg Press'},{name:'Hack Squat'},{name:'Leg Extension'},{name:'Smith Squat'}],
+  hams:[{name:'Lying Leg Curl'},{name:'Seated Leg Curl'},{name:'Romanian Deadlift'},{name:'Nordic Curl'}],
+  glutes:[{name:'Hip Thrust'},{name:'Glute Leg Press'},{name:'Cable Kickback'},{name:'Bulgarian Split Squat'}],
+  calves:[{name:'Standing Calf Raise'},{name:'Seated Calf Raise'},{name:'Leg Press Calf Raise'}],
+  abs:[{name:'Cable Crunch'},{name:'Hanging Leg Raise'},{name:'Ab Machine'}],
+  adductors:[{name:'Adductor Machine'},{name:'Copenhagen Plank'}],
+};
+const CORE_EX = {
+  upperA: new Set(['ua1','ua2','ua3','ua5','ua6']),
+  lowerA: new Set(['la1','la3','la4','la7']),
+  upperB: new Set(['ub1','ub2','ub4','ub7','ub8']),
+  lowerB: new Set(['lb1','lb2','lb5','lb7']),
+};
+
 function App() {
 
   // ── WHOOP INTEGRATION ─────────────────────────────────
@@ -878,6 +938,9 @@ function App() {
   const [curSet, setCurSet]     = useState(0);
   const [setData, setSetData]   = useState({});
   const [painData, setPainData] = useState({});
+  const [subMap, setSubMap] = useState({});
+  const [showSwap, setShowSwap] = useState(false);
+  const [condensed, setCondensed] = useState(false);
   const [wt, setWt]             = useState(60);
   const [rp, setRp]             = useState(8);
   const [rir, setRir]           = useState(1);
@@ -942,7 +1005,7 @@ function App() {
   const skipTimer = () => { setTimerOn(false); setTimerDone(false); const cb=afterRef.current; afterRef.current=null; if(cb)cb(); };
 
   const getLastWt = exId => { for(const l of logs){const e=l.exercises?.find(x=>x.id===exId);if(e?.sets?.length)return e.sets[e.sets.length-1].weight||0;} return 0; };
-  const saveWip = (sid, data, ei, cs) => { const d={sessionId:sid,week,startTime:startRef.current,exIdx:ei,curSet:cs,setData:data,painData:painRef.current}; LS.set('dp_wip',JSON.stringify(d)); setWipData(d); };
+  const saveWip = (sid, data, ei, cs) => { const d={sessionId:sid,week,startTime:startRef.current,exIdx:ei,curSet:cs,setData:data,painData:painRef.current,subMap}; LS.set('dp_wip',JSON.stringify(d)); setWipData(d); };
   const clearWip = () => { LS.del('dp_wip'); setWipData(null); };
 
   const startWorkout = sid => {
@@ -951,7 +1014,7 @@ function App() {
     const _t0 = getTarget(ex0, logs, week);
     setWt(_t0.weight||60); setRp(_t0.reps||ex0.rMin); setRir(WR[week].rirN);
     setEditIdx(null); startRef.current=Date.now();
-    setPainData({}); painRef.current={};
+    setPainData({}); painRef.current={}; setSubMap({});
     clearWip(); setView('workout');
   };
 
@@ -964,7 +1027,7 @@ function App() {
     setWt(last.length?last[last.length-1].weight:getLastWt(ex.id)||60);
     setRp(ex.rMin); setRir(WR[wipData.week||week].rirN);
     startRef.current=wipData.startTime||Date.now();
-    setPainData(wipData.painData||{}); painRef.current=wipData.painData||{};
+    setPainData(wipData.painData||{}); painRef.current=wipData.painData||{}; setSubMap(wipData.subMap||{});
     setWeek(wipData.week||week); setView('workout'); setWipData(null);
   };
 
@@ -972,13 +1035,13 @@ function App() {
     const sess=SESSIONS[sel];
     const dur=Math.round((Date.now()-(startRef.current||Date.now()))/60000);
     const log={date:new Date().toISOString(),sessionId:sel,sessionName:sess.name,week,duration:dur,
-      exercises:sess.exercises.map(ex=>({id:ex.id,name:ex.name,sets:(newData||setData)[ex.id]||[],pain:painRef.current[ex.id]||0})).filter(ex=>ex.sets.length>0)};
+      exercises:sess.exercises.map(ex=>{const e=subMap[ex.id]?{...ex,...subMap[ex.id]}:ex; return {id:e.id,name:e.name,sets:(newData||setData)[e.id]||[],pain:painRef.current[e.id]||0};}).filter(ex=>ex.sets.length>0)};
     setLogs(prev => [log,...prev].slice(0,200));
     clearWip(); setReview(null); setView('complete');
   };
 
   const logSet = () => {
-    const sess=SESSIONS[sel]; const ex=sess.exercises[exIdx];
+    const sess=SESSIONS[sel]; const baseEx2=sess.exercises[exIdx]; const ex=subMap[baseEx2.id]?{...baseEx2,...subMap[baseEx2.id]}:baseEx2;
     const effSets=getDS(ex.sets,week);
     const newSet={weight:parseFloat(wt)||0, reps:parseInt(rp)||0, rir};
     if (editIdx !== null) {
@@ -1197,6 +1260,16 @@ function App() {
     }, 3000);
   }, [logs, bodyMetrics, protocolLog, week, recovery, syncCode]);
 
+  const applySwap = o => {
+    const base = SESSIONS[sel]?.exercises[exIdx];
+    if (!base) return;
+    const subId = 'sub_' + base.id + '_' + o.name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    setSubMap(prev => ({ ...prev, [base.id]: { id: subId, name: o.name } }));
+    setSetData(prev => { if (prev[base.id]) { const n = { ...prev }; n[subId] = prev[base.id]; delete n[base.id]; return n; } return prev; });
+    if (painRef.current[base.id]) { painRef.current[subId] = painRef.current[base.id]; delete painRef.current[base.id]; }
+    setShowSwap(false);
+  };
+
   const phase=getPhase(week), wr=WR[week];
   const showInt=wr.i, isDeload=DLW.has(week);
   const today=new Date().toDateString();
@@ -1204,7 +1277,8 @@ function App() {
   const weekDone=new Set(logs.filter(l=>l.week===week).map(l=>l.sessionId));
   const allDone=weekDone.size>=4;
   const sess=sel?SESSIONS[sel]:null;
-  const curEx=sess?sess.exercises[exIdx]:null;
+  const baseEx=sess?sess.exercises[exIdx]:null;
+  const curEx=baseEx?(subMap[baseEx.id]?{...baseEx,...subMap[baseEx.id]}:baseEx):null;
   const effSets=curEx?getDS(curEx.sets,week):0;
   const loggedSetsArr=curEx?(setData[curEx.id]||[]):[];
   const prevHist=curEx?getPrevHist(curEx.id,logs,3):[];
@@ -1226,6 +1300,7 @@ function App() {
   const curVol=weekMuscleVolume(logs,week);
   const volSeries=weeklyVolumeSeries(logs,volMuscle);
   const deloadInfo=computeDeloadReadiness(whoopHistory,week);
+  const plateaus=detectPlateaus(logs);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
@@ -1255,6 +1330,21 @@ function App() {
               <button className="mbt ghost" onClick={() => setSkipConfirm(false)}>Cancel</button>
               <button className="mbt danger" onClick={doSkipEx}>Skip</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showSwap && curEx && (
+        <div className="modal-ov">
+          <div className="modal">
+            <div className="modal-title">Swap Exercise</div>
+            <div className="modal-sub">Replace {curEx.name} with another option for the same muscle. Your set and rep scheme carries over; it tracks as its own lift.</div>
+            <div className="swap-list">
+              {(ALT_BY_MUSCLE[EX_MUSCLE[baseEx?.id]?.p] || []).filter(o => o.name !== curEx.name).map((o, i) => (
+                <button key={i} className="swap-opt" onClick={() => applySwap(o)}>{o.name}</button>
+              ))}
+            </div>
+            <div className="modal-btns"><button className="mbt ghost" onClick={() => setShowSwap(false)}>Cancel</button></div>
           </div>
         </div>
       )}
@@ -1381,15 +1471,19 @@ function App() {
               <span className={`int-count${activeInts.size>=sess.maxInt?' full':''}`}>{activeInts.size} / {sess.maxInt}</span>
             </div>
           )}
+          <div className="cond-toggle-row">
+            <span className="cond-lbl">Short on time?</span>
+            <button className={`cond-btn${condensed?' on':''}`} onClick={() => setCondensed(c => !c)}>{condensed?'30-min version ON':'Show 30-min version'}</button>
+          </div>
           <div className="ex-list">
             {sess.exercises.map((ex, i) => {
               const adj = getDS(ex.sets, week);
               const rec = getProgRec(ex.id, ex.rMax, logs);
               return (
-                <div key={ex.id} className="ex-row">
+                <div key={ex.id} className={`ex-row${condensed && !CORE_EX[sess.id]?.has(ex.id) ? ' ex-dim' : ''}`}>
                   <div className="ex-n">{i+1}</div>
                   <div className="ex-body">
-                    <div className={`ex-nm${ex.opt?' opt':''}`}>{ex.name}{ex.opt?' (opt)':''}</div>
+                    <div className={`ex-nm${ex.opt?' opt':''}`}>{ex.name}{ex.opt?' (opt)':''}{condensed && CORE_EX[sess.id]?.has(ex.id) ? <span className="core-tag">core</span> : null}</div>
                     <div className="chips">
                       {adj!==ex.sets ? <span className="chip dl">{adj}x (deload)</span> : <span className="chip">{ex.sets}x</span>}
                       <span className="chip">{ex.rMin}-{ex.rMax} reps</span>
@@ -1550,7 +1644,8 @@ function App() {
               </div>
             </div>
             <div className="wk-nav">
-              <button className="wnb" onClick={() => setSkipConfirm(true)}>Skip Exercise</button>
+              <button className="wnb" onClick={() => setShowSwap(true)}>Swap</button>
+              <button className="wnb" onClick={() => setSkipConfirm(true)}>Skip</button>
               <button className="wnb fin" onClick={() => saveAndFinish(setData)}>End Workout</button>
             </div>
           </div>
@@ -1662,6 +1757,25 @@ function App() {
               </>
             )}
           </div>
+          {logs.length >= 4 && (
+            <div className="plateau-sec">
+              <div className="mv-head"><span className="mv-ttl">Stalled Lifts</span><span className="mv-wk">est. 1RM</span></div>
+              {plateaus.length > 0 ? (
+                <>
+                  <div className="mv-sub">No new estimated 1RM for 3+ sessions — time to change something</div>
+                  {plateaus.map((p, i) => (
+                    <div key={i} className="plateau-row">
+                      <div className="plateau-name">{p.name}</div>
+                      <div className="plateau-meta">{p.sessions} sessions stuck &#183; now {p.lastE1rm}kg vs {p.peakE1rm}kg peak</div>
+                    </div>
+                  ))}
+                  <div className="plateau-tip">Fixes: drop to a back-off set and rebuild, change the rep range, swap to a fresh variation, or check recovery and sleep for that muscle.</div>
+                </>
+              ) : (
+                <div className="mv-empty">No stalled lifts — everything with enough history is still progressing.</div>
+              )}
+            </div>
+          )}
           <div className="ex-sel-wrap">
             <div className="ex-sel-lbl">Select Exercise</div>
             <select className="ex-sel" value={progEx||''} onChange={e=>setProgEx(e.target.value)}>
