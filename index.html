@@ -366,6 +366,12 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .mv-trend-sel{margin:5px 0 10px}
 .mv-empty{padding:18px 0;text-align:center;color:var(--t3);font-size:12px;line-height:1.6}
 
+
+.target-line{margin:0 15px 9px;padding:9px 13px;background:var(--ag2);border:1px solid rgba(196,255,0,.25);border-radius:8px;display:flex;flex-direction:column;gap:3px}
+.target-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.18em;color:var(--t3);text-transform:uppercase}
+.target-val{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;color:var(--acc);line-height:1}
+.target-note{font-size:11px;color:var(--t2)}
+
 </style>
 </head>
 <body>
@@ -564,6 +570,21 @@ function getPrevHist(exId, logs, limit=3) {
     if (ex?.sets?.length) { res.push({date:s.date, sets:ex.sets, week:s.week}); if(res.length>=limit) break; }
   }
   return res;
+}
+
+function getTarget(ex, logs, week) {
+  const prev = getPrevHist(ex.id, logs, 1)[0];
+  if (!prev) return { weight: 0, reps: ex.rMin, note: 'First time — establish a working weight', first: true };
+  const topWeight = Math.max(...prev.sets.map(s => s.weight));
+  const rec = getProgRec(ex.id, ex.rMax, logs);
+  const incr = 2.5;
+  if (DLW.has(week)) {
+    return { weight: Math.round((topWeight * 0.85) / 2.5) * 2.5, reps: Math.round((ex.rMin + ex.rMax) / 2), note: 'Deload — keep several reps in reserve' };
+  }
+  if (rec.type === 'inc') {
+    return { weight: topWeight + incr, reps: ex.rMin, note: 'Up ' + incr + 'kg — you hit top reps last time' };
+  }
+  return { weight: topWeight, reps: ex.rMax, note: 'Same weight — beat last session\'s reps' };
 }
 
 function playChime() {
@@ -810,7 +831,8 @@ function App() {
   const startWorkout = sid => {
     const ex0 = SESSIONS[sid].exercises[0];
     setSel(sid); setExIdx(0); setCurSet(0); setSetData({});
-    setWt(getLastWt(ex0.id)||60); setRp(ex0.rMin); setRir(WR[week].rirN);
+    const _t0 = getTarget(ex0, logs, week);
+    setWt(_t0.weight||60); setRp(_t0.reps||ex0.rMin); setRir(WR[week].rirN);
     setEditIdx(null); startRef.current=Date.now();
     clearWip(); setView('workout');
   };
@@ -856,7 +878,8 @@ function App() {
         else {
           const nx=sess.exercises[nextExIdx];
           setExIdx(nextExIdx); setCurSet(0); setEditIdx(null);
-          setWt(getLastWt(nx.id)||60); setRp(nx.rMin); setRir(WR[week].rirN);
+          const _tn = getTarget(nx, logs, week);
+          setWt(_tn.weight||60); setRp(_tn.reps||nx.rMin); setRir(WR[week].rirN);
           saveWip(sel,nd,nextExIdx,0);
         }
       };
@@ -875,7 +898,8 @@ function App() {
     else {
       const nextEx=sess.exercises[nx];
       setExIdx(nx); setCurSet(0); setEditIdx(null);
-      setWt(getLastWt(nextEx.id)||60); setRp(nextEx.rMin); setRir(WR[week].rirN);
+      const _ts = getTarget(nextEx, logs, week);
+      setWt(_ts.weight||60); setRp(_ts.reps||nextEx.rMin); setRir(WR[week].rirN);
       saveWip(sel,setData,nx,0);
     }
   };
@@ -1034,6 +1058,7 @@ function App() {
   const loggedSetsArr=curEx?(setData[curEx.id]||[]):[];
   const prevHist=curEx?getPrevHist(curEx.id,logs,3):[];
   const progRec=curEx?getProgRec(curEx.id,curEx.rMax,logs):null;
+  const curTarget=curEx?getTarget(curEx,logs,week):null;
   const R=88, CIRC=2*Math.PI*R;
   const dashOff=CIRC*(1-(timerTotal>0?timerSecs/timerTotal:0));
   const totalSets=Object.values(setData).reduce((a,s)=>a+s.length,0);
@@ -1262,6 +1287,13 @@ function App() {
             {progRec && (
               <div className={`prog-rec ${progRec.type}`}>
                 {progRec.type==='inc'&&'&#9650;'}{progRec.type==='beat'&&'&#8594;'}{progRec.type==='keep'&&'&#8594;'}{progRec.type==='first'&&'&#9679;'} {progRec.msg}
+              </div>
+            )}
+            {curTarget && !curTarget.first && (
+              <div className="target-line">
+                <span className="target-lbl">Today's target</span>
+                <span className="target-val">{curTarget.weight}kg &#215; {curEx.rMin}-{curEx.rMax} reps</span>
+                <span className="target-note">{curTarget.note}</span>
               </div>
             )}
             <div className="ex-card">
