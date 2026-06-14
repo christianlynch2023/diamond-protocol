@@ -2110,7 +2110,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           {logs.length >= 1 && (
             <div className="period-sec">
               <div className="mv-head"><span className="mv-ttl">Coach Review</span></div>
-              <div className="mv-sub">Zoom out \u2014 let the AI coach review your week or the whole block</div>
+              <div className="mv-sub">Zoom out &#8212; let the AI coach review your week or the whole block</div>
               <div className="period-btns">
                 <button className="period-btn" onClick={() => getPeriodReview('week')} disabled={periodLoading}>{periodLoading && periodScope==='week' ? 'Reviewing\u2026' : 'Weekly Check-in'}</button>
                 <button className="period-btn" onClick={() => getPeriodReview('block')} disabled={periodLoading}>{periodLoading && periodScope==='block' ? 'Reviewing\u2026' : 'End-of-Block Review'}</button>
@@ -2476,7 +2476,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
 
           <div className="body-sec">
             <div className="body-ttl">Cardio</div>
-            <div className="body-sub">Zone-2 work for recovery, work capacity and heart health \u2014 aim 2-3x a week</div>
+            <div className="body-sub">Zone-2 work for recovery, work capacity and heart health &#8212; aim 2-3x a week</div>
             {cardioLog.length > 0 && (
               <div className="meas-grid">
                 <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">This week</div><div className="meas-val">{cardioSessions}<span className="meas-unit">sessions</span></div></div>
@@ -2511,7 +2511,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
 
           <div className="body-sec">
             <div className="body-ttl">Blood Pressure</div>
-            <div className="body-sub">Track BP for cardiovascular health \u2014 your stack can raise it, so watch the trend</div>
+            <div className="body-sub">Track BP for cardiovascular health &#8212; your stack can raise it, so watch the trend</div>
             {latestBP && (() => { const c = bpCategory(latestBP.sys, latestBP.dia); return (
               <div className="bp-latest">
                 <div className="bp-reading">{latestBP.sys}/{latestBP.dia}{latestBP.pulse ? <span className="bp-pulse"> &#183; {latestBP.pulse} bpm</span> : null}</div>
@@ -2520,7 +2520,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             ); })()}
             {bpSeries.length > 1 && (
               <div style={{marginBottom:10}}>
-                <div className="chart-lbl">Systolic \u2014 last {Math.min(bpLog.length,21)} readings</div>
+                <div className="chart-lbl">Systolic &#8212; last {Math.min(bpLog.length,21)} readings</div>
                 <SVGChart data={bpSeries} height={110} color="#ff6b6b"/>
               </div>
             )}
