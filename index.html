@@ -940,21 +940,25 @@ function App() {
 
   const parseWhoop = data => {
     const r = { recovery:null, hrv:null, rhr:null, sleep:null, strain:null };
+    // Recovery score, HRV and RHR live on the dedicated /recovery feed (WHOOP v2)
+    const recRec = data?.recovery?.records?.[0] || data?.recovery?.data?.[0];
+    if (recRec) {
+      const s = recRec.score || recRec;
+      r.recovery = Math.round(s.recovery_score ?? 0) || null;
+      r.hrv      = Math.round(s.hrv_rmssd_milli ?? s.hrv ?? 0) || null;
+      r.rhr      = Math.round(s.resting_heart_rate ?? 0) || null;
+    }
+    // Sleep performance comes from the sleep feed
     const sleep = data?.sleep?.records?.[0] || data?.sleep?.data?.[0];
     if (sleep) {
       const s = sleep.score || sleep;
-      r.recovery = Math.round(s.recovery_score ?? s.readiness ?? 0) || null;
-      r.hrv      = Math.round(s.hrv_rmssd_milli ?? s.hrv_rmssd ?? s.hrv ?? 0) || null;
-      r.rhr      = Math.round(s.resting_heart_rate ?? s.rhr ?? 0) || null;
-      r.sleep    = Math.round(s.sleep_performance_percentage ?? s.sleep_efficiency ?? 0) || null;
+      r.sleep = Math.round(s.sleep_performance_percentage ?? s.sleep_efficiency_percentage ?? 0) || null;
     }
+    // Strain comes from the cycle feed
     const cycle = data?.cycles?.records?.[0] || data?.cycles?.data?.[0];
     if (cycle) {
       const s = cycle.score || cycle;
-      if (r.strain === null)   r.strain   = s.strain ? Math.round(s.strain*10)/10 : null;
-      if (r.recovery === null) r.recovery = Math.round(s.recovery_score ?? 0) || null;
-      if (r.hrv === null)      r.hrv      = Math.round(s.hrv_rmssd_milli ?? s.hrv ?? 0) || null;
-      if (r.rhr === null)      r.rhr      = Math.round(s.resting_heart_rate ?? 0) || null;
+      if (r.strain === null) r.strain = s.strain != null ? Math.round(s.strain*10)/10 : null;
     }
     return r;
   };
