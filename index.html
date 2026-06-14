@@ -166,6 +166,7 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .wk-nav{display:flex;gap:8px;padding:0 15px 16px;flex-shrink:0}
 .wnb{flex:1;padding:11px;background:none;border:1px solid var(--bdr);color:var(--t2);font-family:'Syne',sans-serif;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;transition:all .15s}
 .wnb.fin{color:var(--err)}
+.wnb:disabled{opacity:.4;cursor:default}
 .timer-ov{position:fixed;inset:0;background:rgba(7,9,12,.97);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:300}
 .t-lbl{font-size:10px;letter-spacing:.3em;color:var(--t2);margin-bottom:18px;text-transform:uppercase}
 .t-ring{position:relative;width:200px;height:200px}
@@ -475,6 +476,23 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .eb-v{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--t)}
 .eb-l{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
 .eb-op{font-size:14px;color:var(--t3)}
+
+
+.edit-start{margin-top:8px;padding:8px 14px;background:none;border:1px solid var(--acc);color:var(--acc);border-radius:7px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer}
+.edit-ex{margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bdr)}
+.edit-ex-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.edit-set{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.edit-in{width:60px;padding:7px;background:var(--sur);border:1px solid var(--bdr);border-radius:6px;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:13px;text-align:center}
+.edit-in.sm{width:50px}
+.edit-x2{color:var(--t3);font-size:12px}
+.edit-del{background:none;border:none;color:var(--err);font-size:17px;cursor:pointer;padding:0 4px;margin-left:auto}
+.edit-x{background:none;border:none;color:var(--err);font-size:16px;cursor:pointer}
+.edit-addset{background:none;border:1px dashed var(--bdr);color:var(--t2);border-radius:6px;padding:5px 11px;font-size:11px;cursor:pointer;margin-top:3px}
+.edit-addex{margin:8px 0}
+.edit-sel{width:100%;padding:9px;background:var(--sur);border:1px solid var(--acc);border-radius:7px;color:var(--acc);font-family:'Syne',sans-serif;font-size:12px;font-weight:700}
+.edit-btns{display:flex;gap:8px;margin-top:10px}
+.edit-cancel{flex:1;padding:10px;background:none;border:1px solid var(--bdr);color:var(--t2);border-radius:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer}
+.edit-save{flex:1;padding:10px;background:var(--ag2);border:1px solid var(--acc);color:var(--acc);border-radius:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer}
 
 </style>
 </head>
@@ -1113,6 +1131,10 @@ function App() {
   const [painData, setPainData] = useState({});
   const [subMap, setSubMap] = useState({});
   const [showSwap, setShowSwap] = useState(false);
+  const [reviseMode, setReviseMode] = useState(false);
+  const [finishModal, setFinishModal] = useState(false);
+  const [editingLog, setEditingLog] = useState(null);
+  const [editDraft, setEditDraft] = useState(null);
   const [condensed, setCondensed] = useState(false);
   const [wt, setWt]             = useState(60);
   const [rp, setRp]             = useState(8);
@@ -1128,6 +1150,7 @@ function App() {
   const [timerDone, setTimerDone] = useState(false);
   const [timerMsg, setTimerMsg] = useState('');
   const afterRef = useRef(null);
+  const endRef = useRef(0);
   const [plateTgt, setPlateTgt] = useState(100);
   const [warmWt, setWarmWt]     = useState(100);
   const [ormWt, setOrmWt]       = useState(100);
@@ -1165,6 +1188,8 @@ function App() {
   const [newWt, setNewWt]             = useState('');
   const [newWtNote, setNewWtNote]     = useState('');
   const [showAddBody, setShowAddBody] = useState(false);
+  const [newBF, setNewBF] = useState('');
+  const [newMuscle, setNewMuscle] = useState('');
   const [showAddProt, setShowAddProt] = useState(false);
   const [pCmp, setPCmp]               = useState('TRT');
   const [pDose, setPDose]             = useState('');
@@ -1188,10 +1213,16 @@ function App() {
 
   useEffect(() => {
     if (!timerOn) return;
-    const iv = setInterval(() => {
-      setTimerSecs(p => { if(p<=1){clearInterval(iv);setTimerOn(false);setTimerDone(true);return 0;} return p-1; });
-    }, 1000);
-    return () => clearInterval(iv);
+    const tick = () => {
+      const remaining = Math.max(0, Math.round((endRef.current - Date.now()) / 1000));
+      setTimerSecs(remaining);
+      if (remaining <= 0) { setTimerOn(false); setTimerDone(true); }
+    };
+    tick();
+    const iv = setInterval(tick, 250);
+    const onVis = () => { if (document.visibilityState === 'visible') tick(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
   }, [timerOn]);
 
   useEffect(() => {
@@ -1201,7 +1232,7 @@ function App() {
     if (cb) cb();
   }, [timerDone]);
 
-  const startTimer = (secs, msg, cb) => { afterRef.current=cb; setTimerMsg(msg||''); setTimerTotal(secs); setTimerSecs(secs); setTimerDone(false); setTimerOn(true); };
+  const startTimer = (secs, msg, cb) => { afterRef.current=cb; endRef.current=Date.now()+secs*1000; setTimerMsg(msg||''); setTimerTotal(secs); setTimerSecs(secs); setTimerDone(false); setTimerOn(true); };
   const skipTimer = () => { setTimerOn(false); setTimerDone(false); const cb=afterRef.current; afterRef.current=null; if(cb)cb(); };
 
   const getLastWt = exId => { for(const l of logs){const e=l.exercises?.find(x=>x.id===exId);if(e?.sets?.length)return e.sets[e.sets.length-1].weight||0;} return 0; };
@@ -1214,7 +1245,7 @@ function App() {
     const _t0 = getTarget(ex0, logs, week);
     setWt(_t0.weight||60); setRp(_t0.reps||ex0.rMin); setRir(WR[week].rirN);
     setEditIdx(null); startRef.current=Date.now();
-    setPainData({}); painRef.current={}; setSubMap({});
+    setPainData({}); painRef.current={}; setSubMap({}); setReviseMode(false); setFinishModal(false);
     clearWip(); setView('workout');
   };
 
@@ -1228,7 +1259,7 @@ function App() {
     setWt(last.length?last[last.length-1].weight:getLastWt(_reff)||60);
     setRp(ex.rMin); setRir(WR[wipData.week||week].rirN);
     startRef.current=wipData.startTime||Date.now();
-    setPainData(wipData.painData||{}); painRef.current=wipData.painData||{}; setSubMap(wipData.subMap||{});
+    setPainData(wipData.painData||{}); painRef.current=wipData.painData||{}; setSubMap(wipData.subMap||{}); setReviseMode(false); setFinishModal(false);
     setWeek(wipData.week||week); setView('workout'); setWipData(null);
   };
 
@@ -1257,7 +1288,7 @@ function App() {
     const nextExIdx=exIdx+1;
     if (newSets.length >= effSets) {
       const cb = () => {
-        if (nextExIdx >= sess.exercises.length) { saveAndFinish(nd); }
+        if (reviseMode || nextExIdx >= sess.exercises.length) { tryFinish(nd); }
         else {
           const nx=sess.exercises[nextExIdx];
           setExIdx(nextExIdx); setCurSet(0); setEditIdx(null);
@@ -1274,10 +1305,27 @@ function App() {
     }
   };
 
+  const goToExercise = (idx) => {
+    const sess=SESSIONS[sel]; if(idx<0||idx>=sess.exercises.length) return;
+    const baseEx=sess.exercises[idx]; const eid=subMap[baseEx.id]?subMap[baseEx.id].id:baseEx.id;
+    const logged=setData[eid]||[];
+    setExIdx(idx); setCurSet(logged.length); setEditIdx(null); setReviseMode(true); setFinishModal(false);
+    const t=getTarget(baseEx,logs,week);
+    setWt(logged.length?logged[logged.length-1].weight:(t.weight||60));
+    setRp(t.reps||baseEx.rMin); setRir(WR[week].rirN);
+    saveWip(sel,setData,idx,logged.length);
+  };
+
+  const tryFinish = (data) => {
+    const sess=SESSIONS[sel]; const d=data||setData;
+    const undone=sess.exercises.filter(ex=>{ if(ex.opt) return false; const eid=subMap[ex.id]?subMap[ex.id].id:ex.id; return !(d[eid]&&d[eid].length>0); });
+    if(undone.length>0){ setFinishModal(true); } else { saveAndFinish(d); }
+  };
+
   const doSkipEx = () => {
     setSkipConfirm(false);
     const sess=SESSIONS[sel]; const nx=exIdx+1;
-    if (nx >= sess.exercises.length) { saveAndFinish(setData); }
+    if (nx >= sess.exercises.length) { tryFinish(setData); }
     else {
       const nextEx=sess.exercises[nx];
       setExIdx(nx); setCurSet(0); setEditIdx(null);
@@ -1451,11 +1499,23 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     finally { setPeriodLoading(false); }
   };
 
+  const updSet = (exj, setk, field, val) => setEditDraft(d => ({...d, exercises: d.exercises.map((ex,j)=> j!==exj ? ex : {...ex, sets: ex.sets.map((s,k)=> k!==setk ? s : {...s, [field]: val})})}));
+  const delSet = (exj, setk) => setEditDraft(d => ({...d, exercises: d.exercises.map((ex,j)=> j!==exj ? ex : {...ex, sets: ex.sets.filter((_,k)=>k!==setk)})}));
+  const addSet = (exj) => setEditDraft(d => ({...d, exercises: d.exercises.map((ex,j)=> j!==exj ? ex : {...ex, sets:[...ex.sets, {weight:ex.sets.length?ex.sets[ex.sets.length-1].weight:'', reps:'', rir:''}]})}));
+  const delExercise = (exj) => setEditDraft(d => ({...d, exercises: d.exercises.filter((_,j)=>j!==exj)}));
+  const addExercise = (exId) => setEditDraft(d => { const sess=SESSIONS[d.sessionId]; const rEx=sess&&sess.exercises.find(e=>e.id===exId); if(!rEx) return d; return {...d, exercises:[...d.exercises, {id:rEx.id, name:rEx.name, sets:[{weight:'',reps:'',rir:''}], pain:0}]}; });
+  const saveEdit = () => {
+    if (!editDraft) return;
+    const cleaned = {...editDraft, exercises: editDraft.exercises.map(ex => ({...ex, sets: ex.sets.map(s=>({weight:parseFloat(s.weight)||0, reps:parseInt(s.reps)||0, rir:(s.rir===''||s.rir==null)?null:parseInt(s.rir)})).filter(s=>s.weight>0||s.reps>0)})).filter(ex=>ex.sets.length>0)};
+    setLogs(prev => prev.map(l => l.date===cleaned.date ? cleaned : l));
+    setEditingLog(null); setEditDraft(null);
+  };
+
   const addBodyMetric = () => {
     if (!newWt) return;
-    const e={date:new Date().toISOString(),weight:parseFloat(newWt),notes:newWtNote};
+    const e={date:new Date().toISOString(),weight:parseFloat(newWt),bodyFat:newBF?parseFloat(newBF):null,muscle:newMuscle?parseFloat(newMuscle):null,notes:newWtNote};
     setBodyMetrics(prev=>[e,...prev].slice(0,200));
-    setNewWt('');setNewWtNote('');setShowAddBody(false);
+    setNewWt('');setNewBF('');setNewMuscle('');setNewWtNote('');setShowAddBody(false);
   };
 
   const addCardio = () => {
@@ -1640,6 +1700,26 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <button className="t-skip" onClick={() => {playChime();skipTimer();}}>Skip Rest</button>
         </div>
       )}
+
+      {finishModal && (() => {
+        const sess=SESSIONS[sel];
+        const undone=sess.exercises.map((ex,i)=>({ex,i})).filter(({ex})=>{ if(ex.opt) return false; const eid=subMap[ex.id]?subMap[ex.id].id:ex.id; return !(setData[eid]&&setData[eid].length>0); });
+        return (
+          <div className="modal-ov">
+            <div className="modal">
+              <div className="modal-title">Finish session?</div>
+              <div className="modal-sub">You haven't logged {undone.length} exercise{undone.length>1?'s':''} yet. Jump to one to do it now, or finish anyway.</div>
+              <div className="swap-list">
+                {undone.map(({ex,i})=>(<button key={i} className="swap-opt" onClick={()=>goToExercise(i)}>{(subMap[ex.id]&&subMap[ex.id].name)||ex.name}</button>))}
+              </div>
+              <div className="modal-btns">
+                <button className="mbt ghost" onClick={()=>setFinishModal(false)}>Keep going</button>
+                <button className="mbt danger" onClick={()=>{setFinishModal(false); saveAndFinish(setData);}}>Finish anyway</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {skipConfirm && (
         <div className="modal-ov">
@@ -1975,9 +2055,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               </div>
             </div>
             <div className="wk-nav">
+              <button className="wnb" disabled={exIdx===0} onClick={() => goToExercise(exIdx-1)}>Back</button>
               <button className="wnb" onClick={() => setShowSwap(true)}>Swap</button>
               <button className="wnb" onClick={() => setSkipConfirm(true)}>Skip</button>
-              <button className="wnb fin" onClick={() => saveAndFinish(setData)}>End Workout</button>
+              <button className="wnb fin" onClick={() => tryFinish(setData)}>End</button>
             </div>
           </div>
         );
@@ -2162,12 +2243,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             ? <div className="empty-msg">No sessions logged yet.<br/>Complete a workout to see it here.</div>
             : <div className="hist-list">
                 {logs.map((log,i) => (
-                  <div key={i} className="h-item" onClick={() => setExpandLog(expandLog===i?null:i)}>
+                  <div key={i} className="h-item" onClick={() => { if(editingLog===i) return; setExpandLog(expandLog===i?null:i); }}>
                     <div className="h-date">{fmtDate(log.date)} — Week {log.week}</div>
                     <div className="h-nm">{log.sessionName}</div>
                     <div className="h-det">{log.exercises.length} exercises · {log.duration||'?'} min · {log.exercises.reduce((a,e)=>a+e.sets.length,0)} sets</div>
                     {(() => { const w = matchWorkout(log, whoopWorkouts); return w ? <div className="h-whoop">&#9889; {w.strain} strain{w.avgHr?` \u00b7 ${w.avgHr} avg HR`:''}{w.maxHr?` \u00b7 ${w.maxHr} max`:''}{w.kcal?` \u00b7 ${w.kcal} cal`:''}</div> : null; })()}
-                    {expandLog===i && (
+                    {expandLog===i && editingLog!==i && (
                       <div className="h-exp">
                         {log.exercises.map((ex,j) => (
                           <div key={j} className="h-ex">
@@ -2175,6 +2256,38 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                             <div className="h-sets">{ex.sets.map((s,k) => <span key={k} className="h-set">{s.weight}kg&#215;{s.reps}{s.rir!=null?` @${s.rir}RIR`:''}</span>)}</div>
                           </div>
                         ))}
+                        <button className="edit-start" onClick={(e)=>{e.stopPropagation(); setEditingLog(i); setEditDraft(JSON.parse(JSON.stringify(log)));}}>Edit session</button>
+                      </div>
+                    )}
+                    {expandLog===i && editingLog===i && editDraft && (
+                      <div className="h-exp" onClick={e=>e.stopPropagation()}>
+                        {editDraft.exercises.map((ex,j) => (
+                          <div key={j} className="edit-ex">
+                            <div className="edit-ex-hdr"><span className="h-ex-nm">{ex.name}</span><button className="edit-x" onClick={()=>delExercise(j)}>&#215;</button></div>
+                            {ex.sets.map((s,k) => (
+                              <div key={k} className="edit-set">
+                                <input className="edit-in" type="number" inputMode="decimal" value={s.weight} placeholder="kg" onChange={e=>updSet(j,k,'weight',e.target.value)}/>
+                                <span className="edit-x2">&#215;</span>
+                                <input className="edit-in" type="number" inputMode="numeric" value={s.reps} placeholder="reps" onChange={e=>updSet(j,k,'reps',e.target.value)}/>
+                                <input className="edit-in sm" type="number" inputMode="numeric" value={s.rir==null?'':s.rir} placeholder="RIR" onChange={e=>updSet(j,k,'rir',e.target.value)}/>
+                                <button className="edit-del" onClick={()=>delSet(j,k)}>&#215;</button>
+                              </div>
+                            ))}
+                            <button className="edit-addset" onClick={()=>addSet(j)}>+ set</button>
+                          </div>
+                        ))}
+                        {(() => { const sess=SESSIONS[editDraft.sessionId]; const missing=(sess?sess.exercises:[]).filter(e=>!editDraft.exercises.some(de=>de.id===e.id)); return missing.length ? (
+                          <div className="edit-addex">
+                            <select className="edit-sel" value="" onChange={e=>{if(e.target.value)addExercise(e.target.value);}}>
+                              <option value="">+ Add a missed exercise</option>
+                              {missing.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+                            </select>
+                          </div>
+                        ) : null; })()}
+                        <div className="edit-btns">
+                          <button className="edit-cancel" onClick={()=>{setEditingLog(null);setEditDraft(null);}}>Cancel</button>
+                          <button className="edit-save" onClick={saveEdit}>Save changes</button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2340,6 +2453,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <SVGChart data={bodyMetrics.slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.weight}))} height={120}/>
               </div>
             )}
+            {bodyMetrics.filter(m=>m.bodyFat!=null).length>1&&(
+              <div style={{marginBottom:10}}>
+                <div className="chart-lbl">Body fat %</div>
+                <SVGChart data={bodyMetrics.filter(m=>m.bodyFat!=null).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.bodyFat}))} height={110} color="#ff9f43"/>
+              </div>
+            )}
             <button className="add-toggle" onClick={()=>setShowAddBody(v=>!v)}>
               <span>Log weight</span><span className="plus">{showAddBody?'−':'+'}</span>
             </button>
@@ -2349,6 +2468,16 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="bf-grp">
                     <div className="bf-lbl">Weight (kg)</div>
                     <input className="bf-in" type="number" inputMode="decimal" placeholder="89.5" value={newWt} onChange={e=>setNewWt(e.target.value)}/>
+                  </div>
+                  <div className="bf-grp">
+                    <div className="bf-lbl">Body fat %</div>
+                    <input className="bf-in" type="number" inputMode="decimal" placeholder="18.5" value={newBF} onChange={e=>setNewBF(e.target.value)}/>
+                  </div>
+                </div>
+                <div className="bf-row">
+                  <div className="bf-grp">
+                    <div className="bf-lbl">Muscle (kg, opt)</div>
+                    <input className="bf-in" type="number" inputMode="decimal" placeholder="68" value={newMuscle} onChange={e=>setNewMuscle(e.target.value)}/>
                   </div>
                   <div className="bf-grp">
                     <div className="bf-lbl">Notes</div>
@@ -2362,8 +2491,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               {bodyMetrics.slice(0,20).map((m,i)=>(
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(m.date)}</span>
-                  <span className="bl-val">{m.weight}kg</span>
-                  <span className="bl-note">{m.notes}</span>
+                  <span className="bl-val">{m.weight}kg{m.bodyFat!=null?` · ${m.bodyFat}% bf`:''}</span>
+                  <span className="bl-note">{m.muscle!=null?`${m.muscle}kg lean`:''}{m.notes?((m.muscle!=null?' · ':'')+m.notes):''}</span>
                   <button className="bl-del" onClick={()=>setBodyMetrics(prev=>prev.filter((_,j)=>j!==i))}>&#215;</button>
                 </div>
               ))}
