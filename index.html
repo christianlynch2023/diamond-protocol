@@ -864,7 +864,7 @@ function mergeByKey(a, b, keyFn) {
 
 const MEAS_SITES = ['Waist','Chest','Shoulders','Neck','Hips','Left Arm','Right Arm','Left Thigh','Right Thigh','Calf'];
 
-function computeReadiness(recovery, whoopData, deloadInfo, logs, week) {
+function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory) {
   const lastLog = logs && logs[0];
   const recentPain = (lastLog?.exercises || []).filter(e => e.pain).map(e => ({ name: e.name, level: e.pain }));
   const sharpPain = recentPain.some(p => p.level === 2);
@@ -894,6 +894,16 @@ function computeReadiness(recovery, whoopData, deloadInfo, logs, week) {
   if (recHigh) { pos++; factors.push('WHOOP recovery green (' + rec + '%)'); }
   if (trend === 'fresh') pos++;
   if (sleepGreat) { pos++; factors.push('strong sleep (' + sleep + '%)'); }
+
+  // Cumulative-fatigue + illness signals from the richer WHOOP feed
+  const sd = whoopData?.sleepDebt;
+  if (sd != null && sd >= 2) { minor++; factors.push('sleep debt ' + sd + 'h'); }
+  const rrVals = (whoopHistory || []).map(h => h.respRate).filter(v => v != null);
+  if (whoopData?.respRate != null && rrVals.length >= 5) {
+    const baseArr = rrVals.slice(0, -1).slice(-14);
+    const baseAvg = baseArr.reduce((a, b) => a + b, 0) / baseArr.length;
+    if (whoopData.respRate >= baseAvg + 1) { major++; factors.push('respiratory rate up vs baseline (possible illness)'); }
+  }
 
   const ORDER = ['red_stop', 'red_min', 'amber', 'green_standard', 'green_push'];
   let mode;
@@ -939,26 +949,37 @@ function App() {
   };
 
   const parseWhoop = data => {
-    const r = { recovery:null, hrv:null, rhr:null, sleep:null, strain:null };
-    // Recovery score, HRV and RHR live on the dedicated /recovery feed (WHOOP v2)
+    const r = { recovery:null, hrv:null, rhr:null, sleep:null, strain:null, spo2:null, skinTemp:null, respRate:null, sleepHrs:null, deepHrs:null, remHrs:null, sleepDebt:null, dayCal:null };
+    // Recovery score, HRV, RHR, SpO2 and skin temp live on the /recovery feed (WHOOP v2)
     const recRec = data?.recovery?.records?.[0] || data?.recovery?.data?.[0];
     if (recRec) {
       const s = recRec.score || recRec;
       r.recovery = Math.round(s.recovery_score ?? 0) || null;
       r.hrv      = Math.round(s.hrv_rmssd_milli ?? s.hrv ?? 0) || null;
       r.rhr      = Math.round(s.resting_heart_rate ?? 0) || null;
+      r.spo2     = s.spo2_percentage != null ? Math.round(s.spo2_percentage*10)/10 : null;
+      r.skinTemp = s.skin_temp_celsius != null ? Math.round(s.skin_temp_celsius*10)/10 : null;
     }
-    // Sleep performance comes from the sleep feed
+    // Sleep performance, stages, respiratory rate and sleep debt come from the sleep feed
     const sleep = data?.sleep?.records?.[0] || data?.sleep?.data?.[0];
     if (sleep) {
       const s = sleep.score || sleep;
       r.sleep = Math.round(s.sleep_performance_percentage ?? s.sleep_efficiency_percentage ?? 0) || null;
+      r.respRate = s.respiratory_rate != null ? Math.round(s.respiratory_rate*10)/10 : null;
+      const ss = s.stage_summary || {};
+      const light = ss.total_light_sleep_time_milli || 0, deep = ss.total_slow_wave_sleep_time_milli || 0, rem = ss.total_rem_sleep_time_milli || 0;
+      const asleep = light + deep + rem;
+      if (asleep > 0) { r.sleepHrs = Math.round(asleep/360000)/10; r.deepHrs = Math.round(deep/360000)/10; r.remHrs = Math.round(rem/360000)/10; }
+      const sn = s.sleep_needed || {};
+      const needed = (sn.baseline_milli||0) + (sn.need_from_sleep_debt_milli||0) + (sn.need_from_recent_strain_milli||0) + (sn.need_from_recent_nap_milli||0);
+      if (needed > 0 && asleep > 0) r.sleepDebt = Math.max(0, Math.round((needed - asleep)/360000)/10);
     }
-    // Strain comes from the cycle feed
+    // Strain and daily energy expenditure come from the cycle feed
     const cycle = data?.cycles?.records?.[0] || data?.cycles?.data?.[0];
     if (cycle) {
       const s = cycle.score || cycle;
       if (r.strain === null) r.strain = s.strain != null ? Math.round(s.strain*10)/10 : null;
+      r.dayCal = s.kilojoule != null ? Math.round(s.kilojoule/4.184) : null;
     }
     return r;
   };
@@ -982,7 +1003,7 @@ function App() {
       setWhoopData(parsed);
       LS.set('whoop_cache', JSON.stringify(parsed));
       const newHist = parseWhoopHistory(raw.recovery);
-      const todayEntry = parsed.recovery != null ? [{ date: new Date().toISOString().slice(0,10), recovery: parsed.recovery, hrv: parsed.hrv, rhr: parsed.rhr }] : [];
+      const todayEntry = parsed.recovery != null ? [{ date: new Date().toISOString().slice(0,10), recovery: parsed.recovery, hrv: parsed.hrv, rhr: parsed.rhr, respRate: parsed.respRate, skinTemp: parsed.skinTemp }] : [];
       if (newHist.length || todayEntry.length) {
         setWhoopHistory(prev => { const merged = mergeHistory(prev, [...newHist, ...todayEntry]); LS.set('whoop_history', JSON.stringify(merged)); return merged; });
       }
@@ -1272,7 +1293,7 @@ function App() {
       `${new Date(l.date).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})} - ${l.sessionName}: ${l.exercises.map(e=>e.name+' '+e.sets.map(s=>s.weight+'x'+s.reps).join('/')).join(', ')}`
     ).join('\n')||'No sessions logged yet';
     const whStr=whoopData?.recovery!=null
-      ?`Recovery ${whoopData.recovery}% | HRV ${whoopData.hrv}ms | RHR ${whoopData.rhr}bpm | Sleep ${whoopData.sleep}%`
+      ?`Recovery ${whoopData.recovery}% | HRV ${whoopData.hrv}ms | RHR ${whoopData.rhr}bpm | Sleep ${whoopData.sleepHrs!=null?whoopData.sleepHrs+'h':whoopData.sleep+'%'}${whoopData.respRate!=null?' | Resp '+whoopData.respRate+'br/m':''}${whoopData.sleepDebt!=null?' | Sleep debt '+whoopData.sleepDebt+'h':''}${whoopData.dayCal!=null?' | '+whoopData.dayCal+' cal out':''}`
       :'No Whoop data available';
     const bodyStr=bodyMetrics.length?`Latest weight: ${bodyMetrics[0].weight}kg (${fmtShort(bodyMetrics[0].date)})`:'No body metrics logged';
     const painFlags=[]; logs.slice(0,3).forEach(l=>(l.exercises||[]).forEach(ex=>{ if(ex.pain) painFlags.push(`${ex.name} (${ex.pain===2?'sharp':'mild'}, ${fmtShort(l.date)})`); }));
@@ -1481,7 +1502,7 @@ function App() {
   const cardioThisWeek=cardioLog.filter(c=>new Date(c.date).getTime()>=cardioWeekStart);
   const cardioMins=cardioThisWeek.reduce((a,c)=>a+(c.minutes||0),0);
   const cardioSessions=cardioThisWeek.length;
-  const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week);
+  const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
@@ -1607,8 +1628,13 @@ function App() {
                   <div className="whoop-stats">
                     {whoopData.hrv!=null&&<div className="wst"><div className="wst-v">{whoopData.hrv}</div><div className="wst-l">HRV ms</div></div>}
                     {whoopData.rhr!=null&&<div className="wst"><div className="wst-v">{whoopData.rhr}</div><div className="wst-l">RHR bpm</div></div>}
-                    {whoopData.sleep!=null&&<div className="wst"><div className="wst-v">{whoopData.sleep}%</div><div className="wst-l">Sleep</div></div>}
+                    {whoopData.sleepHrs!=null?<div className="wst"><div className="wst-v">{whoopData.sleepHrs}h</div><div className="wst-l">Sleep</div></div>:whoopData.sleep!=null&&<div className="wst"><div className="wst-v">{whoopData.sleep}%</div><div className="wst-l">Sleep</div></div>}
+                    {whoopData.deepHrs!=null&&<div className="wst"><div className="wst-v">{whoopData.deepHrs}h</div><div className="wst-l">Deep</div></div>}
+                    {whoopData.remHrs!=null&&<div className="wst"><div className="wst-v">{whoopData.remHrs}h</div><div className="wst-l">REM</div></div>}
+                    {whoopData.respRate!=null&&<div className="wst"><div className="wst-v">{whoopData.respRate}</div><div className="wst-l">Resp br/m</div></div>}
+                    {whoopData.spo2!=null&&<div className="wst"><div className="wst-v">{whoopData.spo2}%</div><div className="wst-l">SpO2</div></div>}
                     {whoopData.strain!=null&&<div className="wst"><div className="wst-v">{whoopData.strain}</div><div className="wst-l">Strain</div></div>}
+                    {whoopData.dayCal!=null&&<div className="wst"><div className="wst-v">{whoopData.dayCal}</div><div className="wst-l">Cal out</div></div>}
                   </div>
                 </div>
               ):<div className="whoop-nodata">No recovery data yet — check back after your next sleep cycle.</div>}
