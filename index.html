@@ -469,6 +469,13 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .bp-dot.amber{background:var(--warn)}
 .bp-dot.red{background:var(--err)}
 
+
+.energy-bal{display:flex;align-items:center;justify-content:center;gap:12px;padding:11px;background:var(--sur);border-radius:9px;border:1px solid var(--bdr);margin-bottom:12px}
+.eb-item{text-align:center}
+.eb-v{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--t)}
+.eb-l{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+.eb-op{font-size:14px;color:var(--t3)}
+
 </style>
 </head>
 <body>
@@ -1216,8 +1223,9 @@ function App() {
     setSel(wipData.sessionId); setExIdx(wipData.exIdx||0); setCurSet(wipData.curSet||0);
     setSetData(wipData.setData||{});
     const sess=SESSIONS[wipData.sessionId]; const ex=sess.exercises[wipData.exIdx||0];
-    const last=(wipData.setData?.[ex.id]||[]);
-    setWt(last.length?last[last.length-1].weight:getLastWt(ex.id)||60);
+    const _rsub=(wipData.subMap||{})[ex.id]; const _reff=_rsub?_rsub.id:ex.id;
+    const last=(wipData.setData?.[_reff]||[]);
+    setWt(last.length?last[last.length-1].weight:getLastWt(_reff)||60);
     setRp(ex.rMin); setRir(WR[wipData.week||week].rirN);
     startRef.current=wipData.startTime||Date.now();
     setPainData(wipData.painData||{}); painRef.current=wipData.painData||{}; setSubMap(wipData.subMap||{});
@@ -1395,6 +1403,8 @@ function App() {
     const protAvg = avg7('protein'); const calAvg = avg7('calories');
     const nutLine = protAvg!=null ? `~${protAvg}g protein, ~${calAvg} kcal per day (7-day avg)` : 'not logged';
     const platLine = plateaus.length ? plateaus.map(p=>p.name).join(', ') : 'none';
+    const bpLine = latestBP ? `${latestBP.sys}/${latestBP.dia} (${bpCategory(latestBP.sys,latestBP.dia).label})` : 'not logged';
+    const ebLine = (calIn!=null&&calOut!=null) ? `${calIn} kcal in / ${calOut} out / ${calIn-calOut>=0?'+':''}${calIn-calOut} net` : 'not available';
     let prompt;
     if (scope === 'week') {
       const wl = logs.filter(l => l.week === week);
@@ -1410,9 +1420,9 @@ Recovery/fatigue trend: ${recTrend}
 Nutrition: ${nutLine}
 Cardio: ${cardioLine}
 Stalled lifts: ${platLine}
-Bodyweight: ${bw}
+Bodyweight: ${bw}\nBlood pressure: ${bpLine}\nEnergy balance today: ${ebLine}
 
-Write a concise weekly check-in in 2-3 short paragraphs. Cover: (1) how the week went - volume hit, whether recovery is holding, (2) anything to watch (stalls, under-trained muscles, fatigue, low protein), (3) 2-3 specific things to focus on next week. Direct and practical, like a coach reviewing the week.`;
+Write a concise weekly check-in in 2-3 short paragraphs. Cover: (1) how the week went - volume hit, whether recovery is holding, (2) anything to watch (stalls, under-trained muscles, fatigue, low protein), (3) 2-3 specific things to focus on next week. Where the data allows, connect the dots - e.g. flag if low protein lines up with stalls, if sleep debt or low recovery tracks with how sessions felt, or if blood pressure is drifting up with training load. Direct and practical, like a coach reviewing the week.`;
     } else {
       const vol = {};
       for (const l of logs) for (const ex of (l.exercises||[])) { const m=EX_MUSCLE[ex.id]; if(!m)continue; const s=ex.sets?.length||0; vol[m.p]=(vol[m.p]||0)+s; if(m.s)vol[m.s]=(vol[m.s]||0)+s*0.5; }
@@ -1425,9 +1435,9 @@ Total hard sets per muscle across the block: ${fmtVol(vol)}
 Recovery/fatigue trend: ${recTrend}
 Nutrition: ${nutLine}
 Stalled lifts: ${platLine}
-Bodyweight change: ${bw}
+Bodyweight change: ${bw}\nBlood pressure (latest): ${bpLine}\nEnergy balance (today): ${ebLine}
 
-Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the block achieved overall, (2) which muscles and lifts progressed well and which lagged or stalled, (3) what to change for the next block - exercise selection, volume distribution, recovery or nutrition. Direct and honest, like a coach planning the next mesocycle.`;
+Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the block achieved overall, (2) which muscles and lifts progressed well and which lagged or stalled, (3) what to change for the next block - exercise selection, volume distribution, recovery or nutrition. Explicitly connect the data where you can - protein vs progression, recovery and sleep debt vs performance, BP vs training load. Direct and honest, like a coach planning the next mesocycle.`;
     }
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1552,7 +1562,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setCloudStatus('synced');
       } catch (e) { setCloudStatus('error'); }
     }, 3000);
-  }, [logs, bodyMetrics, protocolLog, week, recovery, syncCode]);
+  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, week, recovery, syncCode]);
 
   const applySwap = o => {
     const base = SESSIONS[sel]?.exercises[exIdx];
@@ -1599,6 +1609,11 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const measSeries=measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value}));
   const protSeries=nutrition.slice(0,21).reverse().map(n=>({x:fmtShort(n.date),y:n.protein}));
   const avg7=(k)=>{ const l7=nutrition.slice(0,7); if(!l7.length) return null; return Math.round(l7.reduce((a,n)=>a+(n[k]||0),0)/l7.length); };
+  const _ebToday=new Date().toISOString().slice(0,10);
+  const _ebN=nutrition.find(n=>n.date===_ebToday);
+  const calIn=_ebN?_ebN.calories:null;
+  const calOut=whoopData?.dayCal??null;
+  const calNet=(calIn!=null&&calOut!=null)?calIn-calOut:null;
   const cardioWeekStart=(()=>{ const d=new Date(); const day=(d.getDay()+6)%7; d.setHours(0,0,0,0); d.setDate(d.getDate()-day); return d.getTime(); })();
   const cardioThisWeek=cardioLog.filter(c=>new Date(c.date).getTime()>=cardioWeekStart);
   const cardioMins=cardioThisWeek.reduce((a,c)=>a+(c.minutes||0),0);
@@ -2411,6 +2426,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="body-sec">
             <div className="body-ttl">Nutrition</div>
             <div className="body-sub">Daily macro totals — read them off your tracker and log them here to line fuel up with training</div>
+            {calNet != null && (
+              <div className="energy-bal">
+                <div className="eb-item"><div className="eb-v">{calIn}</div><div className="eb-l">in</div></div>
+                <div className="eb-op">&#8722;</div>
+                <div className="eb-item"><div className="eb-v">{calOut}</div><div className="eb-l">out</div></div>
+                <div className="eb-op">=</div>
+                <div className="eb-item"><div className="eb-v" style={{color: calNet>=0?'var(--acc)':'var(--warn)'}}>{calNet>=0?'+':''}{calNet}</div><div className="eb-l">net</div></div>
+              </div>
+            )}
             {nutrition.length > 0 && (
               <div className="meas-grid">
                 <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">7-day protein</div><div className="meas-val">{avg7('protein') ?? '\u2014'}<span className="meas-unit">g/day</span></div></div>
