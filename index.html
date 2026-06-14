@@ -448,6 +448,9 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .rd-action{font-size:12px;color:var(--t);line-height:1.55;margin-bottom:6px}
 .rd-factors{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);line-height:1.5}
 
+
+.cal-preview{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--acc);padding:2px 0}
+
 </style>
 </head>
 <body>
@@ -507,16 +510,16 @@ const WR = {
 const DLW = new Set([4,8,12]);
 const SESSIONS = {
   upperA:{id:"upperA",name:"Upper A",focus:"Heavy Upper Tension",day:"Monday",time:"70-85 min",maxInt:2,exercises:[
-    {id:"ua1",name:"RO-T8 Flat Press",sets:4,rMin:5,rMax:8,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Neutral to semi-pronated","Deep controlled stretch","Elbows 30-45"],avoidFail:true,avoidReason:"Shoulder and triceps fatigue",int:null,orm:true},
-    {id:"ua2",name:"Weighted Pull-Up",sets:4,rMin:5,rMax:8,rirMin:1,rirMax:2,rest:180,handle:"Belt/bodyweight",cues:["Full stretch","3-sec eccentric"],avoidFail:true,avoidReason:"Elbow and biceps tendon fatigue",int:null,orm:true},
+    {id:"ua1",name:"RO-T8 Flat Press",sets:4,rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Neutral to semi-pronated","Deep controlled stretch","Elbows 30-45"],avoidFail:true,avoidReason:"Shoulder and triceps fatigue",int:null,orm:true},
+    {id:"ua2",name:"Weighted Pull-Up",sets:4,rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"Belt/bodyweight",cues:["Full stretch","3-sec eccentric"],avoidFail:true,avoidReason:"Elbow and biceps tendon fatigue",int:null,orm:true},
     {id:"ua3",name:"RO-T8 Incline Press",sets:3,rMin:8,rMax:10,rirMin:1,rirMax:1,rest:120,handle:"RO-T8",cues:["30-45 bench","Elbows 30-45"],avoidFail:false,int:{label:"0 RIR",desc:"Final set to 0 RIR, no forced reps"},orm:true},
     {id:"ua4",name:"Short Bar Row",sets:4,rMin:8,rMax:10,rirMin:1,rirMax:1,rest:120,handle:"RO-T8 short bar",cues:["Pull to lower ribs","Chest-supported preferred"],avoidFail:false,int:{label:"REST-PAUSE",desc:"Failure, 20s rest, 3-5 more reps"},orm:false},
     {id:"ua5",name:"Cable Lateral Raise",sets:4,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Small KAZ",cues:["Slight lean","Lead with elbow","Scapular plane"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 lengthened partials on final set"},orm:false},
-    {id:"ua6",name:"Triceps Pushdown",sets:3,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:60,handle:"RO-T8/short bar",cues:["Elbows pinned","Natural wrist rotation"],avoidFail:false,int:null,orm:false},
+    {id:"ua6",name:"Overhead Cable Triceps Ext",sets:3,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:60,handle:"Rope/single handle",cues:["Deep overhead stretch","Elbows in, full lockout"],avoidFail:false,int:null,orm:false},
     {id:"ua7",name:"Cable Crunch",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope/KAZ",opt:true,cues:["Round spine","Elbows to knees"],avoidFail:false,int:null,orm:false},
   ]},
   lowerA:{id:"lowerA",name:"Lower A",focus:"Quads and Posterior Chain",day:"Tuesday",time:"85-95 min",maxInt:2,exercises:[
-    {id:"la1",name:"Hack Squat",sets:3,rMin:6,rMax:8,rirMin:1,rirMax:1,rest:180,cues:["3-sec eccentric","1-sec controlled bottom"],avoidFail:true,avoidReason:"No grinders on top sets",int:null,orm:true},
+    {id:"la1",name:"Hack Squat",sets:3,rMin:6,rMax:10,rirMin:1,rirMax:1,rest:180,cues:["3-sec eccentric","1-sec controlled bottom"],avoidFail:true,avoidReason:"No grinders on top sets",int:null,orm:true},
     {id:"la2",name:"Hack Squat Back-Off",sets:1,rMin:10,rMax:15,rirMin:0,rirMax:1,rest:150,cues:["Drop 15-20% from top set"],avoidFail:false,int:{label:"0 RIR",desc:"Take this single set to 0 RIR"},orm:false},
     {id:"la3",name:"Romanian Deadlift",sets:3,rMin:8,rMax:10,rirMin:1,rirMax:2,rest:180,cues:["Hips back","3-4 sec eccentric","Spine neutral"],avoidFail:true,avoidReason:"Never to failure",int:null,orm:true},
     {id:"la4",name:"Leg Press Quad Bias",sets:3,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:120,cues:["Feet low-to-mid","Shoulder-width"],avoidFail:false,int:{label:"PARTIALS",desc:"+8-10 bottom-third partials on final set"},orm:false},
@@ -1073,6 +1076,11 @@ function App() {
   const [mVal, setMVal] = useState('');
   const [showAddMeas, setShowAddMeas] = useState(false);
   const [mViewSite, setMViewSite] = useState('Waist');
+  const [nutrition, setNutrition] = useState(() => { try { return JSON.parse(LS.get('nutrition_log') || '[]'); } catch(e) { return []; } });
+  const [nP, setNP] = useState('');
+  const [nC, setNC] = useState('');
+  const [nF, setNF] = useState('');
+  const [showAddNutri, setShowAddNutri] = useState(false);
   const [newWt, setNewWt]             = useState('');
   const [newWtNote, setNewWtNote]     = useState('');
   const [showAddBody, setShowAddBody] = useState(false);
@@ -1093,6 +1101,7 @@ function App() {
   useEffect(()=>{LS.set('body_metrics',JSON.stringify(bodyMetrics));},[bodyMetrics]);
   useEffect(()=>{LS.set('protocol_log',JSON.stringify(protocolLog));},[protocolLog]);
   useEffect(()=>{LS.set('body_measurements',JSON.stringify(measurements));},[measurements]);
+  useEffect(()=>{LS.set('nutrition_log',JSON.stringify(nutrition));},[nutrition]);
 
   useEffect(() => {
     if (!timerOn) return;
@@ -1299,6 +1308,14 @@ function App() {
     setNewWt('');setNewWtNote('');setShowAddBody(false);
   };
 
+  const addNutrition = () => {
+    if (!nP && !nC && !nF) return;
+    const p = parseFloat(nP) || 0, c = parseFloat(nC) || 0, f = parseFloat(nF) || 0;
+    const entry = { date: new Date().toISOString().slice(0,10), protein: p, carbs: c, fat: f, calories: Math.round(p*4 + c*4 + f*9) };
+    setNutrition(prev => { const filtered = prev.filter(e => e.date !== entry.date); return [entry, ...filtered].slice(0, 400); });
+    setNP(''); setNC(''); setNF(''); setShowAddNutri(false);
+  };
+
   const addMeasurement = () => {
     if (!mVal) return;
     const entry = { date: new Date().toISOString(), site: mSite, value: parseFloat(mVal) };
@@ -1327,14 +1344,16 @@ function App() {
         const mergedBody = mergeByKey(bodyMetrics, Array.isArray(data.bodyMetrics) ? data.bodyMetrics : [], e => e.date + '|' + e.weight);
         const mergedProt = mergeByKey(protocolLog, Array.isArray(data.protocolLog) ? data.protocolLog : [], e => e.date + '|' + e.compound + '|' + e.dose);
         const mergedMeas = mergeByKey(measurements, Array.isArray(data.measurements) ? data.measurements : [], e => e.date + '|' + e.site + '|' + e.value);
+        const mergedNutri = mergeByKey(nutrition, Array.isArray(data.nutrition) ? data.nutrition : [], e => e.date);
         skipPush.current = true;
         setLogs(mergedLogs);
         setBodyMetrics(mergedBody);
         setProtocolLog(mergedProt);
         setMeasurements(mergedMeas);
+        setNutrition(mergedNutri);
         if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); }
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, updatedAt: Date.now() });
         fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot }).catch(() => {});
         setCloudStatus('synced');
         return true;
@@ -1349,7 +1368,7 @@ function App() {
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, updatedAt: Date.now() });
       await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       setCloudStatus('synced');
     } catch (e) { setCloudStatus('error'); }
@@ -1374,7 +1393,7 @@ function App() {
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -1427,6 +1446,8 @@ function App() {
   const plateaus=detectPlateaus(logs);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
   const measSeries=measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value}));
+  const protSeries=nutrition.slice(0,21).reverse().map(n=>({x:fmtShort(n.date),y:n.protein}));
+  const avg7=(k)=>{ const l7=nutrition.slice(0,7); if(!l7.length) return null; return Math.round(l7.reduce((a,n)=>a+(n[k]||0),0)/l7.length); };
   const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
@@ -2211,6 +2232,48 @@ function App() {
                 </div>
               ))}
               {measurements.length === 0 && <div className="empty-msg">No measurements yet.<br/>Log your first site above.</div>}
+            </div>
+          </div>
+
+          <div className="body-sec">
+            <div className="body-ttl">Nutrition</div>
+            <div className="body-sub">Daily macro totals — read them off your tracker and log them here to line fuel up with training</div>
+            {nutrition.length > 0 && (
+              <div className="meas-grid">
+                <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">7-day protein</div><div className="meas-val">{avg7('protein') ?? '\u2014'}<span className="meas-unit">g/day</span></div></div>
+                <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">7-day calories</div><div className="meas-val">{avg7('calories') ?? '\u2014'}<span className="meas-unit">kcal</span></div></div>
+              </div>
+            )}
+            {protSeries.length > 1 && (
+              <div style={{marginBottom:10}}>
+                <div className="chart-lbl">Protein — last {Math.min(nutrition.length,21)} days (g)</div>
+                <SVGChart data={protSeries} height={110} color="#c4ff00"/>
+              </div>
+            )}
+            <button className="add-toggle" onClick={() => setShowAddNutri(v => !v)}>
+              <span>Log today's macros</span><span className="plus">{showAddNutri ? '\u2212' : '+'}</span>
+            </button>
+            {showAddNutri && (
+              <div className="body-form">
+                <div className="bf-row">
+                  <div className="bf-grp"><div className="bf-lbl">Protein (g)</div><input className="bf-in" type="number" inputMode="decimal" placeholder="0" value={nP} onChange={e => setNP(e.target.value)}/></div>
+                  <div className="bf-grp"><div className="bf-lbl">Carbs (g)</div><input className="bf-in" type="number" inputMode="decimal" placeholder="0" value={nC} onChange={e => setNC(e.target.value)}/></div>
+                  <div className="bf-grp"><div className="bf-lbl">Fat (g)</div><input className="bf-in" type="number" inputMode="decimal" placeholder="0" value={nF} onChange={e => setNF(e.target.value)}/></div>
+                </div>
+                {(nP || nC || nF) && <div className="cal-preview">= {Math.round((parseFloat(nP)||0)*4 + (parseFloat(nC)||0)*4 + (parseFloat(nF)||0)*9)} kcal</div>}
+                <button className="bf-save" onClick={addNutrition}>Save</button>
+              </div>
+            )}
+            <div className="body-list">
+              {nutrition.slice(0, 21).map((n, i) => (
+                <div key={i} className="bl-row">
+                  <span className="bl-date">{fmtShort(n.date)}</span>
+                  <span style={{flex:1,margin:'0 8px',fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'var(--t2)'}}>P{n.protein} C{n.carbs} F{n.fat}</span>
+                  <span className="bl-val">{n.calories}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>kcal</span></span>
+                  <button className="bl-del" onClick={() => setNutrition(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
+                </div>
+              ))}
+              {nutrition.length === 0 && <div className="empty-msg">No macros logged yet.<br/>Log today's totals above.</div>}
             </div>
           </div>
 
