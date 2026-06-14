@@ -586,6 +586,16 @@ const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short'
 const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
 const getDS = (sets,week) => DLW.has(week) ? Math.max(1,Math.ceil(sets*0.6)) : sets;
+const RAMP_EX = new Set(['ua3','ua4','ua5','ub3','ub1','ub4']);
+const RAMP_P1 = new Set([2,6]);
+const RAMP_P2 = new Set([3,7]);
+const getEffSets = (ex, week) => {
+  let s = ex.sets;
+  if (DLW.has(week)) return Math.max(1, Math.ceil(s * 0.6));
+  if (RAMP_EX.has(ex.id)) { if (RAMP_P2.has(week)) s += 2; else if (RAMP_P1.has(week)) s += 1; }
+  return s;
+};
+
 
 function calcPlates(target, bar=20) {
   const avail = [25,20,15,10,5,2.5,1.25];
@@ -1081,6 +1091,11 @@ function App() {
   const [nC, setNC] = useState('');
   const [nF, setNF] = useState('');
   const [showAddNutri, setShowAddNutri] = useState(false);
+  const [cardioLog, setCardioLog] = useState(() => { try { return JSON.parse(LS.get('cardio_log') || '[]'); } catch(e) { return []; } });
+  const [cType, setCType] = useState('Zone 2');
+  const [cMin, setCMin] = useState('');
+  const [cNote, setCNote] = useState('');
+  const [showAddCardio, setShowAddCardio] = useState(false);
   const [newWt, setNewWt]             = useState('');
   const [newWtNote, setNewWtNote]     = useState('');
   const [showAddBody, setShowAddBody] = useState(false);
@@ -1102,6 +1117,7 @@ function App() {
   useEffect(()=>{LS.set('protocol_log',JSON.stringify(protocolLog));},[protocolLog]);
   useEffect(()=>{LS.set('body_measurements',JSON.stringify(measurements));},[measurements]);
   useEffect(()=>{LS.set('nutrition_log',JSON.stringify(nutrition));},[nutrition]);
+  useEffect(()=>{LS.set('cardio_log',JSON.stringify(cardioLog));},[cardioLog]);
 
   useEffect(() => {
     if (!timerOn) return;
@@ -1159,7 +1175,7 @@ function App() {
 
   const logSet = () => {
     const sess=SESSIONS[sel]; const baseEx2=sess.exercises[exIdx]; const ex=subMap[baseEx2.id]?{...baseEx2,...subMap[baseEx2.id]}:baseEx2;
-    const effSets=getDS(ex.sets,week);
+    const effSets=getEffSets(ex,week);
     const newSet={weight:parseFloat(wt)||0, reps:parseInt(rp)||0, rir};
     if (editIdx !== null) {
       const arr=[...(setData[ex.id]||[])]; arr[editIdx]=newSet;
@@ -1257,7 +1273,7 @@ function App() {
     const bodyStr=bodyMetrics.length?`Latest weight: ${bodyMetrics[0].weight}kg (${fmtShort(bodyMetrics[0].date)})`:'No body metrics logged';
     const painFlags=[]; logs.slice(0,3).forEach(l=>(l.exercises||[]).forEach(ex=>{ if(ex.pain) painFlags.push(`${ex.name} (${ex.pain===2?'sharp':'mild'}, ${fmtShort(l.date)})`); }));
     const painStr=painFlags.length?painFlags.join('; '):'none reported recently';
-    const prompt=`You are a personal strength coach for a 47-year-old male on an optimised TRT protocol (TRT, HCG, tren 35mg/week, HGH 14IU/week). He follows the Diamond Protocol 12-week hypertrophy programme.\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\nRecent joint/tendon pain: ${painStr}\nToday's readiness call: ${readiness.title} - ${readiness.action}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. If sharp joint or tendon pain is flagged on any lift, recommend a machine or cable alternative for it today. Keep your guidance consistent with today's readiness call above and explain its reasoning in your own words. Direct, no fluff.`;
+    const prompt=`You are a personal strength coach for a 48-year-old male on an optimised hormonal protocol with enhanced recovery capacity. He follows the Diamond Protocol 12-week hypertrophy programme.\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\nRecent joint/tendon pain: ${painStr}\nToday's readiness call: ${readiness.title} - ${readiness.action}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. If sharp joint or tendon pain is flagged on any lift, recommend a machine or cable alternative for it today. Keep your guidance consistent with today's readiness call above and explain its reasoning in your own words. Direct, no fluff.`;
     try {
       const res=await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
@@ -1287,7 +1303,7 @@ function App() {
     }).join('\n');
     const wr2 = WR[last.week]; const ph = getPhase(last.week);
     const whStr = whoopData?.recovery != null ? `Recovery ${whoopData.recovery}%, HRV ${whoopData.hrv}ms` : 'no Whoop data';
-    const prompt = `You are a personal strength coach reviewing a just-completed session for a 47-year-old male on an optimised TRT protocol (TRT, HCG, tren 35mg/week, HGH 14IU/week), following the Diamond Protocol 12-week hypertrophy programme.\n\nSESSION JUST COMPLETED: ${last.sessionName} - Week ${last.week} (${ph.name}, target ${wr2.rir})\nDuration: ${last.duration} min | Recovery context: ${whStr}\n\nEXERCISE RESULTS (today vs last time):\n${lines}\n\nWrite a concise post-session review in 2-3 short paragraphs. Cover: (1) what clearly progressed today (specific lifts that added weight or reps), (2) anything that stalled or regressed and the likely reason, (3) 2-3 specific, actionable adjustments for next time this session comes around - exact weights or rep targets where possible. If any lift has sharp pain flagged, recommend swapping it for a joint-friendly alternative next time. Be direct and encouraging but honest. Talk like a coach who tracks every set.`;
+    const prompt = `You are a personal strength coach reviewing a just-completed session for a 48-year-old male on an optimised hormonal protocol with enhanced recovery capacity, following the Diamond Protocol 12-week hypertrophy programme.\n\nSESSION JUST COMPLETED: ${last.sessionName} - Week ${last.week} (${ph.name}, target ${wr2.rir})\nDuration: ${last.duration} min | Recovery context: ${whStr}\n\nEXERCISE RESULTS (today vs last time):\n${lines}\n\nWrite a concise post-session review in 2-3 short paragraphs. Cover: (1) what clearly progressed today (specific lifts that added weight or reps), (2) anything that stalled or regressed and the likely reason, (3) 2-3 specific, actionable adjustments for next time this session comes around - exact weights or rep targets where possible. If any lift has sharp pain flagged, recommend swapping it for a joint-friendly alternative next time. Be direct and encouraging but honest. Talk like a coach who tracks every set.`;
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -1306,6 +1322,13 @@ function App() {
     const e={date:new Date().toISOString(),weight:parseFloat(newWt),notes:newWtNote};
     setBodyMetrics(prev=>[e,...prev].slice(0,200));
     setNewWt('');setNewWtNote('');setShowAddBody(false);
+  };
+
+  const addCardio = () => {
+    if (!cMin) return;
+    const entry = { date: new Date().toISOString(), modality: cType, minutes: parseFloat(cMin), note: cNote };
+    setCardioLog(prev => [entry, ...prev].slice(0, 400));
+    setCMin(''); setCNote(''); setShowAddCardio(false);
   };
 
   const addNutrition = () => {
@@ -1345,15 +1368,17 @@ function App() {
         const mergedProt = mergeByKey(protocolLog, Array.isArray(data.protocolLog) ? data.protocolLog : [], e => e.date + '|' + e.compound + '|' + e.dose);
         const mergedMeas = mergeByKey(measurements, Array.isArray(data.measurements) ? data.measurements : [], e => e.date + '|' + e.site + '|' + e.value);
         const mergedNutri = mergeByKey(nutrition, Array.isArray(data.nutrition) ? data.nutrition : [], e => e.date);
+        const mergedCardio = mergeByKey(cardioLog, Array.isArray(data.cardioLog) ? data.cardioLog : [], e => e.date + '|' + e.modality + '|' + e.minutes);
         skipPush.current = true;
         setLogs(mergedLogs);
         setBodyMetrics(mergedBody);
         setProtocolLog(mergedProt);
         setMeasurements(mergedMeas);
         setNutrition(mergedNutri);
+        setCardioLog(mergedCardio);
         if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); }
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, cardioLog: mergedCardio, updatedAt: Date.now() });
         fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot }).catch(() => {});
         setCloudStatus('synced');
         return true;
@@ -1368,7 +1393,7 @@ function App() {
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, updatedAt: Date.now() });
       await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       setCloudStatus('synced');
     } catch (e) { setCloudStatus('error'); }
@@ -1393,7 +1418,7 @@ function App() {
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -1422,7 +1447,7 @@ function App() {
   const sess=sel?SESSIONS[sel]:null;
   const baseEx=sess?sess.exercises[exIdx]:null;
   const curEx=baseEx?(subMap[baseEx.id]?{...baseEx,...subMap[baseEx.id]}:baseEx):null;
-  const effSets=curEx?getDS(curEx.sets,week):0;
+  const effSets=curEx?getEffSets(curEx,week):0;
   const loggedSetsArr=curEx?(setData[curEx.id]||[]):[];
   const prevHist=curEx?getPrevHist(curEx.id,logs,3):[];
   const progRec=curEx?getProgRec(curEx.id,curEx.rMax,logs):null;
@@ -1448,6 +1473,10 @@ function App() {
   const measSeries=measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value}));
   const protSeries=nutrition.slice(0,21).reverse().map(n=>({x:fmtShort(n.date),y:n.protein}));
   const avg7=(k)=>{ const l7=nutrition.slice(0,7); if(!l7.length) return null; return Math.round(l7.reduce((a,n)=>a+(n[k]||0),0)/l7.length); };
+  const cardioWeekStart=(()=>{ const d=new Date(); const day=(d.getDay()+6)%7; d.setHours(0,0,0,0); d.setDate(d.getDate()-day); return d.getTime(); })();
+  const cardioThisWeek=cardioLog.filter(c=>new Date(c.date).getTime()>=cardioWeekStart);
+  const cardioMins=cardioThisWeek.reduce((a,c)=>a+(c.minutes||0),0);
+  const cardioSessions=cardioThisWeek.length;
   const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
@@ -1631,7 +1660,7 @@ function App() {
           </div>
           <div className="ex-list">
             {sess.exercises.map((ex, i) => {
-              const adj = getDS(ex.sets, week);
+              const adj = getEffSets(ex, week);
               const rec = getProgRec(ex.id, ex.rMax, logs);
               return (
                 <div key={ex.id} className={`ex-row${condensed && !CORE_EX[sess.id]?.has(ex.id) ? ' ex-dim' : ''}`}>
@@ -1639,7 +1668,7 @@ function App() {
                   <div className="ex-body">
                     <div className={`ex-nm${ex.opt?' opt':''}`}>{ex.name}{ex.opt?' (opt)':''}{condensed && CORE_EX[sess.id]?.has(ex.id) ? <span className="core-tag">core</span> : null}</div>
                     <div className="chips">
-                      {adj!==ex.sets ? <span className="chip dl">{adj}x (deload)</span> : <span className="chip">{ex.sets}x</span>}
+                      {adj>ex.sets ? <span className="chip" style={{color:'var(--acc)',borderColor:'rgba(196,255,0,.3)',background:'var(--ag2)'}}>{adj}x (+{adj-ex.sets})</span> : adj<ex.sets ? <span className="chip dl">{adj}x (deload)</span> : <span className="chip">{ex.sets}x</span>}
                       <span className="chip">{ex.rMin}-{ex.rMax} reps</span>
                       <span className="chip rir">{ex.rirMin===ex.rirMax?ex.rirMin:`${ex.rirMin}-${ex.rirMax}`} RIR</span>
                       <span className="chip">{fmt(ex.rest)} rest</span>
@@ -2278,8 +2307,43 @@ function App() {
           </div>
 
           <div className="body-sec">
+            <div className="body-ttl">Cardio</div>
+            <div className="body-sub">Zone-2 work for recovery, work capacity and heart health \u2014 aim 2-3x a week</div>
+            {cardioLog.length > 0 && (
+              <div className="meas-grid">
+                <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">This week</div><div className="meas-val">{cardioSessions}<span className="meas-unit">sessions</span></div></div>
+                <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">Weekly total</div><div className="meas-val">{cardioMins}<span className="meas-unit">min</span></div></div>
+              </div>
+            )}
+            <button className="add-toggle" onClick={() => setShowAddCardio(v => !v)}>
+              <span>Log cardio</span><span className="plus">{showAddCardio ? '\u2212' : '+'}</span>
+            </button>
+            {showAddCardio && (
+              <div className="body-form">
+                <div className="bf-row">
+                  <div className="bf-grp"><div className="bf-lbl">Type</div><select className="bf-sel" value={cType} onChange={e => setCType(e.target.value)}>{['Zone 2','Incline Walk','Bike','Row','Stairs','Other'].map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                  <div className="bf-grp"><div className="bf-lbl">Minutes</div><input className="bf-in" type="number" inputMode="numeric" placeholder="35" value={cMin} onChange={e => setCMin(e.target.value)}/></div>
+                </div>
+                <input className="bf-in" type="text" placeholder="Note (optional)" value={cNote} onChange={e => setCNote(e.target.value)}/>
+                <button className="bf-save" onClick={addCardio}>Save</button>
+              </div>
+            )}
+            <div className="body-list">
+              {cardioLog.slice(0, 21).map((c, i) => (
+                <div key={i} className="bl-row">
+                  <span className="bl-date">{fmtShort(c.date)}</span>
+                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{c.modality}{c.note ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> \u00b7 {c.note}</span> : null}</span>
+                  <span className="bl-val">{c.minutes}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>min</span></span>
+                  <button className="bl-del" onClick={() => setCardioLog(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
+                </div>
+              ))}
+              {cardioLog.length === 0 && <div className="empty-msg">No cardio logged yet.<br/>Log a session above.</div>}
+            </div>
+          </div>
+
+          <div className="body-sec">
             <div className="body-ttl">Protocol Log</div>
-            <div className="body-sub">Track TRT, HCG, Tren and HGH doses alongside training</div>
+            <div className="body-sub">Track your protocol doses alongside training</div>
             <button className="add-toggle" onClick={()=>setShowAddProt(v=>!v)}>
               <span>Log a dose</span><span className="plus">{showAddProt?'−':'+'}</span>
             </button>
@@ -2289,7 +2353,7 @@ function App() {
                   <div className="bf-grp">
                     <div className="bf-lbl">Compound</div>
                     <select className="bf-sel" value={pCmp} onChange={e=>setPCmp(e.target.value)}>
-                      {['TRT','HCG','Tren','HGH','Other'].map(c=><option key={c} value={c}>{c}</option>)}
+                      {['TRT','HCG','Compound A','Compound B','Other'].map(c=><option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="bf-grp">
