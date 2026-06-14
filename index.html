@@ -451,6 +451,24 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 
 .cal-preview{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--acc);padding:2px 0}
 
+
+.period-sec{padding:13px 15px;border-bottom:1px solid var(--bdr)}
+.period-btns{display:flex;gap:8px;margin-top:9px}
+.period-btn{flex:1;padding:11px 8px;border-radius:9px;border:1px solid var(--acc);background:var(--ag2);color:var(--acc);font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer}
+.period-btn:disabled{opacity:.5}
+.period-out{margin-top:11px;padding:13px;background:var(--sur);border-radius:9px;border:1px solid var(--bdr);font-size:13px;line-height:1.6;color:var(--t);white-space:pre-wrap}
+.bp-latest{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+.bp-reading{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:var(--t)}
+.bp-pulse{font-size:12px;color:var(--t3)}
+.bp-chip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:11px}
+.bp-chip.green{color:var(--ok);background:rgba(0,232,122,.12)}
+.bp-chip.amber{color:var(--warn);background:rgba(255,140,0,.12)}
+.bp-chip.red{color:var(--err);background:rgba(255,68,68,.12)}
+.bp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.bp-dot.green{background:var(--ok)}
+.bp-dot.amber{background:var(--warn)}
+.bp-dot.red{background:var(--err)}
+
 </style>
 </head>
 <body>
@@ -929,6 +947,14 @@ function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHist
   return { mode, cls: meta.cls, title: meta.title, action, factors };
 }
 
+function bpCategory(sys, dia) {
+  if (sys >= 180 || dia >= 120) return { label: 'Crisis - seek care', cls: 'red' };
+  if (sys >= 140 || dia >= 90) return { label: 'High (Stage 2)', cls: 'red' };
+  if (sys >= 130 || dia >= 80) return { label: 'Elevated (Stage 1)', cls: 'amber' };
+  if (sys >= 120) return { label: 'Elevated', cls: 'amber' };
+  return { label: 'Normal', cls: 'green' };
+}
+
 function App() {
 
   // ── WHOOP INTEGRATION ─────────────────────────────────
@@ -1121,6 +1147,14 @@ function App() {
   const [cMin, setCMin] = useState('');
   const [cNote, setCNote] = useState('');
   const [showAddCardio, setShowAddCardio] = useState(false);
+  const [bpLog, setBpLog] = useState(() => { try { return JSON.parse(LS.get('bp_log') || '[]'); } catch(e) { return []; } });
+  const [bpSys, setBpSys] = useState('');
+  const [bpDia, setBpDia] = useState('');
+  const [bpPulse, setBpPulse] = useState('');
+  const [showAddBP, setShowAddBP] = useState(false);
+  const [periodReview, setPeriodReview] = useState(null);
+  const [periodLoading, setPeriodLoading] = useState(false);
+  const [periodScope, setPeriodScope] = useState(null);
   const [newWt, setNewWt]             = useState('');
   const [newWtNote, setNewWtNote]     = useState('');
   const [showAddBody, setShowAddBody] = useState(false);
@@ -1143,6 +1177,7 @@ function App() {
   useEffect(()=>{LS.set('body_measurements',JSON.stringify(measurements));},[measurements]);
   useEffect(()=>{LS.set('nutrition_log',JSON.stringify(nutrition));},[nutrition]);
   useEffect(()=>{LS.set('cardio_log',JSON.stringify(cardioLog));},[cardioLog]);
+  useEffect(()=>{LS.set('bp_log',JSON.stringify(bpLog));},[bpLog]);
 
   useEffect(() => {
     if (!timerOn) return;
@@ -1342,6 +1377,70 @@ function App() {
     finally { setReviewLoading(false); }
   };
 
+  const addBP = () => {
+    if (!bpSys || !bpDia) return;
+    const entry = { date: new Date().toISOString(), sys: parseInt(bpSys), dia: parseInt(bpDia), pulse: bpPulse ? parseInt(bpPulse) : null };
+    setBpLog(prev => [entry, ...prev].slice(0, 400));
+    setBpSys(''); setBpDia(''); setBpPulse(''); setShowAddBP(false);
+  };
+
+  const getPeriodReview = async (scope) => {
+    const key = LS.get('anthropic_key');
+    if (!key) { alert('Add your Anthropic API key in Tools \u2192 AI Coaching first'); return; }
+    setPeriodScope(scope); setPeriodReview(null); setPeriodLoading(true);
+    const ph = getPhase(week);
+    const fmtVol = v => Object.keys(v).length ? Object.entries(v).map(([m,s]) => `${MUSCLES[m]?.name||m} ${Math.round(s*10)/10}`).join(', ') : 'none';
+    const bw = bodyMetrics.length >= 2 ? `${bodyMetrics[bodyMetrics.length-1].weight}kg to ${bodyMetrics[0].weight}kg` : (bodyMetrics.length===1?`${bodyMetrics[0].weight}kg`:'not logged');
+    const recTrend = (deloadInfo?.level && deloadInfo.level!=='unknown') ? deloadInfo.msg : 'insufficient WHOOP history';
+    const protAvg = avg7('protein'); const calAvg = avg7('calories');
+    const nutLine = protAvg!=null ? `~${protAvg}g protein, ~${calAvg} kcal per day (7-day avg)` : 'not logged';
+    const platLine = plateaus.length ? plateaus.map(p=>p.name).join(', ') : 'none';
+    let prompt;
+    if (scope === 'week') {
+      const wl = logs.filter(l => l.week === week);
+      const sessLines = wl.length ? wl.map(l => `- ${l.sessionName||l.sessionId}: ${l.exercises.length} exercises, ${l.exercises.reduce((a,e)=>a+e.sets.length,0)} sets`).join('\n') : 'no sessions logged yet';
+      const cardioLine = cardioLog.length ? `${cardioSessions} sessions, ${cardioMins} min this week` : 'none';
+      prompt = `You are a personal strength coach giving a weekly check-in for a 48-year-old male on an optimised hormonal protocol with enhanced recovery, following the Diamond Protocol 12-week hypertrophy programme.
+
+WEEK ${week}/12 (${ph.name})
+Sessions this week:
+${sessLines}
+Hard sets per muscle this week: ${fmtVol(weekMuscleVolume(logs, week))}
+Recovery/fatigue trend: ${recTrend}
+Nutrition: ${nutLine}
+Cardio: ${cardioLine}
+Stalled lifts: ${platLine}
+Bodyweight: ${bw}
+
+Write a concise weekly check-in in 2-3 short paragraphs. Cover: (1) how the week went - volume hit, whether recovery is holding, (2) anything to watch (stalls, under-trained muscles, fatigue, low protein), (3) 2-3 specific things to focus on next week. Direct and practical, like a coach reviewing the week.`;
+    } else {
+      const vol = {};
+      for (const l of logs) for (const ex of (l.exercises||[])) { const m=EX_MUSCLE[ex.id]; if(!m)continue; const s=ex.sets?.length||0; vol[m.p]=(vol[m.p]||0)+s; if(m.s)vol[m.s]=(vol[m.s]||0)+s*0.5; }
+      const sessLines = logs.length ? logs.slice(0,40).map(l => `- W${l.week} ${l.sessionName||l.sessionId}: ${l.exercises.reduce((a,e)=>a+e.sets.length,0)} sets`).join('\n') : 'none logged';
+      prompt = `You are a personal strength coach writing an end-of-block retrospective for a 48-year-old male on an optimised hormonal protocol with enhanced recovery, who has run the Diamond Protocol 12-week hypertrophy programme (currently week ${week}).
+
+All sessions logged:
+${sessLines}
+Total hard sets per muscle across the block: ${fmtVol(vol)}
+Recovery/fatigue trend: ${recTrend}
+Nutrition: ${nutLine}
+Stalled lifts: ${platLine}
+Bodyweight change: ${bw}
+
+Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the block achieved overall, (2) which muscles and lifts progressed well and which lagged or stalled, (3) what to change for the next block - exercise selection, volume distribution, recovery or nutrition. Direct and honest, like a coach planning the next mesocycle.`;
+    }
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens: scope==='week'?750:1100, messages:[{role:'user',content:prompt}] })
+      });
+      const data = await res.json();
+      setPeriodReview(data.content?.[0]?.text || 'Could not generate review. Check your API key in Tools.');
+    } catch(e){ setPeriodReview('Error: '+e.message); }
+    finally { setPeriodLoading(false); }
+  };
+
   const addBodyMetric = () => {
     if (!newWt) return;
     const e={date:new Date().toISOString(),weight:parseFloat(newWt),notes:newWtNote};
@@ -1394,6 +1493,7 @@ function App() {
         const mergedMeas = mergeByKey(measurements, Array.isArray(data.measurements) ? data.measurements : [], e => e.date + '|' + e.site + '|' + e.value);
         const mergedNutri = mergeByKey(nutrition, Array.isArray(data.nutrition) ? data.nutrition : [], e => e.date);
         const mergedCardio = mergeByKey(cardioLog, Array.isArray(data.cardioLog) ? data.cardioLog : [], e => e.date + '|' + e.modality + '|' + e.minutes);
+        const mergedBP = mergeByKey(bpLog, Array.isArray(data.bpLog) ? data.bpLog : [], e => e.date + '|' + e.sys + '|' + e.dia);
         skipPush.current = true;
         setLogs(mergedLogs);
         setBodyMetrics(mergedBody);
@@ -1401,9 +1501,10 @@ function App() {
         setMeasurements(mergedMeas);
         setNutrition(mergedNutri);
         setCardioLog(mergedCardio);
+        setBpLog(mergedBP);
         if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); }
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, cardioLog: mergedCardio, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, cardioLog: mergedCardio, bpLog: mergedBP, updatedAt: Date.now() });
         fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot }).catch(() => {});
         setCloudStatus('synced');
         return true;
@@ -1418,7 +1519,7 @@ function App() {
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, updatedAt: Date.now() });
       await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       setCloudStatus('synced');
     } catch (e) { setCloudStatus('error'); }
@@ -1443,7 +1544,7 @@ function App() {
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -1502,6 +1603,8 @@ function App() {
   const cardioThisWeek=cardioLog.filter(c=>new Date(c.date).getTime()>=cardioWeekStart);
   const cardioMins=cardioThisWeek.reduce((a,c)=>a+(c.minutes||0),0);
   const cardioSessions=cardioThisWeek.length;
+  const latestBP=bpLog[0]||null;
+  const bpSeries=bpLog.slice(0,21).reverse().map(b=>({x:fmtShort(b.date),y:b.sys}));
   const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
@@ -1989,6 +2092,17 @@ function App() {
               )}
             </div>
           )}
+          {logs.length >= 1 && (
+            <div className="period-sec">
+              <div className="mv-head"><span className="mv-ttl">Coach Review</span></div>
+              <div className="mv-sub">Zoom out \u2014 let the AI coach review your week or the whole block</div>
+              <div className="period-btns">
+                <button className="period-btn" onClick={() => getPeriodReview('week')} disabled={periodLoading}>{periodLoading && periodScope==='week' ? 'Reviewing\u2026' : 'Weekly Check-in'}</button>
+                <button className="period-btn" onClick={() => getPeriodReview('block')} disabled={periodLoading}>{periodLoading && periodScope==='block' ? 'Reviewing\u2026' : 'End-of-Block Review'}</button>
+              </div>
+              {periodReview && <div className="period-out">{periodReview}</div>}
+            </div>
+          )}
           <div className="ex-sel-wrap">
             <div className="ex-sel-lbl">Select Exercise</div>
             <select className="ex-sel" value={progEx||''} onChange={e=>setProgEx(e.target.value)}>
@@ -2368,6 +2482,47 @@ function App() {
                 </div>
               ))}
               {cardioLog.length === 0 && <div className="empty-msg">No cardio logged yet.<br/>Log a session above.</div>}
+            </div>
+          </div>
+
+          <div className="body-sec">
+            <div className="body-ttl">Blood Pressure</div>
+            <div className="body-sub">Track BP for cardiovascular health \u2014 your stack can raise it, so watch the trend</div>
+            {latestBP && (() => { const c = bpCategory(latestBP.sys, latestBP.dia); return (
+              <div className="bp-latest">
+                <div className="bp-reading">{latestBP.sys}/{latestBP.dia}{latestBP.pulse ? <span className="bp-pulse"> &#183; {latestBP.pulse} bpm</span> : null}</div>
+                <span className={`bp-chip ${c.cls}`}>{c.label}</span>
+              </div>
+            ); })()}
+            {bpSeries.length > 1 && (
+              <div style={{marginBottom:10}}>
+                <div className="chart-lbl">Systolic \u2014 last {Math.min(bpLog.length,21)} readings</div>
+                <SVGChart data={bpSeries} height={110} color="#ff6b6b"/>
+              </div>
+            )}
+            <button className="add-toggle" onClick={() => setShowAddBP(v => !v)}>
+              <span>Log a reading</span><span className="plus">{showAddBP ? '\u2212' : '+'}</span>
+            </button>
+            {showAddBP && (
+              <div className="body-form">
+                <div className="bf-row">
+                  <div className="bf-grp"><div className="bf-lbl">Systolic</div><input className="bf-in" type="number" inputMode="numeric" placeholder="120" value={bpSys} onChange={e => setBpSys(e.target.value)}/></div>
+                  <div className="bf-grp"><div className="bf-lbl">Diastolic</div><input className="bf-in" type="number" inputMode="numeric" placeholder="80" value={bpDia} onChange={e => setBpDia(e.target.value)}/></div>
+                  <div className="bf-grp"><div className="bf-lbl">Pulse (opt)</div><input className="bf-in" type="number" inputMode="numeric" placeholder="60" value={bpPulse} onChange={e => setBpPulse(e.target.value)}/></div>
+                </div>
+                <button className="bf-save" onClick={addBP}>Save</button>
+              </div>
+            )}
+            <div className="body-list">
+              {bpLog.slice(0, 21).map((b, i) => { const c = bpCategory(b.sys, b.dia); return (
+                <div key={i} className="bl-row">
+                  <span className="bl-date">{fmtShort(b.date)}</span>
+                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{b.sys}/{b.dia}{b.pulse ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {b.pulse}bpm</span> : null}</span>
+                  <span className={`bp-dot ${c.cls}`}></span>
+                  <button className="bl-del" onClick={() => setBpLog(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
+                </div>
+              ); })}
+              {bpLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your blood pressure above.</div>}
             </div>
           </div>
 
