@@ -507,6 +507,12 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .ebody-f{display:flex;flex-direction:column;gap:4px}
 .ebody-f label{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--t3)}
 .ebody-f input{padding:10px;background:var(--sur);border:1px solid var(--bdr);border-radius:7px;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:14px}
+
+.hv-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 15px 10px;padding:12px 14px;background:var(--crd);border:1px solid var(--bdr);border-radius:10px}
+.hv-txt{flex:1}.hv-lbl{font-size:13px;font-weight:700;color:var(--t);font-family:'Syne',sans-serif}
+.hv-sub{font-size:10px;color:var(--t3);margin-top:2px}
+.hv-btn{flex-shrink:0;padding:8px 16px;border-radius:8px;border:1px solid var(--bdr);background:var(--sur);color:var(--t3);font-family:'Syne',sans-serif;font-weight:800;font-size:12px;letter-spacing:.05em;cursor:pointer}
+.hv-btn.on{border-color:var(--acc);background:var(--ag2);color:var(--acc)}
 </style>
 </head>
 <body>
@@ -645,9 +651,11 @@ const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
 const RAMP_EX = new Set(['ua3','ua4','ua5','ub3','ub1','ub4','ub5']);
 const RAMP_P1 = new Set([2,6]);
 const RAMP_P2 = new Set([3,7]);
-const getEffSets = (ex, week) => {
+const HIGHVOL_EX = new Set(['ua5','ub4','ua8','ub5','ub7','ua6','ub8','la6','lb5','la7','lb7','ua7','lb6']);
+const getEffSets = (ex, week, hv) => {
   let s = ex.sets;
   if (DLW.has(week)) return Math.max(1, Math.round(s * 0.5));
+  if (hv && HIGHVOL_EX.has(ex.id)) s += 1;
   if (RAMP_EX.has(ex.id)) { if (RAMP_P2.has(week)) s += 2; else if (RAMP_P1.has(week)) s += 1; }
   return s;
 };
@@ -1156,6 +1164,7 @@ function App() {
   const [editingLog, setEditingLog] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
   const [condensed, setCondensed] = useState(false);
+  const [highVol, setHighVol] = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).highVol||false:false; });
   const [wt, setWt]             = useState(60);
   const [rp, setRp]             = useState(8);
   const [rir, setRir]           = useState(1);
@@ -1224,7 +1233,7 @@ function App() {
   const skipPush  = useRef(false);
   const syncMounted = useRef(false);
 
-  useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery, block})); }, [week, recovery, block]);
+  useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery, block, highVol})); }, [week, recovery, block, highVol]);
   useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
   useEffect(()=>{LS.set('body_metrics',JSON.stringify(bodyMetrics));},[bodyMetrics]);
   useEffect(()=>{LS.set('protocol_log',JSON.stringify(protocolLog));},[protocolLog]);
@@ -1298,7 +1307,7 @@ function App() {
 
   const logSet = () => {
     const sess=SESSIONS[sel]; const baseEx2=sess.exercises[exIdx]; const ex=subMap[baseEx2.id]?{...baseEx2,...subMap[baseEx2.id]}:baseEx2;
-    const effSets=getEffSets(ex,week);
+    const effSets=getEffSets(ex,week,hvActive);
     const newSet={weight:parseFloat(wt)||0, reps:parseInt(rp)||0, rir};
     if (editIdx !== null) {
       const arr=[...(setData[ex.id]||[])]; arr[editIdx]=newSet;
@@ -1684,10 +1693,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const doneToday=new Set(logs.filter(l=>new Date(l.date).toDateString()===today).map(l=>l.sessionId));
   const weekDone=new Set(logs.filter(l=>l.week===week && (l.block||1)===block).map(l=>l.sessionId));
   const allDone=weekDone.size>=4;
+  const deloadInfo=computeDeloadReadiness(whoopHistory,week);
+  const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory);
+  const hvActive = highVol && readiness.cls === 'green';
   const sess=sel?SESSIONS[sel]:null;
   const baseEx=sess?sess.exercises[exIdx]:null;
   const curEx=baseEx?(subMap[baseEx.id]?{...baseEx,...subMap[baseEx.id]}:baseEx):null;
-  const effSets=curEx?getEffSets(curEx,week):0;
+  const effSets=curEx?getEffSets(curEx,week,hvActive):0;
   const loggedSetsArr=curEx?(setData[curEx.id]||[]):[];
   const prevHist=curEx?getPrevHist(curEx.id,logs,3):[];
   const progRec=curEx?getProgRec(curEx.id,curEx.rMax,logs):null;
@@ -1711,7 +1723,6 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const _unit=progMetric==='volume'?'':'kg';
   const curVol=weekMuscleVolume(logs,week,block);
   const volSeries=weeklyVolumeSeries(logs,volMuscle,block);
-  const deloadInfo=computeDeloadReadiness(whoopHistory,week);
   const plateaus=detectPlateaus(logs);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
   const measSeries=measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value}));
@@ -1728,7 +1739,6 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const cardioSessions=cardioThisWeek.length;
   const latestBP=bpLog[0]||null;
   const bpSeries=bpLog.slice(0,21).reverse().map(b=>({x:fmtShort(b.date),y:b.sys}));
-  const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
@@ -1885,6 +1895,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           {!(allDone && week === 12) && (
             <button className="newblock-btn" onClick={() => setNewBlockConfirm(true)}>&#8635; Start a new block</button>
           )}
+          <div className="hv-row">
+              <div className="hv-txt">
+                <div className="hv-lbl">High-volume track</div>
+                <div className="hv-sub">{!highVol ? 'Off \u00b7 standard volume' : DLW.has(week) ? 'Paused \u00b7 deload week' : readiness.cls==='green' ? 'Active today \u00b7 +1 set on priority muscles' : 'Paused \u00b7 readiness not green'}</div>
+              </div>
+              <button className={`hv-btn${highVol?' on':''}`} onClick={()=>setHighVol(v=>!v)}>{highVol?'ON':'OFF'}</button>
+            </div>
           {wipData && (
             <div className="resume-box">
               <div className="rb-title">Resume workout?</div>
@@ -1985,7 +2002,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           </div>
           <div className="ex-list">
             {sess.exercises.map((ex, i) => {
-              const adj = getEffSets(ex, week);
+              const adj = getEffSets(ex, week, hvActive);
               const rec = getProgRec(ex.id, ex.rMax, logs);
               return (
                 <div key={ex.id} className={`ex-row${condensed && !CORE_EX[sess.id]?.has(ex.id) ? ' ex-dim' : ''}`}>
