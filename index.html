@@ -930,6 +930,7 @@ function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHist
   const sharpName = recentPain.find(p => p.level === 2)?.name;
   const rec = whoopData?.recovery;
   const recLow = rec != null && rec < 34;
+  const recMidLow = rec != null && rec >= 34 && rec < 50;
   const recHigh = rec != null && rec >= 67;
   const sleep = whoopData?.sleep;
   const sleepPoor = sleep != null && sleep < 70;
@@ -948,6 +949,7 @@ function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHist
   if (sleepPoor) { minor++; factors.push('poor sleep (' + sleep + '%)'); }
   if (trend === 'moderate') { minor++; factors.push('early fatigue signal'); }
   if (nigglePain) { minor++; factors.push('joint niggle flagged last session'); }
+  if (recMidLow) { minor++; factors.push('WHOOP recovery low-yellow (' + rec + '%)'); }
   if (subjExcellent) { pos++; factors.push('you feel fresh'); }
   if (recHigh) { pos++; factors.push('WHOOP recovery green (' + rec + '%)'); }
   if (trend === 'fresh') pos++;
