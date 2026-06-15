@@ -571,6 +571,7 @@ const SESSIONS = {
     {id:"ua3",name:"RO-T8 Incline Press",sets:3,rMin:8,rMax:10,rirMin:1,rirMax:1,rest:120,handle:"RO-T8",cues:["30-45 bench","Elbows 30-45"],avoidFail:false,int:{label:"0 RIR",desc:"Final set to 0 RIR, no forced reps"},orm:true},
     {id:"ua4",name:"Short Bar Row",sets:4,rMin:8,rMax:10,rirMin:1,rirMax:1,rest:120,handle:"RO-T8 short bar",cues:["Pull to lower ribs","Chest-supported preferred"],avoidFail:false,int:{label:"REST-PAUSE",desc:"Failure, 20s rest, 3-5 more reps"},orm:false},
     {id:"ua5",name:"Cable Lateral Raise",sets:4,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Small KAZ",cues:["Slight lean","Lead with elbow","Scapular plane"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 lengthened partials on final set"},orm:false},
+    {id:"ua8",name:"Face Pull",sets:3,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope",cues:["Pull to forehead, elbows high","External rotate at the end"],avoidFail:false,int:null,orm:false},
     {id:"ua6",name:"Overhead Cable Triceps Ext",sets:3,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:60,handle:"Rope/single handle",cues:["Deep overhead stretch","Elbows in, full lockout"],avoidFail:false,int:null,orm:false},
     {id:"ua7",name:"Cable Crunch",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope/KAZ",opt:true,cues:["Round spine","Elbows to knees"],avoidFail:false,int:null,orm:false},
   ]},
@@ -588,7 +589,7 @@ const SESSIONS = {
     {id:"ub2",name:"Seated Cable Press",sets:3,rMin:10,rMax:12,rirMin:1,rirMax:1,rest:90,handle:"RO-T8",cues:["Bench 70-80","Controlled stretch"],avoidFail:false,int:null,orm:false},
     {id:"ub3",name:"Seated Cable Flye",sets:3,rMin:12,rMax:15,rirMin:1,rirMax:2,rest:60,handle:"Small KAZ",cues:["Deep stretch","Hands to chin line"],avoidFail:false,int:{label:"PARTIALS",desc:"+8-10 lengthened partials on final set"},orm:false},
     {id:"ub4",name:"Cable Lateral Raise",sets:4,rMin:12,rMax:20,rirMin:0,rirMax:1,rest:53,handle:"Small KAZ",cues:["Lead with elbow","Hand below elbow"],avoidFail:false,int:{label:"MYO-REPS",desc:"1x20 then 4-5 mini-sets of 4 reps"},orm:false},
-    {id:"ub5",name:"Rear Delt Cable Flye",sets:3,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Small KAZ",cues:["Sweep out into inverted V"],avoidFail:false,int:null,orm:false},
+    {id:"ub5",name:"Rear Delt Cable Flye",sets:4,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Small KAZ",cues:["Sweep out into inverted V"],avoidFail:false,int:null,orm:false},
     {id:"ub6",name:"Lat Cross Extension",sets:3,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Small KAZ/cuffs",cues:["Soft elbow","Freeze angle","Elbow to back pocket"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 short partials on final set"},orm:false},
     {id:"ub7",name:"Incline DB Curl",sets:3,rMin:10,rMax:12,rirMin:1,rirMax:1,rest:83,handle:"Dumbbells",cues:["45 bench","3-4 sec eccentric"],avoidFail:false,int:{label:"0 RIR",desc:"Take final set to 0 RIR"},orm:true},
     {id:"ub8",name:"Overhead Triceps Ext",sets:3,rMin:12,rMax:15,rirMin:1,rirMax:1,rest:60,handle:"Small KAZ",cues:["Deep stretch","Slight elbow flare"],avoidFail:false,int:{label:"REST-PAUSE",desc:"Failure, 20s rest, 3-5 more reps"},orm:false},
@@ -600,7 +601,7 @@ const SESSIONS = {
     {id:"lb4",name:"Adductor Machine",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:68,cues:["Full stretch","Hard squeeze"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 short partials on final set"},orm:false},
     {id:"lb5",name:"Seated Leg Curl",sets:3,rMin:12,rMax:15,rirMin:1,rirMax:1,rest:90,cues:["Full stretch","Controlled negative"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 stretch partials on final set"},orm:false},
     {id:"lb6",name:"Cable Crunch",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,cues:["Round spine","Elbows to knees"],avoidFail:false,int:{label:"0 RIR",desc:"Take final set to 0 RIR"},orm:false},
-    {id:"lb7",name:"Seated Calf Raise",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,cues:["Deep stretch","Controlled top"],avoidFail:false,int:null,orm:false},
+    {id:"lb7",name:"Seated Calf Raise",sets:4,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,cues:["Deep stretch","Controlled top"],avoidFail:false,int:null,orm:false},
   ]},
 };
 const ALL_EX = Object.values(SESSIONS).flatMap(s => s.exercises.map(e => ({id:e.id,name:e.name,session:s.name})));
@@ -627,12 +628,12 @@ const MUSCLES = {
 };
 const EX_MUSCLE = {
   ua1:{p:'chest',s:'triceps'}, ua2:{p:'back',s:'biceps'}, ua3:{p:'chest',s:'triceps'},
-  ua4:{p:'back'}, ua5:{p:'sideDelt'}, ua6:{p:'triceps'}, ua7:{p:'abs'},
-  la1:{p:'quads'}, la2:{p:'quads'}, la3:{p:'hams',s:'glutes'}, la4:{p:'quads'},
+  ua4:{p:'back',s:['rearDelt','biceps']}, ua5:{p:'sideDelt'}, ua6:{p:'triceps'}, ua7:{p:'abs'}, ua8:{p:'rearDelt'},
+  la1:{p:'quads',s:['glutes','adductors']}, la2:{p:'quads',s:['glutes','adductors']}, la3:{p:'hams',s:'glutes'}, la4:{p:'quads',s:['glutes','adductors']},
   la5:{p:'quads'}, la6:{p:'hams'}, la7:{p:'calves'},
-  ub1:{p:'back',s:'biceps'}, ub2:{p:'chest',s:'sideDelt'}, ub3:{p:'chest'},
+  ub1:{p:'back',s:'biceps'}, ub2:{p:'chest',s:['sideDelt','triceps']}, ub3:{p:'chest'},
   ub4:{p:'sideDelt'}, ub5:{p:'rearDelt'}, ub6:{p:'back'}, ub7:{p:'biceps'}, ub8:{p:'triceps'},
-  lb1:{p:'glutes',s:'quads'}, lb2:{p:'quads',s:'glutes'}, lb3:{p:'glutes',s:'hams'},
+  lb1:{p:'glutes',s:['quads','adductors']}, lb2:{p:'quads',s:['glutes','adductors']}, lb3:{p:'glutes',s:'hams'},
   lb4:{p:'adductors'}, lb5:{p:'hams'}, lb6:{p:'abs'}, lb7:{p:'calves'},
 };
 
@@ -642,7 +643,7 @@ const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short'
 const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
 const getDS = (sets,week) => DLW.has(week) ? Math.max(1,Math.ceil(sets*0.6)) : sets;
-const RAMP_EX = new Set(['ua3','ua4','ua5','ub3','ub1','ub4']);
+const RAMP_EX = new Set(['ua3','ua4','ua5','ub3','ub1','ub4','ub5']);
 const RAMP_P1 = new Set([2,6]);
 const RAMP_P2 = new Set([3,7]);
 const getEffSets = (ex, week) => {
@@ -679,7 +680,7 @@ function weekMuscleVolume(logs, wk, block) {
       const m = EX_MUSCLE[ex.id]; if (!m) continue;
       const sets = ex.sets?.length || 0;
       v[m.p] = (v[m.p] || 0) + sets;
-      if (m.s) v[m.s] = (v[m.s] || 0) + sets * 0.5;
+      if (m.s) { const ss=Array.isArray(m.s)?m.s:[m.s]; for(const sm of ss) v[sm]=(v[sm]||0)+sets*0.5; }
     }
   }
   return v;
@@ -692,7 +693,7 @@ function weeklyVolumeSeries(logs, muscle, block) {
       const m = EX_MUSCLE[ex.id]; if (!m) continue;
       const sets = ex.sets?.length || 0;
       if (muscle === 'all') { byWeek[l.week] = (byWeek[l.week] || 0) + sets; }
-      else { let add = 0; if (m.p === muscle) add += sets; if (m.s === muscle) add += sets * 0.5; if (add) byWeek[l.week] = (byWeek[l.week] || 0) + add; }
+      else { let add = 0; if (m.p === muscle) add += sets; if (m.s) { const ss=Array.isArray(m.s)?m.s:[m.s]; if(ss.includes(muscle)) add += sets * 0.5; } if (add) byWeek[l.week] = (byWeek[l.week] || 0) + add; }
     }
   }
   const weeks = Object.keys(byWeek).map(Number).sort((a,b) => a-b);
@@ -1498,7 +1499,7 @@ Write a concise weekly check-in in 2-3 short paragraphs. Cover: (1) how the week
     } else {
       const blockLogs = logs.filter(l => (l.block||1) === block);
       const vol = {};
-      for (const l of blockLogs) for (const ex of (l.exercises||[])) { const m=EX_MUSCLE[ex.id]; if(!m)continue; const s=ex.sets?.length||0; vol[m.p]=(vol[m.p]||0)+s; if(m.s)vol[m.s]=(vol[m.s]||0)+s*0.5; }
+      for (const l of blockLogs) for (const ex of (l.exercises||[])) { const m=EX_MUSCLE[ex.id]; if(!m)continue; const s=ex.sets?.length||0; vol[m.p]=(vol[m.p]||0)+s; if(m.s){const ss=Array.isArray(m.s)?m.s:[m.s];for(const sm of ss)vol[sm]=(vol[sm]||0)+s*0.5;} }
       const sessLines = blockLogs.length ? blockLogs.slice(0,40).map(l => `- W${l.week} ${l.sessionName||l.sessionId}: ${l.exercises.reduce((a,e)=>a+e.sets.length,0)} sets`).join('\n') : 'none logged';
       prompt = `You are a personal strength coach writing an end-of-block retrospective for a 48-year-old male on an optimised hormonal protocol with enhanced recovery, who has run the Diamond Protocol 12-week hypertrophy programme (currently week ${week}).
 
