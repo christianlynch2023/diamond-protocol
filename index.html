@@ -648,6 +648,7 @@ const fmt = s => { const m=Math.floor(s/60), sc=s%60; return m>0 ? `${m}:${Strin
 const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' ' + new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const RAMP_EX = new Set(['ua3','ua4','ua5','ub3','ub1','ub4','ub5']);
 const RAMP_P1 = new Set([2,6]);
 const RAMP_P2 = new Set([3,7]);
@@ -1226,6 +1227,12 @@ function App() {
   const [pDose, setPDose]             = useState('');
   const [pUnit, setPUnit]             = useState('mg');
   const [pNote, setPNote]             = useState('');
+  const [wtDate, setWtDate] = useState(localToday());
+  const [mDate, setMDate] = useState(localToday());
+  const [nDate, setNDate] = useState(localToday());
+  const [cDate, setCDate] = useState(localToday());
+  const [bpDate, setBpDate] = useState(localToday());
+  const [pDate, setPDate] = useState(localToday());
   const [syncCode, setSyncCode]       = useState(() => LS.get('sync_code') || '');
   const [syncCodeInput, setSyncCodeInput] = useState('');
   const [cloudStatus, setCloudStatus] = useState('idle');
@@ -1468,9 +1475,9 @@ function App() {
 
   const addBP = () => {
     if (!bpSys || !bpDia) return;
-    const entry = { date: new Date().toISOString(), sys: parseInt(bpSys), dia: parseInt(bpDia), pulse: bpPulse ? parseInt(bpPulse) : null };
-    setBpLog(prev => [entry, ...prev].slice(0, 400));
-    setBpSys(''); setBpDia(''); setBpPulse(''); setShowAddBP(false);
+    const entry = { date: `${bpDate}T12:00:00.000Z`, sys: parseInt(bpSys), dia: parseInt(bpDia), pulse: bpPulse ? parseInt(bpPulse) : null };
+    setBpLog(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
+    setBpSys(''); setBpDia(''); setBpPulse(''); setBpDate(localToday()); setShowAddBP(false);
   };
 
   const getPeriodReview = async (scope) => {
@@ -1566,38 +1573,38 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
 
   const addBodyMetric = () => {
     if (!newWt) return;
-    const e={date:new Date().toISOString(),weight:parseFloat(newWt),bodyFat:newBF?parseFloat(newBF):null,muscle:newMuscle?parseFloat(newMuscle):null,notes:newWtNote};
-    setBodyMetrics(prev=>[e,...prev].slice(0,200));
-    setNewWt('');setNewBF('');setNewMuscle('');setNewWtNote('');setShowAddBody(false);
+    const e={date:`${wtDate}T12:00:00.000Z`,weight:parseFloat(newWt),bodyFat:newBF?parseFloat(newBF):null,muscle:newMuscle?parseFloat(newMuscle):null,notes:newWtNote};
+    setBodyMetrics(prev=>[e,...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,200));
+    setNewWt('');setNewBF('');setNewMuscle('');setNewWtNote('');setWtDate(localToday());setShowAddBody(false);
   };
 
   const addCardio = () => {
     if (!cMin) return;
-    const entry = { date: new Date().toISOString(), modality: cType, minutes: parseFloat(cMin), note: cNote };
-    setCardioLog(prev => [entry, ...prev].slice(0, 400));
-    setCMin(''); setCNote(''); setShowAddCardio(false);
+    const entry = { date: `${cDate}T12:00:00.000Z`, modality: cType, minutes: parseFloat(cMin), note: cNote };
+    setCardioLog(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
+    setCMin(''); setCNote(''); setCDate(localToday()); setShowAddCardio(false);
   };
 
   const addNutrition = () => {
     if (!nP && !nC && !nF) return;
     const p = parseFloat(nP) || 0, c = parseFloat(nC) || 0, f = parseFloat(nF) || 0;
-    const entry = { date: new Date().toISOString().slice(0,10), protein: p, carbs: c, fat: f, calories: Math.round(p*4 + c*4 + f*9) };
-    setNutrition(prev => { const filtered = prev.filter(e => e.date !== entry.date); return [entry, ...filtered].slice(0, 400); });
-    setNP(''); setNC(''); setNF(''); setShowAddNutri(false);
+    const entry = { date: nDate, protein: p, carbs: c, fat: f, calories: Math.round(p*4 + c*4 + f*9) };
+    setNutrition(prev => { const filtered = prev.filter(e => e.date !== entry.date); return [entry, ...filtered].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400); });
+    setNP(''); setNC(''); setNF(''); setNDate(localToday()); setShowAddNutri(false);
   };
 
   const addMeasurement = () => {
     if (!mVal) return;
-    const entry = { date: new Date().toISOString(), site: mSite, value: parseFloat(mVal) };
-    setMeasurements(prev => [entry, ...prev].slice(0, 500));
-    setMVal(''); setShowAddMeas(false);
+    const entry = { date: `${mDate}T12:00:00.000Z`, site: mSite, value: parseFloat(mVal) };
+    setMeasurements(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 500));
+    setMVal(''); setMDate(localToday()); setShowAddMeas(false);
   };
 
   const addProtocol = () => {
     if (!pDose) return;
-    const e={date:new Date().toISOString(),compound:pCmp,dose:parseFloat(pDose),unit:pUnit,notes:pNote};
-    setProtocolLog(prev=>[e,...prev].slice(0,500));
-    setPDose('');setPNote('');setShowAddProt(false);
+    const e={date:`${pDate}T12:00:00.000Z`,compound:pCmp,dose:parseFloat(pDose),unit:pUnit,notes:pNote};
+    setProtocolLog(prev=>[e,...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,500));
+    setPDose('');setPNote('');setPDate(localToday());setShowAddProt(false);
   };
 
 
@@ -2603,6 +2610,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <input className="bf-in" type="text" placeholder="e.g. fasted" value={newWtNote} onChange={e=>setNewWtNote(e.target.value)}/>
                   </div>
                 </div>
+                <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={wtDate} onChange={e=>setWtDate(e.target.value)}/></div>
                 <button className="bf-save" onClick={addBodyMetric}>Save</button>
               </div>
             )}
@@ -2656,6 +2664,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <input className="bf-in" type="number" inputMode="decimal" placeholder="e.g. 40.5" value={mVal} onChange={e => setMVal(e.target.value)}/>
                   </div>
                 </div>
+                <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={mDate} onChange={e=>setMDate(e.target.value)}/></div>
                 <button className="bf-save" onClick={addMeasurement}>Save</button>
               </div>
             )}
@@ -2708,6 +2717,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="bf-grp"><div className="bf-lbl">Fat (g)</div><input className="bf-in" type="number" inputMode="decimal" placeholder="0" value={nF} onChange={e => setNF(e.target.value)}/></div>
                 </div>
                 {(nP || nC || nF) && <div className="cal-preview">= {Math.round((parseFloat(nP)||0)*4 + (parseFloat(nC)||0)*4 + (parseFloat(nF)||0)*9)} kcal</div>}
+                <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={nDate} onChange={e=>setNDate(e.target.value)}/></div>
                 <button className="bf-save" onClick={addNutrition}>Save</button>
               </div>
             )}
@@ -2744,6 +2754,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="bf-grp"><div className="bf-lbl">Minutes</div><input className="bf-in" type="number" inputMode="numeric" placeholder="35" value={cMin} onChange={e => setCMin(e.target.value)}/></div>
                 </div>
                 <input className="bf-in" type="text" placeholder="Note (optional)" value={cNote} onChange={e => setCNote(e.target.value)}/>
+                <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={cDate} onChange={e=>setCDate(e.target.value)}/></div>
                 <button className="bf-save" onClick={addCardio}>Save</button>
               </div>
             )}
@@ -2786,6 +2797,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="bf-grp"><div className="bf-lbl">Diastolic</div><input className="bf-in" type="number" inputMode="numeric" placeholder="80" value={bpDia} onChange={e => setBpDia(e.target.value)}/></div>
                   <div className="bf-grp"><div className="bf-lbl">Pulse (opt)</div><input className="bf-in" type="number" inputMode="numeric" placeholder="60" value={bpPulse} onChange={e => setBpPulse(e.target.value)}/></div>
                 </div>
+                <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={bpDate} onChange={e=>setBpDate(e.target.value)}/></div>
                 <button className="bf-save" onClick={addBP}>Save</button>
               </div>
             )}
@@ -2830,6 +2842,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   </div>
                 </div>
                 <input className="bf-in" type="text" placeholder="Notes (optional)" value={pNote} onChange={e=>setPNote(e.target.value)} style={{marginTop:0}}/>
+                <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={pDate} onChange={e=>setPDate(e.target.value)}/></div>
                 <button className="bf-save" onClick={addProtocol}>Save</button>
               </div>
             )}
