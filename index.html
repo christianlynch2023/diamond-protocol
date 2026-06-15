@@ -497,6 +497,9 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 
 .newblock-btn{display:block;margin:0 15px 10px;padding:9px;width:calc(100% - 30px);background:none;border:1px dashed var(--bdr);border-radius:8px;color:var(--t3);font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:.05em;cursor:pointer;flex-shrink:0}
 .mbt.go{background:var(--acc);color:#000;border-color:var(--acc)}
+.metric-tog{display:flex;gap:6px;padding:10px 15px 0}
+.mtog-btn{flex:1;padding:8px;background:var(--sur);border:1px solid var(--bdr);border-radius:7px;color:var(--t2);font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .12s}
+.mtog-btn.on{background:var(--ag2);border-color:var(--acc);color:var(--acc)}
 </style>
 </head>
 <body>
@@ -1130,6 +1133,7 @@ function App() {
   const [wipData, setWipData]   = useState(() => { const r=LS.get('dp_wip'); return r?JSON.parse(r):null; });
   const [expandLog, setExpandLog] = useState(null);
   const [progEx, setProgEx]     = useState(null);
+  const [progMetric, setProgMetric] = useState('e1rm');
   const [volMuscle, setVolMuscle] = useState('all');
   const [activeInts, setActiveInts] = useState(new Set());
   const [exIdx, setExIdx]       = useState(0);
@@ -1668,9 +1672,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     return {name:ex.name, orm:epley(best.weight,best.reps)};
   }).filter(Boolean):[];
   const progHist=progEx?getPrevHist(progEx,logs,20):[];
-  const progChartData=progHist.slice().reverse().map(h=>({x:fmtShort(h.date),y:Math.max(...h.sets.map(s=>s.weight))}));
+  const _metricVal=(sets)=>{ if(!sets||!sets.length) return 0; if(progMetric==='weight') return Math.max(...sets.map(s=>s.weight||0)); if(progMetric==='volume') return sets.reduce((a,s)=>a+(s.weight||0)*(s.reps||0),0); return Math.max(...sets.map(s=>epley(s.weight||0,s.reps||0))); };
+  const progChartData=progHist.slice().reverse().map(h=>({x:fmtShort(h.date),y:Math.round(_metricVal(h.sets))}));
   const prWeight=progChartData.length?Math.max(...progChartData.map(d=>d.y)):0;
   const lastWeight=progChartData.length?progChartData[progChartData.length-1].y:0;
+  const _metricLbl=progMetric==='e1rm'?'Estimated 1RM per session (kg)':progMetric==='weight'?'Top-set weight per session (kg)':'Session volume (weight × reps)';
+  const _prLbl=progMetric==='e1rm'?'Best e1RM':progMetric==='weight'?'PR Weight':'Best Volume';
+  const _unit=progMetric==='volume'?'':'kg';
   const curVol=weekMuscleVolume(logs,week,block);
   const volSeries=weeklyVolumeSeries(logs,volMuscle,block);
   const deloadInfo=computeDeloadReadiness(whoopHistory,week);
@@ -2240,13 +2248,18 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           </div>
           {progEx && progChartData.length > 1 && (
             <>
+              <div className="metric-tog">
+                {[['e1rm','Est. 1RM'],['weight','Top set'],['volume','Volume']].map(([m,lbl])=>(
+                  <button key={m} className={`mtog-btn${progMetric===m?' on':''}`} onClick={()=>setProgMetric(m)}>{lbl}</button>
+                ))}
+              </div>
               <div className="chart-area">
-                <div className="chart-lbl">Max weight per session (kg)</div>
+                <div className="chart-lbl">{_metricLbl}</div>
                 <SVGChart data={progChartData} height={130}/>
               </div>
               <div className="pstats">
-                <div className="pst"><div className="pst-v">{prWeight}kg</div><div className="pst-l">PR Weight</div></div>
-                <div className="pst"><div className="pst-v">{lastWeight}kg</div><div className="pst-l">Last Session</div></div>
+                <div className="pst"><div className="pst-v">{prWeight}{_unit}</div><div className="pst-l">{_prLbl}</div></div>
+                <div className="pst"><div className="pst-v">{lastWeight}{_unit}</div><div className="pst-l">Last Session</div></div>
                 <div className="pst"><div className="pst-v">{progChartData.length}</div><div className="pst-l">Sessions</div></div>
               </div>
             </>
