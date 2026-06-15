@@ -500,6 +500,13 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .metric-tog{display:flex;gap:6px;padding:10px 15px 0}
 .mtog-btn{flex:1;padding:8px;background:var(--sur);border:1px solid var(--bdr);border-radius:7px;color:var(--t2);font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .12s}
 .mtog-btn.on{background:var(--ag2);border-color:var(--acc);color:var(--acc)}
+
+.bl-edit,.p-edit{background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;padding:4px}
+.bl-edit:active,.p-edit:active{color:var(--acc)}
+.ebody-grid{display:flex;flex-direction:column;gap:9px;margin:8px 0 4px}
+.ebody-f{display:flex;flex-direction:column;gap:4px}
+.ebody-f label{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--t3)}
+.ebody-f input{padding:10px;background:var(--sur);border:1px solid var(--bdr);border-radius:7px;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:14px}
 </style>
 </head>
 <body>
@@ -1199,6 +1206,8 @@ function App() {
   const [newWt, setNewWt]             = useState('');
   const [newWtNote, setNewWtNote]     = useState('');
   const [showAddBody, setShowAddBody] = useState(false);
+  const [editBody, setEditBody] = useState(null);
+  const [editBodyDraft, setEditBodyDraft] = useState(null);
   const [newBF, setNewBF] = useState('');
   const [newMuscle, setNewMuscle] = useState('');
   const [showAddProt, setShowAddProt] = useState(false);
@@ -1525,6 +1534,25 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     setEditingLog(null); setEditDraft(null);
   };
 
+  const BODY_TYPES = {
+    weight:    { setter:setBodyMetrics, slice:200, dateOnly:false, title:'Edit weigh-in', fields:[['weight','Weight (kg)','num'],['bodyFat','Body fat %','num'],['muscle','Muscle (kg)','num'],['notes','Notes','text']] },
+    meas:      { setter:setMeasurements, slice:400, dateOnly:false, title:'Edit measurement', ro:[['site','Site']], fields:[['value','Value (cm)','num']] },
+    nutrition: { setter:setNutrition, slice:400, dateOnly:true, title:'Edit nutrition', fields:[['protein','Protein (g)','num'],['carbs','Carbs (g)','num'],['fat','Fat (g)','num']], recompute:(d)=>({...d, calories:Math.round((parseFloat(d.protein)||0)*4+(parseFloat(d.carbs)||0)*4+(parseFloat(d.fat)||0)*9)}) },
+    cardio:    { setter:setCardioLog, slice:400, dateOnly:false, title:'Edit cardio', fields:[['modality','Type','text'],['minutes','Minutes','num'],['note','Note','text']] },
+    bp:        { setter:setBpLog, slice:400, dateOnly:false, title:'Edit blood pressure', fields:[['sys','Systolic','num'],['dia','Diastolic','num'],['pulse','Pulse','num']] },
+    protocol:  { setter:setProtocolLog, slice:500, dateOnly:false, title:'Edit protocol', fields:[['compound','Compound','text'],['dose','Dose','num'],['unit','Unit','text'],['notes','Notes','text']] },
+  };
+  const openBodyEdit = (type, index, entry) => { setEditBody({type, index}); setEditBodyDraft({...entry}); };
+  const saveBodyEdit = () => {
+    if(!editBody) return;
+    const cfg = BODY_TYPES[editBody.type];
+    let d = {...editBodyDraft};
+    cfg.fields.forEach(([k,,kind])=>{ if(kind==='num') d[k] = (d[k]===''||d[k]==null)?null:parseFloat(d[k]); });
+    if(cfg.recompute) d = cfg.recompute(d);
+    cfg.setter(prev => { const arr = prev.map((e,idx)=> idx===editBody.index ? d : e); arr.sort((a,b)=> (a.date<b.date?1:a.date>b.date?-1:0)); return arr.slice(0, cfg.slice); });
+    setEditBody(null); setEditBodyDraft(null);
+  };
+
   const addBodyMetric = () => {
     if (!newWt) return;
     const e={date:new Date().toISOString(),weight:parseFloat(newWt),bodyFat:newBF?parseFloat(newBF):null,muscle:newMuscle?parseFloat(newMuscle):null,notes:newWtNote};
@@ -1718,6 +1746,33 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <button className="t-skip" onClick={() => {playChime();skipTimer();}}>Skip Rest</button>
         </div>
       )}
+
+      {editBody && editBodyDraft && (() => {
+        const cfg = BODY_TYPES[editBody.type];
+        const dv = cfg.dateOnly ? (editBodyDraft.date||'') : (editBodyDraft.date||'').slice(0,10);
+        const setDate = (val) => setEditBodyDraft(d => ({...d, date: cfg.dateOnly ? val : `${val}T12:00:00.000Z`}));
+        return (
+          <div className="modal-ov">
+            <div className="modal">
+              <div className="modal-title">{cfg.title}</div>
+              {cfg.ro && cfg.ro.map(([k,lbl])=>(<div key={k} className="modal-sub">{lbl}: {editBodyDraft[k]}</div>))}
+              <div className="ebody-grid">
+                <div className="ebody-f"><label>Date</label><input type="date" value={dv} onChange={e=>setDate(e.target.value)}/></div>
+                {cfg.fields.map(([k,lbl,kind])=>(
+                  <div key={k} className="ebody-f"><label>{lbl}</label>
+                    <input type={kind==='num'?'number':'text'} inputMode={kind==='num'?'decimal':'text'} value={editBodyDraft[k]==null?'':editBodyDraft[k]} onChange={e=>setEditBodyDraft(d=>({...d,[k]:e.target.value}))}/>
+                  </div>
+                ))}
+              </div>
+              <div className="modal-btns">
+                <button className="mbt danger" onClick={()=>{ cfg.setter(prev=>prev.filter((_,idx)=>idx!==editBody.index)); setEditBody(null); setEditBodyDraft(null); }}>Delete</button>
+                <button className="mbt ghost" onClick={()=>{setEditBody(null);setEditBodyDraft(null);}}>Cancel</button>
+                <button className="mbt go" onClick={saveBodyEdit}>Save</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {newBlockConfirm && (
         <div className="modal-ov">
@@ -2538,6 +2593,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-date">{fmtShort(m.date)}</span>
                   <span className="bl-val">{m.weight}kg{m.bodyFat!=null?` · ${m.bodyFat}% bf`:''}</span>
                   <span className="bl-note">{m.muscle!=null?`${m.muscle}kg lean`:''}{m.notes?((m.muscle!=null?' · ':'')+m.notes):''}</span>
+                  <button className="bl-edit" onClick={()=>openBodyEdit('weight',i,m)}>&#9998;</button>
                   <button className="bl-del" onClick={()=>setBodyMetrics(prev=>prev.filter((_,j)=>j!==i))}>&#215;</button>
                 </div>
               ))}
@@ -2590,6 +2646,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-date">{fmtShort(m.date)}</span>
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{m.site}</span>
                   <span className="bl-val">{m.value}cm</span>
+                  <button className="bl-edit" onClick={()=>openBodyEdit('meas',i,m)}>&#9998;</button>
                   <button className="bl-del" onClick={() => setMeasurements(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
                 </div>
               ))}
@@ -2641,6 +2698,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-date">{fmtShort(n.date)}</span>
                   <span style={{flex:1,margin:'0 8px',fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'var(--t2)'}}>P{n.protein} C{n.carbs} F{n.fat}</span>
                   <span className="bl-val">{n.calories}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>kcal</span></span>
+                  <button className="bl-edit" onClick={()=>openBodyEdit('nutrition',i,n)}>&#9998;</button>
                   <button className="bl-del" onClick={() => setNutrition(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
                 </div>
               ))}
@@ -2676,6 +2734,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-date">{fmtShort(c.date)}</span>
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{c.modality}{c.note ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {c.note}</span> : null}</span>
                   <span className="bl-val">{c.minutes}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>min</span></span>
+                  <button className="bl-edit" onClick={()=>openBodyEdit('cardio',i,c)}>&#9998;</button>
                   <button className="bl-del" onClick={() => setCardioLog(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
                 </div>
               ))}
@@ -2717,6 +2776,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-date">{fmtShort(b.date)}</span>
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{b.sys}/{b.dia}{b.pulse ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {b.pulse}bpm</span> : null}</span>
                   <span className={`bp-dot ${c.cls}`}></span>
+                  <button className="bl-edit" onClick={()=>openBodyEdit('bp',i,b)}>&#9998;</button>
                   <button className="bl-del" onClick={() => setBpLog(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
                 </div>
               ); })}
@@ -2763,6 +2823,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <div className="p-dose">{p.dose}{p.unit}</div>
                     {p.notes&&<div className="p-note">{p.notes}</div>}
                   </div>
+                  <button className="p-edit" onClick={()=>openBodyEdit('protocol',i,p)}>&#9998;</button>
                   <button className="p-del" onClick={()=>setProtocolLog(prev=>prev.filter((_,j)=>j!==i))}>&#215;</button>
                 </div>
               ))}
