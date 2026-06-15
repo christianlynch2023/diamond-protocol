@@ -614,7 +614,7 @@ const DEF_INTS = {
 
 const MUSCLES = {
   chest:    {name:'Chest',      min:10, max:18},
-  back:     {name:'Back / Lats',min:10, max:18},
+  back:     {name:'Back / Lats',min:10, max:20},
   sideDelt: {name:'Side Delts', min:12, max:20},
   rearDelt: {name:'Rear Delts', min:8,  max:16},
   biceps:   {name:'Biceps',     min:8,  max:16},
@@ -642,7 +642,6 @@ const fmt = s => { const m=Math.floor(s/60), sc=s%60; return m>0 ? `${m}:${Strin
 const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' ' + new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
-const getDS = (sets,week) => DLW.has(week) ? Math.max(1,Math.ceil(sets*0.6)) : sets;
 const RAMP_EX = new Set(['ua3','ua4','ua5','ub3','ub1','ub4','ub5']);
 const RAMP_P1 = new Set([2,6]);
 const RAMP_P2 = new Set([3,7]);
