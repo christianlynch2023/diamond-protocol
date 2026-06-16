@@ -513,6 +513,15 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .hv-sub{font-size:10px;color:var(--t3);margin-top:2px}
 .hv-btn{flex-shrink:0;padding:8px 16px;border-radius:8px;border:1px solid var(--bdr);background:var(--sur);color:var(--t3);font-family:'Syne',sans-serif;font-weight:800;font-size:12px;letter-spacing:.05em;cursor:pointer}
 .hv-btn.on{border-color:var(--acc);background:var(--ag2);color:var(--acc)}
+.phase-row{margin:0 15px 10px;padding:12px 14px;background:var(--crd);border:1px solid var(--bdr);border-radius:10px}
+.phase-lbl{font-size:10px;letter-spacing:.16em;color:var(--t3);text-transform:uppercase;margin-bottom:8px;font-family:'JetBrains Mono',monospace}
+.phase-seg{display:flex;gap:5px}
+.phase-btn{flex:1;padding:9px;border:1px solid var(--bdr);border-radius:8px;background:var(--sur);color:var(--t2);font-family:'Syne',sans-serif;font-weight:800;font-size:12px;letter-spacing:.04em;cursor:pointer}
+.phase-btn.on{border-color:var(--acc);background:var(--ag2);color:var(--acc)}
+.bw-rate{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-2px 0 10px;font-family:'JetBrains Mono',monospace}
+.bw-rate-v{font-size:15px;font-weight:700}
+.bw-rate-pct{font-size:12px;color:var(--t2)}
+.bw-rate-tgt{font-size:10px;color:var(--t3);letter-spacing:.04em;margin-left:auto}
 </style>
 </head>
 <body>
@@ -708,12 +717,12 @@ function weeklyVolumeSeries(logs, muscle, block) {
   return weeks.map(w => ({ x: 'W' + w, y: Math.round(byWeek[w] * 10) / 10 }));
 }
 
-function getProgRec(exId, rMax, logs) {
+function getProgRec(exId, rMax, logs, phase) {
   for (const s of logs) {
     const ex = s.exercises?.find(e => e.id === exId);
     if (!ex?.sets?.length) continue;
     const top = Math.max(...ex.sets.map(s => s.weight));
-    if (ex.sets.every(s => s.reps >= rMax)) return {type:"inc", msg:`All sets hit ${rMax} reps — increase weight`, wt:top};
+    if (ex.sets.every(s => s.reps >= rMax)) return phase==='cut' ? {type:"hold", msg:"Cut — hold load, keep the reps", wt:top} : {type:"inc", msg:`All sets hit ${rMax} reps — increase weight`, wt:top};
     if (ex.sets.some(s => s.reps >= rMax)) return {type:"beat", msg:"Beat weaker sets, keep weight", wt:top};
     return {type:"keep", msg:"Keep weight, beat reps", wt:top};
   }
@@ -729,7 +738,7 @@ function getPrevHist(exId, logs, limit=3) {
   return res;
 }
 
-function getTarget(ex, logs, week) {
+function getTarget(ex, logs, week, phase) {
   const prev = getPrevHist(ex.id, logs, 1)[0];
   if (!prev) return { weight: 0, reps: ex.rMin, note: 'First time — establish a working weight', first: true };
   const topWeight = Math.max(...prev.sets.map(s => s.weight));
@@ -737,6 +746,9 @@ function getTarget(ex, logs, week) {
   const incr = 2.5;
   if (DLW.has(week)) {
     return { weight: Math.round((topWeight * 0.85) / 2.5) * 2.5, reps: Math.round((ex.rMin + ex.rMax) / 2), note: 'Deload — keep several reps in reserve' };
+  }
+  if (phase === 'cut') {
+    return { weight: topWeight, reps: ex.rMax, note: 'Cut — hold load, retain muscle' };
   }
   if (rec.type === 'inc') {
     return { weight: topWeight + incr, reps: ex.rMin, note: 'Up ' + incr + 'kg — you hit top reps last time' };
@@ -1166,6 +1178,9 @@ function App() {
   const [editDraft, setEditDraft] = useState(null);
   const [condensed, setCondensed] = useState(false);
   const [highVol, setHighVol] = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).highVol||false:false; });
+  const [goalPhase, setGoalPhase] = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).phase||'bulk':'bulk'; });
+  const GOAL_LABEL = { bulk:'muscle gain in a slight surplus', maintain:'maintenance / recomposition at roughly maintenance calories', cut:'fat loss in a caloric deficit' };
+  const phaseLine = `CURRENT GOAL: ${GOAL_LABEL[goalPhase]||GOAL_LABEL.bulk}.` + (goalPhase==='cut' ? ' Priority is RETAINING muscle, not gaining it \u2014 holding the same loads and reps while bodyweight drops is success, and stalls are expected rather than failures to fix. Do NOT recommend adding weight or extra volume; keep volume around maintenance, keep intensity high, and protect recovery. Flag if protein looks low or the deficit seems too steep to hold muscle.' : goalPhase==='maintain' ? ' Progression is welcome but not forced; maintaining strength or a slow recomp is the aim.' : ' A small surplus supports growth, so drive progression where recovery allows.');
   const [wt, setWt]             = useState(60);
   const [rp, setRp]             = useState(8);
   const [rir, setRir]           = useState(1);
@@ -1240,7 +1255,7 @@ function App() {
   const skipPush  = useRef(false);
   const syncMounted = useRef(false);
 
-  useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery, block, highVol})); }, [week, recovery, block, highVol]);
+  useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery, block, highVol, phase: goalPhase})); }, [week, recovery, block, highVol, goalPhase]);
   useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
   useEffect(()=>{LS.set('body_metrics',JSON.stringify(bodyMetrics));},[bodyMetrics]);
   useEffect(()=>{LS.set('protocol_log',JSON.stringify(protocolLog));},[protocolLog]);
@@ -1280,7 +1295,7 @@ function App() {
   const startWorkout = sid => {
     const ex0 = SESSIONS[sid].exercises[0];
     setSel(sid); setExIdx(0); setCurSet(0); setSetData({});
-    const _t0 = getTarget(ex0, logs, week);
+    const _t0 = getTarget(ex0, logs, week, goalPhase);
     setWt(_t0.weight||60); setRp(_t0.reps||ex0.rMin); setRir(WR[week].rirN);
     setEditIdx(null); startRef.current=Date.now();
     setPainData({}); painRef.current={}; setSubMap({}); setReviseMode(false); setFinishModal(false);
@@ -1332,7 +1347,7 @@ function App() {
         else {
           const nx=sess.exercises[nextExIdx];
           setExIdx(nextExIdx); setCurSet(0); setEditIdx(null);
-          const _tn = getTarget(nx, logs, week);
+          const _tn = getTarget(nx, logs, week, goalPhase);
           setWt(_tn.weight||60); setRp(_tn.reps||nx.rMin); setRir(WR[week].rirN);
           saveWip(sel,nd,nextExIdx,0);
         }
@@ -1350,7 +1365,7 @@ function App() {
     const baseEx=sess.exercises[idx]; const eid=subMap[baseEx.id]?subMap[baseEx.id].id:baseEx.id;
     const logged=setData[eid]||[];
     setExIdx(idx); setCurSet(logged.length); setEditIdx(null); setReviseMode(true); setFinishModal(false);
-    const t=getTarget(baseEx,logs,week);
+    const t=getTarget(baseEx,logs,week,goalPhase);
     setWt(logged.length?logged[logged.length-1].weight:(t.weight||60));
     setRp(t.reps||baseEx.rMin); setRir(WR[week].rirN);
     saveWip(sel,setData,idx,logged.length);
@@ -1369,7 +1384,7 @@ function App() {
     else {
       const nextEx=sess.exercises[nx];
       setExIdx(nx); setCurSet(0); setEditIdx(null);
-      const _ts = getTarget(nextEx, logs, week);
+      const _ts = getTarget(nextEx, logs, week, goalPhase);
       setWt(_ts.weight||60); setRp(_ts.reps||nextEx.rMin); setRir(WR[week].rirN);
       saveWip(sel,setData,nx,0);
     }
@@ -1415,7 +1430,7 @@ function App() {
     const sess = SESSIONS[sessionId]; const wr = WR[week]; const ph = getPhase(week);
     setBriefingLoading(true); setBriefing(null);
     const progLines = sess.exercises.map(ex=>{
-      const rec=getProgRec(ex.id,ex.rMax,logs);
+      const rec=getProgRec(ex.id,ex.rMax,logs,goalPhase);
       const prev=getPrevHist(ex.id,logs,1)[0];
       const ps=prev?prev.sets.map(s=>`${s.weight}kg x${s.reps}`).join(', '):'first time';
       return `- ${ex.name}: ${rec.msg} (last: ${ps})`;
@@ -1429,7 +1444,7 @@ function App() {
     const bodyStr=bodyMetrics.length?`Latest weight: ${bodyMetrics[0].weight}kg (${fmtShort(bodyMetrics[0].date)})`:'No body metrics logged';
     const painFlags=[]; logs.slice(0,3).forEach(l=>(l.exercises||[]).forEach(ex=>{ if(ex.pain) painFlags.push(`${ex.name} (${ex.pain===2?'sharp':'mild'}, ${fmtShort(l.date)})`); }));
     const painStr=painFlags.length?painFlags.join('; '):'none reported recently';
-    const prompt=`You are a personal strength coach for a 48-year-old male on an optimised hormonal protocol with enhanced recovery capacity. He follows the Diamond Protocol 12-week hypertrophy programme.\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\nRecent joint/tendon pain: ${painStr}\nToday's readiness call: ${readiness.title} - ${readiness.action}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. If sharp joint or tendon pain is flagged on any lift, recommend a machine or cable alternative for it today. Keep your guidance consistent with today's readiness call above and explain its reasoning in your own words. Direct, no fluff.`;
+    const prompt=`You are a personal strength coach for a 48-year-old male on an optimised hormonal protocol with enhanced recovery capacity. He follows the Diamond Protocol 12-week hypertrophy programme. ${phaseLine}\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\nRecent joint/tendon pain: ${painStr}\nToday's readiness call: ${readiness.title} - ${readiness.action}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. If sharp joint or tendon pain is flagged on any lift, recommend a machine or cable alternative for it today. Keep your guidance consistent with today's readiness call above and explain its reasoning in your own words. Direct, no fluff.`;
     try {
       const res=await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
@@ -1459,7 +1474,7 @@ function App() {
     }).join('\n');
     const wr2 = WR[last.week]; const ph = getPhase(last.week);
     const whStr = whoopData?.recovery != null ? `Recovery ${whoopData.recovery}%, HRV ${whoopData.hrv}ms` : 'no Whoop data';
-    const prompt = `You are a personal strength coach reviewing a just-completed session for a 48-year-old male on an optimised hormonal protocol with enhanced recovery capacity, following the Diamond Protocol 12-week hypertrophy programme.\n\nSESSION JUST COMPLETED: ${last.sessionName} - Week ${last.week} (${ph.name}, target ${wr2.rir})\nDuration: ${last.duration} min | Recovery context: ${whStr}\n\nEXERCISE RESULTS (today vs last time):\n${lines}\n\nWrite a concise post-session review in 2-3 short paragraphs. Cover: (1) what clearly progressed today (specific lifts that added weight or reps), (2) anything that stalled or regressed and the likely reason, (3) 2-3 specific, actionable adjustments for next time this session comes around - exact weights or rep targets where possible. If any lift has sharp pain flagged, recommend swapping it for a joint-friendly alternative next time. Be direct and encouraging but honest. Talk like a coach who tracks every set.`;
+    const prompt = `You are a personal strength coach reviewing a just-completed session for a 48-year-old male on an optimised hormonal protocol with enhanced recovery capacity, following the Diamond Protocol 12-week hypertrophy programme. ${phaseLine}\n\nSESSION JUST COMPLETED: ${last.sessionName} - Week ${last.week} (${ph.name}, target ${wr2.rir})\nDuration: ${last.duration} min | Recovery context: ${whStr}\n\nEXERCISE RESULTS (today vs last time):\n${lines}\n\nWrite a concise post-session review in 2-3 short paragraphs. Cover: (1) what clearly progressed today (specific lifts that added weight or reps), (2) anything that stalled or regressed and the likely reason, (3) 2-3 specific, actionable adjustments for next time this session comes around - exact weights or rep targets where possible. If any lift has sharp pain flagged, recommend swapping it for a joint-friendly alternative next time. Be direct and encouraging but honest. Talk like a coach who tracks every set.`;
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -1498,7 +1513,7 @@ function App() {
       const wl = logs.filter(l => l.week === week && (l.block||1) === block);
       const sessLines = wl.length ? wl.map(l => `- ${l.sessionName||l.sessionId}: ${l.exercises.length} exercises, ${l.exercises.reduce((a,e)=>a+e.sets.length,0)} sets`).join('\n') : 'no sessions logged yet';
       const cardioLine = cardioLog.length ? `${cardioSessions} sessions, ${cardioMins} min this week` : 'none';
-      prompt = `You are a personal strength coach giving a weekly check-in for a 48-year-old male on an optimised hormonal protocol with enhanced recovery, following the Diamond Protocol 12-week hypertrophy programme.
+      prompt = `You are a personal strength coach giving a weekly check-in for a 48-year-old male on an optimised hormonal protocol with enhanced recovery, following the Diamond Protocol 12-week hypertrophy programme. ${phaseLine}
 
 WEEK ${week}/12 (${ph.name})
 Sessions this week:
@@ -1516,7 +1531,7 @@ Write a concise weekly check-in in 2-3 short paragraphs. Cover: (1) how the week
       const vol = {};
       for (const l of blockLogs) for (const ex of (l.exercises||[])) { const m=EX_MUSCLE[ex.id]; if(!m)continue; const s=ex.sets?.length||0; vol[m.p]=(vol[m.p]||0)+s; if(m.s){const ss=Array.isArray(m.s)?m.s:[m.s];for(const sm of ss)vol[sm]=(vol[sm]||0)+s*0.5;} }
       const sessLines = blockLogs.length ? blockLogs.slice(0,40).map(l => `- W${l.week} ${l.sessionName||l.sessionId}: ${l.exercises.reduce((a,e)=>a+e.sets.length,0)} sets`).join('\n') : 'none logged';
-      prompt = `You are a personal strength coach writing an end-of-block retrospective for a 48-year-old male on an optimised hormonal protocol with enhanced recovery, who has run the Diamond Protocol 12-week hypertrophy programme (currently week ${week}).
+      prompt = `You are a personal strength coach writing an end-of-block retrospective for a 48-year-old male on an optimised hormonal protocol with enhanced recovery, who has run the Diamond Protocol 12-week hypertrophy programme (currently week ${week}). ${phaseLine}
 
 All sessions logged:
 ${sessLines}
@@ -1702,15 +1717,26 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const allDone=weekDone.size>=4;
   const deloadInfo=computeDeloadReadiness(whoopHistory,week);
   const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory);
-  const hvActive = highVol && readiness.cls === 'green';
+  const hvActive = highVol && readiness.cls === 'green' && goalPhase !== 'cut';
+  const bwRate = (() => {
+    if (!bodyMetrics || bodyMetrics.length < 2) return null;
+    const newest = bodyMetrics[0];
+    let ref = null;
+    for (const m of bodyMetrics) { const days=(new Date(newest.date)-new Date(m.date))/86400000; if (days>=7){ ref=m; break; } }
+    if (!ref) ref = bodyMetrics[bodyMetrics.length-1];
+    const days=(new Date(newest.date)-new Date(ref.date))/86400000;
+    if (days<=0 || !newest.weight || !ref.weight) return null;
+    const perWeek=(newest.weight-ref.weight)/days*7;
+    return { perWeek, pctWeek: perWeek/newest.weight*100 };
+  })();
   const sess=sel?SESSIONS[sel]:null;
   const baseEx=sess?sess.exercises[exIdx]:null;
   const curEx=baseEx?(subMap[baseEx.id]?{...baseEx,...subMap[baseEx.id]}:baseEx):null;
   const effSets=curEx?getEffSets(curEx,week,hvActive):0;
   const loggedSetsArr=curEx?(setData[curEx.id]||[]):[];
   const prevHist=curEx?getPrevHist(curEx.id,logs,3):[];
-  const progRec=curEx?getProgRec(curEx.id,curEx.rMax,logs):null;
-  const curTarget=curEx?getTarget(curEx,logs,week):null;
+  const progRec=curEx?getProgRec(curEx.id,curEx.rMax,logs,goalPhase):null;
+  const curTarget=curEx?getTarget(curEx,logs,week,goalPhase):null;
   const R=88, CIRC=2*Math.PI*R;
   const dashOff=CIRC*(1-(timerTotal>0?timerSecs/timerTotal:0));
   const totalSets=Object.values(setData).reduce((a,s)=>a+s.length,0);
@@ -1902,10 +1928,18 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           {!(allDone && week === 12) && (
             <button className="newblock-btn" onClick={() => setNewBlockConfirm(true)}>&#8635; Start a new block</button>
           )}
+          <div className="phase-row">
+            <div className="phase-lbl">Goal phase</div>
+            <div className="phase-seg">
+              {[['bulk','Bulk'],['maintain','Maintain'],['cut','Cut']].map(([p,lbl])=>(
+                <button key={p} className={`phase-btn${goalPhase===p?' on':''}`} onClick={()=>setGoalPhase(p)}>{lbl}</button>
+              ))}
+            </div>
+          </div>
           <div className="hv-row">
               <div className="hv-txt">
                 <div className="hv-lbl">High-volume track</div>
-                <div className="hv-sub">{!highVol ? 'Off \u00b7 standard volume' : DLW.has(week) ? 'Paused \u00b7 deload week' : readiness.cls==='green' ? 'Active today \u00b7 +1 set on priority muscles' : 'Paused \u00b7 readiness not green'}</div>
+                <div className="hv-sub">{!highVol ? 'Off \u00b7 standard volume' : DLW.has(week) ? 'Paused \u00b7 deload week' : goalPhase==='cut' ? 'Paused \u00b7 cut phase' : readiness.cls==='green' ? 'Active today \u00b7 +1 set on priority muscles' : 'Paused \u00b7 readiness not green'}</div>
               </div>
               <button className={`hv-btn${highVol?' on':''}`} onClick={()=>setHighVol(v=>!v)}>{highVol?'ON':'OFF'}</button>
             </div>
@@ -2574,6 +2608,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="body-sec">
             <div className="body-ttl">Body Weight</div>
             <div className="body-sub">Weekly weigh-in — track alongside your training block</div>
+            {bwRate && (
+              <div className="bw-rate">
+                <span className="bw-rate-v" style={{color: bwRate.perWeek<0?'var(--ok)':bwRate.perWeek>0?'var(--inf)':'var(--t2)'}}>{bwRate.perWeek>0?'+':''}{bwRate.perWeek.toFixed(2)} kg/wk</span>
+                <span className="bw-rate-pct">{bwRate.pctWeek>0?'+':''}{bwRate.pctWeek.toFixed(2)}%/wk</span>
+                {goalPhase==='cut' && <span className="bw-rate-tgt">target -0.5 to -1%/wk</span>}
+              </div>
+            )}
             {bodyMetrics.length>1&&(
               <div style={{marginBottom:10}}>
                 <SVGChart data={bodyMetrics.slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.weight}))} height={120}/>
