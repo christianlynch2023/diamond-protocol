@@ -1209,7 +1209,7 @@ function App() {
   const [highVol, setHighVol] = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).highVol||false:false; });
   const [goalPhase, setGoalPhase] = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).phase||'bulk':'bulk'; });
   const GOAL_LABEL = { bulk:'muscle gain in a slight surplus', maintain:'maintenance / recomposition at roughly maintenance calories', cut:'fat loss in a caloric deficit' };
-  const phaseLine = `CURRENT GOAL: ${GOAL_LABEL[goalPhase]||GOAL_LABEL.bulk}.` + (goalPhase==='cut' ? ' Priority is RETAINING muscle, not gaining it \u2014 holding the same loads and reps while bodyweight drops is success, and stalls are expected rather than failures to fix. Do NOT recommend adding weight or extra volume; keep volume around maintenance, keep intensity high, and protect recovery. Flag if protein looks low or the deficit seems too steep to hold muscle.' : goalPhase==='maintain' ? ' Progression is welcome but not forced; maintaining strength or a slow recomp is the aim.' : ' A small surplus supports growth, so drive progression where recovery allows.');
+  const phaseLine = `CURRENT GOAL: ${GOAL_LABEL[goalPhase]||GOAL_LABEL.bulk}.` + (goalPhase==='cut' ? ' Priority is RETAINING muscle. Progression is welcome when recovery is good and the reps are there \u2014 take it when it comes \u2014 but never force it: holding loads while bodyweight drops is also success, and stalls are expected, not failures to fix. Keep volume around maintenance, protect recovery, and flag if protein looks low or the deficit seems too steep to hold muscle.' : goalPhase==='maintain' ? ' Progression is welcome but not forced; maintaining strength or a slow recomp is the aim.' : ' A small surplus supports growth, so drive progression where recovery allows.');
   const [wt, setWt]             = useState(60);
   const [rp, setRp]             = useState(8);
   const [rir, setRir]           = useState(1);
@@ -1324,7 +1324,7 @@ function App() {
   const startWorkout = sid => {
     const ex0 = SESSIONS[sid].exercises[0];
     setSel(sid); setExIdx(0); setCurSet(0); setSetData({});
-    const _t0 = getTarget(ex0, logs, week, goalPhase);
+    const _t0 = getTarget(ex0, logs, week, effPhase);
     setWt(_t0.weight||60); setRp(_t0.reps||ex0.rMin); setRir(WR[week].rirN);
     setEditIdx(null); startRef.current=Date.now();
     setPainData({}); painRef.current={}; setSubMap({}); setReviseMode(false); setFinishModal(false);
@@ -1376,7 +1376,7 @@ function App() {
         else {
           const nx=sess.exercises[nextExIdx];
           setExIdx(nextExIdx); setCurSet(0); setEditIdx(null);
-          const _tn = getTarget(nx, logs, week, goalPhase);
+          const _tn = getTarget(nx, logs, week, effPhase);
           setWt(_tn.weight||60); setRp(_tn.reps||nx.rMin); setRir(WR[week].rirN);
           saveWip(sel,nd,nextExIdx,0);
         }
@@ -1394,7 +1394,7 @@ function App() {
     const baseEx=sess.exercises[idx]; const eid=subMap[baseEx.id]?subMap[baseEx.id].id:baseEx.id;
     const logged=setData[eid]||[];
     setExIdx(idx); setCurSet(logged.length); setEditIdx(null); setReviseMode(true); setFinishModal(false);
-    const t=getTarget(baseEx,logs,week,goalPhase);
+    const t=getTarget(baseEx,logs,week,effPhase);
     setWt(logged.length?logged[logged.length-1].weight:(t.weight||60));
     setRp(t.reps||baseEx.rMin); setRir(WR[week].rirN);
     saveWip(sel,setData,idx,logged.length);
@@ -1413,7 +1413,7 @@ function App() {
     else {
       const nextEx=sess.exercises[nx];
       setExIdx(nx); setCurSet(0); setEditIdx(null);
-      const _ts = getTarget(nextEx, logs, week, goalPhase);
+      const _ts = getTarget(nextEx, logs, week, effPhase);
       setWt(_ts.weight||60); setRp(_ts.reps||nextEx.rMin); setRir(WR[week].rirN);
       saveWip(sel,setData,nx,0);
     }
@@ -1459,7 +1459,7 @@ function App() {
     const sess = SESSIONS[sessionId]; const wr = WR[week]; const ph = getPhase(week);
     setBriefingLoading(true); setBriefing(null);
     const progLines = sess.exercises.map(ex=>{
-      const rec=getProgRec(ex.id,ex.rMax,logs,goalPhase);
+      const rec=getProgRec(ex.id,ex.rMax,logs,effPhase);
       const prev=getPrevHist(ex.id,logs,1)[0];
       const ps=prev?prev.sets.map(s=>`${s.weight}kg x${s.reps}`).join(', '):'first time';
       return `- ${ex.name}: ${rec.msg} (last: ${ps})`;
@@ -1752,6 +1752,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const deloadInfo=computeDeloadReadiness(whoopHistory,week);
   const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory);
   const hvActive = highVol && readiness.cls === 'green' && goalPhase !== 'cut';
+  const effPhase = (goalPhase==='cut' && readiness.cls==='green') ? 'maintain' : goalPhase;
   const bwRate = (() => {
     if (!bodyMetrics || bodyMetrics.length < 2) return null;
     const newest = bodyMetrics[0];
@@ -1818,8 +1819,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const effSets=curEx?getEffSets(curEx,week,hvActive):0;
   const loggedSetsArr=curEx?(setData[curEx.id]||[]):[];
   const prevHist=curEx?getPrevHist(curEx.id,logs,3):[];
-  const progRec=curEx?getProgRec(curEx.id,curEx.rMax,logs,goalPhase):null;
-  const curTarget=curEx?getTarget(curEx,logs,week,goalPhase):null;
+  const progRec=curEx?getProgRec(curEx.id,curEx.rMax,logs,effPhase):null;
+  const curTarget=curEx?getTarget(curEx,logs,week,effPhase):null;
   const R=88, CIRC=2*Math.PI*R;
   const dashOff=CIRC*(1-(timerTotal>0?timerSecs/timerTotal:0));
   const totalSets=Object.values(setData).reduce((a,s)=>a+s.length,0);
