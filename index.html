@@ -522,6 +522,35 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .bw-rate-v{font-size:15px;font-weight:700}
 .bw-rate-pct{font-size:12px;color:var(--t2)}
 .bw-rate-tgt{font-size:10px;color:var(--t3);letter-spacing:.04em;margin-left:auto}
+.nc{margin:0 0 12px;padding:14px;background:linear-gradient(180deg,var(--ag2),transparent),var(--crd);border:1px solid var(--bdr);border-radius:12px}
+.nc-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.nc-ttl{font-family:'Syne',sans-serif;font-weight:800;font-size:14px;color:var(--t);letter-spacing:.02em}
+.nc-conf{font-size:9px;text-transform:uppercase;letter-spacing:.1em;padding:3px 7px;border-radius:6px;font-family:'JetBrains Mono',monospace}
+.nc-conf.high{background:rgba(0,232,122,.14);color:var(--ok)}
+.nc-conf.medium{background:rgba(255,140,0,.14);color:var(--warn)}
+.nc-conf.low{background:var(--sur);color:var(--t3)}
+.nc-note{font-size:12px;color:var(--t2);line-height:1.5}
+.nc-body{display:flex;flex-direction:column;gap:10px}
+.nc-main{display:flex;flex-direction:column;gap:4px}
+.nc-est{display:flex;align-items:baseline;gap:8px}
+.nc-est-v{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--acc)}
+.nc-est-l{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em}
+.nc-meta{font-size:11px;color:var(--t2);font-family:'JetBrains Mono',monospace}
+.nc-tgt{background:var(--sur);border:1px solid var(--bdr);border-radius:9px;padding:11px}
+.nc-tgt-hd{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:5px}
+.nc-tgt-cal{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--t)}
+.nc-tgt-cal span{font-size:12px;color:var(--t3);font-weight:400}
+.nc-macros{display:flex;gap:6px;margin-top:8px}
+.nc-mac{flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;padding:6px 4px;border-radius:6px;background:var(--crd)}
+.nc-mac.p{color:#4a9eff}.nc-mac.c{color:var(--acc)}.nc-mac.f{color:#ff9f43}
+.nc-adj{font-size:12px;line-height:1.5;padding:9px 11px;border-radius:8px}
+.nc-adj.down{background:rgba(255,140,0,.1);color:var(--warn);border:1px solid rgba(255,140,0,.22)}
+.nc-adj.up{background:rgba(74,158,255,.1);color:var(--inf);border:1px solid rgba(74,158,255,.22)}
+.nc-adj.hold{background:rgba(0,232,122,.1);color:var(--ok);border:1px solid rgba(0,232,122,.22)}
+.nc-cyc{font-size:11px;color:var(--t2);line-height:1.55}
+.nc-cyc-t{font-weight:700;color:var(--t);font-family:'Syne',sans-serif;margin-right:5px}
+.nc-cyc-n{color:var(--t3)}
+.nc-cyc b{color:var(--acc);font-family:'JetBrains Mono',monospace}
 </style>
 </head>
 <body>
@@ -1508,6 +1537,9 @@ function App() {
     const platLine = plateaus.length ? plateaus.map(p=>p.name).join(', ') : 'none';
     const bpLine = latestBP ? `${latestBP.sys}/${latestBP.dia} (${bpCategory(latestBP.sys,latestBP.dia).label})` : 'not logged';
     const ebLine = (calIn!=null&&calOut!=null) ? `${calIn} kcal in / ${calOut} out / ${calIn-calOut>=0?'+':''}${calIn-calOut} net` : 'not available';
+    const coachLine = nutriCoach.ok
+      ? `est. maintenance ~${nutriCoach.tdee} kcal/day (${nutriCoach.conf} confidence, derived from logged intake vs weight trend); recent intake ~${nutriCoach.avgIntake} kcal/day; weight trend ${nutriCoach.ratePerWk>0?'+':''}${nutriCoach.ratePerWk.toFixed(2)} kg/wk; current ${goalPhase} target ${nutriCoach.targetCals} kcal/day (P ${nutriCoach.proteinG} / C ${nutriCoach.carbG} / F ${nutriCoach.fatG} g)${nutriCoach.adjust&&nutriCoach.adjust.dir==='down'?'; app flags loss stalled vs target, suggests trimming ~'+nutriCoach.adjust.kcal+' kcal/day':nutriCoach.adjust&&nutriCoach.adjust.dir==='up'?'; app flags loss faster than 1%/wk, suggests adding ~'+nutriCoach.adjust.kcal+' kcal/day to protect muscle':nutriCoach.adjust?'; loss rate on target':''}`
+      : 'not enough recent food + weigh-in data to estimate maintenance yet';
     let prompt;
     if (scope === 'week') {
       const wl = logs.filter(l => l.week === week && (l.block||1) === block);
@@ -1521,11 +1553,12 @@ ${sessLines}
 Hard sets per muscle this week: ${fmtVol(weekMuscleVolume(logs, week, block))}
 Recovery/fatigue trend: ${recTrend}
 Nutrition: ${nutLine}
+Adaptive nutrition: ${coachLine}
 Cardio: ${cardioLine}
 Stalled lifts: ${platLine}
 Bodyweight: ${bw}\nBlood pressure: ${bpLine}\nEnergy balance today: ${ebLine}
 
-Write a concise weekly check-in in 2-3 short paragraphs. Cover: (1) how the week went - volume hit, whether recovery is holding, (2) anything to watch (stalls, under-trained muscles, fatigue, low protein), (3) 2-3 specific things to focus on next week. Where the data allows, connect the dots - e.g. flag if low protein lines up with stalls, if sleep debt or low recovery tracks with how sessions felt, or if blood pressure is drifting up with training load. Direct and practical, like a coach reviewing the week.`;
+Write a concise weekly check-in in 2-3 short paragraphs. Cover: (1) how the week went - volume hit, whether recovery is holding, (2) anything to watch (stalls, under-trained muscles, fatigue, low protein), (3) 2-3 specific things to focus on next week. Where the data allows, connect the dots - e.g. flag if low protein lines up with stalls, if sleep debt or low recovery tracks with how sessions felt, or if blood pressure is drifting up with training load. Reference the adaptive nutrition numbers above: say whether current intake and the suggested target line up with the ${goalPhase} goal and whether the weight trend supports it. Direct and practical, like a coach reviewing the week.`;
     } else {
       const blockLogs = logs.filter(l => (l.block||1) === block);
       const vol = {};
@@ -1538,10 +1571,11 @@ ${sessLines}
 Total hard sets per muscle across the block: ${fmtVol(vol)}
 Recovery/fatigue trend: ${recTrend}
 Nutrition: ${nutLine}
+Adaptive nutrition: ${coachLine}
 Stalled lifts: ${platLine}
 Bodyweight change: ${bw}\nBlood pressure (latest): ${bpLine}\nEnergy balance (today): ${ebLine}
 
-Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the block achieved overall, (2) which muscles and lifts progressed well and which lagged or stalled, (3) what to change for the next block - exercise selection, volume distribution, recovery or nutrition. Explicitly connect the data where you can - protein vs progression, recovery and sleep debt vs performance, BP vs training load. Direct and honest, like a coach planning the next mesocycle.`;
+Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the block achieved overall, (2) which muscles and lifts progressed well and which lagged or stalled, (3) what to change for the next block - exercise selection, volume distribution, recovery or nutrition. Explicitly connect the data where you can - protein vs progression, recovery and sleep debt vs performance, BP vs training load. Use the adaptive nutrition numbers above when discussing nutrition: connect the maintenance estimate, intake and weight trend to whether the ${goalPhase} goal is being met. Direct and honest, like a coach planning the next mesocycle.`;
     }
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1728,6 +1762,55 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (days<=0 || !newest.weight || !ref.weight) return null;
     const perWeek=(newest.weight-ref.weight)/days*7;
     return { perWeek, pctWeek: perWeek/newest.weight*100 };
+  })();
+  const nutriCoach = (() => {
+    const dayMs=86400000, parse=d=>new Date(d).getTime();
+    const latestW=(bodyMetrics&&bodyMetrics.length&&bodyMetrics[0].weight)?bodyMetrics[0].weight:null;
+    if(!latestW) return { ok:false, reason:'Log your bodyweight to unlock smart targets.' };
+    const allD=[];
+    (nutrition||[]).forEach(e=>{const t=parse(e.date); if(!isNaN(t)) allD.push(t);});
+    (bodyMetrics||[]).forEach(e=>{const t=parse(e.date); if(!isNaN(t)) allD.push(t);});
+    const anchor=allD.length?Math.max(...allD):Date.now();
+    const winStart=anchor-14*dayMs;
+    const nutWin=(nutrition||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&e.calories>0;});
+    const wWin=(bodyMetrics||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&e.weight>0;}).sort((a,b)=>parse(a.date)-parse(b.date));
+    let tdee=null, conf='low', spanDays=0, avgIntake=null, ratePerWk=null;
+    if(nutWin.length>=5&&wWin.length>=2){
+      avgIntake=Math.round(nutWin.reduce((s,e)=>s+e.calories,0)/nutWin.length);
+      const wA=wWin[0], wB=wWin[wWin.length-1];
+      spanDays=(parse(wB.date)-parse(wA.date))/dayMs;
+      if(spanDays>=5){
+        const wChange=wB.weight-wA.weight;
+        tdee=Math.round(avgIntake-(wChange*7700/spanDays));
+        ratePerWk=wChange/spanDays*7;
+        conf=(nutWin.length>=10&&spanDays>=10)?'high':(nutWin.length>=7&&spanDays>=7)?'medium':'low';
+      }
+    }
+    if(tdee===null) return { ok:false, partial:true, foodDays:nutWin.length, weighIns:wWin.length };
+    tdee=Math.max(1400,Math.min(5500,tdee));
+    const W=latestW, proteinG=Math.round(2.2*W), fatG=Math.round(0.7*W);
+    let targetRatePct, targetCals;
+    if(goalPhase==='cut'){ targetRatePct=0.5; targetCals=tdee-Math.round((0.5/100*W*7700)/7); }
+    else if(goalPhase==='bulk'){ targetRatePct=0.25; targetCals=tdee+Math.round((0.25/100*W*7700)/7); }
+    else { targetRatePct=0; targetCals=tdee; }
+    targetCals=Math.max(targetCals, Math.round(W*22));
+    const carbG=Math.max(0, Math.round((targetCals-proteinG*4-fatG*9)/4));
+    let adjust=null;
+    if(goalPhase==='cut'&&ratePerWk!=null){
+      const actPct=ratePerWk/W*100;
+      if(actPct>-0.25){ const k=200; adjust={dir:'down',kcal:k,carb:Math.round(k*0.75/4),fat:Math.round(k*0.25/9)}; }
+      else if(actPct<-1.0){ const k=150; adjust={dir:'up',kcal:k,carb:Math.round(k/4),fat:0}; }
+      else adjust={dir:'hold'};
+    }
+    let cycle=null;
+    if(carbG>0){
+      const wkAgo=anchor-7*dayMs;
+      const td=new Set((logs||[]).filter(l=>{const t=parse(l.date); return !isNaN(t)&&t>=wkAgo;}).map(l=>new Date(l.date).toDateString()));
+      const trainDays=Math.min(6,Math.max(2,td.size||4)), restDays=7-trainDays, weekly=carbG*7;
+      const lowCarb=Math.round(carbG*0.6), highCarb=restDays>0?Math.round((weekly-lowCarb*restDays)/trainDays):carbG;
+      cycle={trainDays,restDays,lowCarb:Math.max(0,lowCarb),highCarb:Math.max(0,highCarb)};
+    }
+    return { ok:true, tdee, conf, avgIntake, ratePerWk, spanDays:Math.round(spanDays), targetCals, proteinG, fatG, carbG, targetRatePct, adjust, cycle, phase:goalPhase };
   })();
   const sess=sel?SESSIONS[sel]:null;
   const baseEx=sess?sess.exercises[exIdx]:null;
@@ -2726,6 +2809,28 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="body-sec">
             <div className="body-ttl">Nutrition</div>
             <div className="body-sub">Daily macro totals — read them off your tracker and log them here to line fuel up with training</div>
+            <div className="nc">
+              <div className="nc-hd"><span className="nc-ttl">Smart targets</span>{nutriCoach.ok && <span className={'nc-conf '+nutriCoach.conf}>{nutriCoach.conf} confidence</span>}</div>
+              {!nutriCoach.ok && nutriCoach.reason && <div className="nc-note">{nutriCoach.reason}</div>}
+              {!nutriCoach.ok && nutriCoach.partial && <div className="nc-note">Need ~1-2 weeks of consistent logging to estimate your maintenance. So far: {nutriCoach.foodDays} food day{nutriCoach.foodDays===1?'':'s'} and {nutriCoach.weighIns} weigh-in{nutriCoach.weighIns===1?'':'s'} in the last 14 days.</div>}
+              {nutriCoach.ok && (
+                <div className="nc-body">
+                  <div className="nc-main">
+                    <div className="nc-est"><div className="nc-est-v">{nutriCoach.tdee}</div><div className="nc-est-l">est. maintenance kcal/day</div></div>
+                    <div className="nc-meta">Logging ~{nutriCoach.avgIntake} kcal/day, trending {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk.toFixed(2)} kg/wk over {nutriCoach.spanDays}d</div>
+                  </div>
+                  <div className="nc-tgt">
+                    <div className="nc-tgt-hd">{nutriCoach.phase==='cut'?('Cut target (-'+nutriCoach.targetRatePct+'%/wk)'):nutriCoach.phase==='bulk'?'Lean-gain target':'Maintenance target'}</div>
+                    <div className="nc-tgt-cal">{nutriCoach.targetCals} <span>kcal/day</span></div>
+                    <div className="nc-macros"><span className="nc-mac p">P {nutriCoach.proteinG}g</span><span className="nc-mac c">C {nutriCoach.carbG}g</span><span className="nc-mac f">F {nutriCoach.fatG}g</span></div>
+                  </div>
+                  {nutriCoach.adjust && nutriCoach.adjust.dir==='down' && <div className="nc-adj down">Loss has stalled versus target. Drop ~{nutriCoach.adjust.kcal} kcal/day: -{nutriCoach.adjust.carb}g carb and -{nutriCoach.adjust.fat}g fat, protein held.</div>}
+                  {nutriCoach.adjust && nutriCoach.adjust.dir==='up' && <div className="nc-adj up">Dropping faster than 1%/wk. Add ~{nutriCoach.adjust.kcal} kcal/day (+{nutriCoach.adjust.carb}g carb) to protect muscle.</div>}
+                  {nutriCoach.adjust && nutriCoach.adjust.dir==='hold' && <div className="nc-adj hold">On track. Loss rate is in the target range, hold these numbers.</div>}
+                  {nutriCoach.cycle && <div className="nc-cyc"><span className="nc-cyc-t">Carb cycling</span>{nutriCoach.cycle.trainDays} train / {nutriCoach.cycle.restDays} rest days. Training days <b>{nutriCoach.cycle.highCarb}g</b> carb, rest days <b>{nutriCoach.cycle.lowCarb}g</b> carb. <span className="nc-cyc-n">Protein and fat stay constant.</span></div>}
+                </div>
+              )}
+            </div>
             {calNet != null && (
               <div className="energy-bal">
                 <div className="eb-item"><div className="eb-v">{calIn}</div><div className="eb-l">in</div></div>
