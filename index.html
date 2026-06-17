@@ -508,16 +508,7 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .ebody-f label{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--t3)}
 .ebody-f input{padding:10px;background:var(--sur);border:1px solid var(--bdr);border-radius:7px;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:14px}
 
-.hv-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 15px 10px;padding:12px 14px;background:var(--crd);border:1px solid var(--bdr);border-radius:10px}
-.hv-txt{flex:1}.hv-lbl{font-size:13px;font-weight:700;color:var(--t);font-family:'Syne',sans-serif}
-.hv-sub{font-size:10px;color:var(--t3);margin-top:2px}
-.hv-btn{flex-shrink:0;padding:8px 16px;border-radius:8px;border:1px solid var(--bdr);background:var(--sur);color:var(--t3);font-family:'Syne',sans-serif;font-weight:800;font-size:12px;letter-spacing:.05em;cursor:pointer}
-.hv-btn.on{border-color:var(--acc);background:var(--ag2);color:var(--acc)}
-.phase-row{margin:0 15px 10px;padding:12px 14px;background:var(--crd);border:1px solid var(--bdr);border-radius:10px}
-.phase-lbl{font-size:10px;letter-spacing:.16em;color:var(--t3);text-transform:uppercase;margin-bottom:8px;font-family:'JetBrains Mono',monospace}
-.phase-seg{display:flex;gap:5px}
-.phase-btn{flex:1;padding:9px;border:1px solid var(--bdr);border-radius:8px;background:var(--sur);color:var(--t2);font-family:'Syne',sans-serif;font-weight:800;font-size:12px;letter-spacing:.04em;cursor:pointer}
-.phase-btn.on{border-color:var(--acc);background:var(--ag2);color:var(--acc)}
+.hv-sub{font-size:10px;color:var(--t3);margin-top:6px}
 .bw-rate{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-2px 0 10px;font-family:'JetBrains Mono',monospace}
 .bw-rate-v{font-size:15px;font-weight:700}
 .bw-rate-pct{font-size:12px;color:var(--t2)}
@@ -2054,21 +2045,22 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           {!(allDone && week === 12) && (
             <button className="newblock-btn" onClick={() => setNewBlockConfirm(true)}>&#8635; Start a new block</button>
           )}
-          <div className="phase-row">
-            <div className="phase-lbl">Goal phase</div>
-            <div className="phase-seg">
+          <div className="rec-sec">
+            <div className="sec-lbl">Goal Phase</div>
+            <div className="rec-row">
               {[['bulk','Bulk'],['maintain','Maintain'],['cut','Cut']].map(([p,lbl])=>(
-                <button key={p} className={`phase-btn${goalPhase===p?' on':''}`} onClick={()=>setGoalPhase(p)}>{lbl}</button>
+                <button key={p} className={`rc${goalPhase===p?' nm':''}`} onClick={()=>setGoalPhase(p)}>{lbl}</button>
               ))}
             </div>
           </div>
-          <div className="hv-row">
-              <div className="hv-txt">
-                <div className="hv-lbl">High-volume track</div>
-                <div className="hv-sub">{!highVol ? 'Off \u00b7 standard volume' : DLW.has(week) ? 'Paused \u00b7 deload week' : goalPhase==='cut' ? 'Paused \u00b7 cut phase' : (readiness.cls==='green'||pushOverride) ? 'Active today \u00b7 +1 set on priority muscles' : 'Paused \u00b7 readiness not green'}</div>
-              </div>
-              <button className={`hv-btn${highVol?' on':''}`} onClick={()=>setHighVol(v=>!v)}>{highVol?'ON':'OFF'}</button>
+          <div className="rec-sec">
+            <div className="sec-lbl">High-Volume Track</div>
+            <div className="rec-row">
+              <button className={`rc${!highVol?' nm':''}`} onClick={()=>setHighVol(false)}>Off</button>
+              <button className={`rc${highVol?' nm':''}`} onClick={()=>setHighVol(true)}>On</button>
             </div>
+            <div className="hv-sub">{!highVol ? 'Standard volume' : DLW.has(week) ? 'Paused \u00b7 deload week' : goalPhase==='cut' ? 'Paused \u00b7 cut phase' : (readiness.cls==='green'||pushOverride) ? 'Active today \u00b7 +1 set on priority muscles' : 'Paused \u00b7 readiness not green'}</div>
+          </div>
           {wipData && (
             <div className="resume-box">
               <div className="rb-title">Resume workout?</div>
