@@ -905,11 +905,13 @@ function matchWorkout(log, workouts) {
   return bestOv > 5 * 60000 ? best : null;
 }
 
+const ORM_IDS = (() => { const s=new Set(); for(const k in SESSIONS) for(const e of SESSIONS[k].exercises) if(e.orm) s.add(e.id); return s; })();
 function detectPlateaus(logs) {
   const byEx = {};
   for (const l of logs) {
     for (const ex of (l.exercises || [])) {
       if (!ex.sets?.length) continue;
+      if (!ORM_IDS.has(ex.id)) continue;
       const best = Math.max(...ex.sets.map(s => epley(s.weight, s.reps)));
       (byEx[ex.id] = byEx[ex.id] || { name: ex.name, vals: [] }).vals.push(best);
     }
@@ -1310,6 +1312,7 @@ function App() {
   useEffect(() => {
     if (!timerDone) return;
     setTimerDone(false);
+    playChime();
     const cb = afterRef.current; afterRef.current = null;
     if (cb) cb();
   }, [timerDone]);
@@ -1420,7 +1423,7 @@ function App() {
   };
 
   const exportData = () => {
-    const data={version:'2.0',exported:new Date().toISOString(),logs,config:{week,recovery,block}};
+    const data={version:'2.1',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},bodyMetrics,measurements,nutrition,cardioLog,bpLog,protocolLog};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`diamond-${new Date().toISOString().split('T')[0]}.json`;
@@ -1436,8 +1439,14 @@ function App() {
         try {
           const data=JSON.parse(ev.target.result);
           if (Array.isArray(data.logs)) { setLogs(data.logs); }
-          if (data.config) { if(data.config.week)setWeek(data.config.week); if(data.config.recovery)setRecovery(data.config.recovery); if(data.config.block)setBlock(data.config.block); }
-          alert(`Imported ${data.logs?.length||0} sessions successfully.`);
+          if (Array.isArray(data.bodyMetrics)) setBodyMetrics(data.bodyMetrics);
+          if (Array.isArray(data.measurements)) setMeasurements(data.measurements);
+          if (Array.isArray(data.nutrition)) setNutrition(data.nutrition);
+          if (Array.isArray(data.cardioLog)) setCardioLog(data.cardioLog);
+          if (Array.isArray(data.bpLog)) setBpLog(data.bpLog);
+          if (Array.isArray(data.protocolLog)) setProtocolLog(data.protocolLog);
+          if (data.config) { if(data.config.week)setWeek(data.config.week); if(data.config.recovery)setRecovery(data.config.recovery); if(data.config.block)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase)setGoalPhase(data.config.phase); }
+          alert(`Restored ${data.logs?.length||0} sessions plus body, nutrition, BP, cardio and protocol history.`);
         } catch(err) { alert('Could not read file. Make sure it is a valid Diamond Protocol backup.'); }
       };
       reader.readAsText(file);
@@ -1447,9 +1456,10 @@ function App() {
 
   const clearAllData = () => {
     setClearConfirm(false);
-    setLogs([]); setWeek(1); setBlock(1); setRecovery('normal');
-    LS.del('dp_logs'); LS.del('dp_wip'); LS.del('dp_cfg');
+    setLogs([]); setWeek(1); setBlock(1); setRecovery('normal'); setHighVol(false); setGoalPhase('bulk');
     setWipData(null);
+    setBodyMetrics([]); setMeasurements([]); setNutrition([]); setCardioLog([]); setBpLog([]); setProtocolLog([]);
+    ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','protocol_log'].forEach(k=>LS.del(k));
   };
 
 
@@ -1681,9 +1691,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setNutrition(mergedNutri);
         setCardioLog(mergedCardio);
         setBpLog(mergedBP);
-        if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); }
+        if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); if (data.config.block) setBlock(data.config.block); if (data.config.highVol!=null) setHighVol(data.config.highVol); if (data.config.phase) setGoalPhase(data.config.phase); }
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery, block: data.config?.block || block }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, cardioLog: mergedCardio, bpLog: mergedBP, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery, block: data.config?.block || block, highVol: data.config?.highVol != null ? data.config.highVol : highVol, phase: data.config?.phase || goalPhase }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, cardioLog: mergedCardio, bpLog: mergedBP, updatedAt: Date.now() });
         fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot }).catch(() => {});
         setCloudStatus('synced');
         return true;
@@ -1698,7 +1708,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, updatedAt: Date.now() });
       await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       setCloudStatus('synced');
     } catch (e) { setCloudStatus('error'); }
@@ -1723,7 +1733,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -1776,15 +1786,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const nutWin=(nutrition||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&e.calories>0;});
     const wWin=(bodyMetrics||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&e.weight>0;}).sort((a,b)=>parse(a.date)-parse(b.date));
     let tdee=null, conf='low', spanDays=0, avgIntake=null, ratePerWk=null;
-    if(nutWin.length>=5&&wWin.length>=2){
+    if(nutWin.length>=7&&wWin.length>=2){
       avgIntake=Math.round(nutWin.reduce((s,e)=>s+e.calories,0)/nutWin.length);
       const wA=wWin[0], wB=wWin[wWin.length-1];
       spanDays=(parse(wB.date)-parse(wA.date))/dayMs;
-      if(spanDays>=5){
+      if(spanDays>=10){
         const wChange=wB.weight-wA.weight;
         tdee=Math.round(avgIntake-(wChange*7700/spanDays));
         ratePerWk=wChange/spanDays*7;
-        conf=(nutWin.length>=10&&spanDays>=10)?'high':(nutWin.length>=7&&spanDays>=7)?'medium':'low';
+        conf=(nutWin.length>=12&&spanDays>=14)?'high':(nutWin.length>=9&&spanDays>=12)?'medium':'low';
       }
     }
     if(tdee===null) return { ok:false, partial:true, foodDays:nutWin.length, weighIns:wWin.length };
@@ -1872,7 +1882,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="t-ctr"><div className="t-secs">{fmt(timerSecs)}</div><div className="t-unit">remaining</div></div>
           </div>
           <div className="t-msg">{timerMsg}</div>
-          <button className="t-skip" onClick={() => {playChime();skipTimer();}}>Skip Rest</button>
+          <button className="t-skip" onClick={skipTimer}>Skip Rest</button>
         </div>
       )}
 
@@ -1968,7 +1978,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         <div className="modal-ov">
           <div className="modal">
             <div className="modal-title">Clear All Data?</div>
-            <div className="modal-sub">This permanently deletes all workout history, logs and settings. Export a backup first if you want to keep your data.</div>
+            <div className="modal-sub">This permanently deletes everything — workout history, logs, settings, and all health metrics (bodyweight, measurements, nutrition, BP, cardio, protocol). Export a backup first if you want to keep your data.</div>
             <div className="modal-btns">
               <button className="mbt ghost" onClick={() => setClearConfirm(false)}>Cancel</button>
               <button className="mbt danger" onClick={clearAllData}>Clear Everything</button>
@@ -2045,7 +2055,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
             </div>
           </div>
-          {isDeload && <div className="info-banner warn">Deload week — sets auto-reduced to 60%</div>}
+          {isDeload && <div className="info-banner warn">Deload week — sets auto-reduced to 50%</div>}
           {recovery==='beat' && <div className="info-banner err">Beat up — drop volume 25-40%, skip intensifiers</div>}
           {whoopConnected && deloadInfo.level==='deload' && <div className="info-banner err">Fatigue rising across your WHOOP data — a deload is recommended. See Progress.</div>}
           {/* WHOOP Biometrics */}
@@ -2128,7 +2138,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="ex-list">
             {sess.exercises.map((ex, i) => {
               const adj = getEffSets(ex, week, hvActive);
-              const rec = getProgRec(ex.id, ex.rMax, logs);
+              const rec = getProgRec(ex.id, ex.rMax, logs, effPhase);
               return (
                 <div key={ex.id} className={`ex-row${condensed && !CORE_EX[sess.id]?.has(ex.id) ? ' ex-dim' : ''}`}>
                   <div className="ex-n">{i+1}</div>
