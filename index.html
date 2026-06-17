@@ -551,6 +551,20 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .nc-cyc-t{font-weight:700;color:var(--t);font-family:'Syne',sans-serif;margin-right:5px}
 .nc-cyc-n{color:var(--t3)}
 .nc-cyc b{color:var(--acc);font-family:'JetBrains Mono',monospace}
+.rd-push{margin-top:10px;width:100%;padding:9px;border:1px solid var(--bdr);border-radius:8px;background:var(--sur);color:var(--t2);font-family:'Syne',sans-serif;font-weight:700;font-size:12px;letter-spacing:.03em;cursor:pointer}
+.rd-push.on{background:rgba(255,140,0,.14);border-color:rgba(255,140,0,.45);color:var(--warn)}
+.hm-card{margin:0 15px 14px;padding:14px;background:var(--crd);border:1px solid var(--bdr);border-radius:12px}
+.hm-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.hm-ttl{font-family:'Syne',sans-serif;font-weight:800;font-size:14px;color:var(--t)}
+.hm-wk{font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace;letter-spacing:.04em}
+.hm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.hm-cell{border:1px solid;border-radius:8px;padding:8px 6px;text-align:center}
+.hm-mus{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;line-height:1.2;min-height:22px;display:flex;align-items:center;justify-content:center}
+.hm-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;margin:2px 0}
+.hm-rng{font-size:9px;color:var(--t3);font-family:'JetBrains Mono',monospace}
+.hm-legend{display:flex;gap:14px;justify-content:center;margin-top:10px;font-size:10px;color:var(--t3)}
+.hm-legend span{display:flex;align-items:center;gap:5px}
+.hm-legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
 </style>
 </head>
 <body>
@@ -767,12 +781,19 @@ function getPrevHist(exId, logs, limit=3) {
   return res;
 }
 
+function getIncrement(ex) {
+  const n = (ex.name || '').toLowerCase();
+  if (n.includes('pull-up') || n.includes('chin')) return 1.25;
+  if (n.includes('db ') || n.includes('dumbbell')) return 2;
+  if (/(lateral|fly|crunch|curl|ext|raise|face pull|adductor|pulldown|cross)/.test(n)) return 1;
+  return 2.5;
+}
 function getTarget(ex, logs, week, phase) {
   const prev = getPrevHist(ex.id, logs, 1)[0];
   if (!prev) return { weight: 0, reps: ex.rMin, note: 'First time — establish a working weight', first: true };
   const topWeight = Math.max(...prev.sets.map(s => s.weight));
   const rec = getProgRec(ex.id, ex.rMax, logs);
-  const incr = 2.5;
+  const incr = getIncrement(ex);
   if (DLW.has(week)) {
     return { weight: Math.round((topWeight * 0.85) / 2.5) * 2.5, reps: Math.round((ex.rMin + ex.rMax) / 2), note: 'Deload — keep several reps in reserve' };
   }
@@ -1221,6 +1242,7 @@ function App() {
   const startRef = useRef(null);
   const painRef = useRef({});
   const [timerOn, setTimerOn]   = useState(false);
+  const [pushOverride, setPushOverride] = useState(false);
   const [timerSecs, setTimerSecs] = useState(0);
   const [timerTotal, setTimerTotal] = useState(0);
   const [timerDone, setTimerDone] = useState(false);
@@ -1761,8 +1783,18 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const allDone=weekDone.size>=4;
   const deloadInfo=computeDeloadReadiness(whoopHistory,week);
   const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory);
-  const hvActive = highVol && readiness.cls === 'green' && goalPhase !== 'cut';
-  const effPhase = (goalPhase==='cut' && readiness.cls==='green') ? 'maintain' : goalPhase;
+  const hvActive = highVol && (readiness.cls === 'green' || pushOverride) && goalPhase !== 'cut';
+  const effPhase = (goalPhase==='cut' && (readiness.cls==='green' || pushOverride)) ? 'maintain' : goalPhase;
+  const plannedVol = (() => {
+    const v={};
+    for (const k of Object.keys(SESSIONS)) for (const e of SESSIONS[k].exercises) {
+      const m=EX_MUSCLE[e.id]; if(!m) continue;
+      const s=getEffSets(e, week, hvActive);
+      v[m.p]=(v[m.p]||0)+s;
+      if(m.s){ (Array.isArray(m.s)?m.s:[m.s]).forEach(sm=>v[sm]=(v[sm]||0)+s*0.5); }
+    }
+    return v;
+  })();
   const bwRate = (() => {
     if (!bodyMetrics || bodyMetrics.length < 2) return null;
     const newest = bodyMetrics[0];
@@ -2033,7 +2065,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="hv-row">
               <div className="hv-txt">
                 <div className="hv-lbl">High-volume track</div>
-                <div className="hv-sub">{!highVol ? 'Off \u00b7 standard volume' : DLW.has(week) ? 'Paused \u00b7 deload week' : goalPhase==='cut' ? 'Paused \u00b7 cut phase' : readiness.cls==='green' ? 'Active today \u00b7 +1 set on priority muscles' : 'Paused \u00b7 readiness not green'}</div>
+                <div className="hv-sub">{!highVol ? 'Off \u00b7 standard volume' : DLW.has(week) ? 'Paused \u00b7 deload week' : goalPhase==='cut' ? 'Paused \u00b7 cut phase' : (readiness.cls==='green'||pushOverride) ? 'Active today \u00b7 +1 set on priority muscles' : 'Paused \u00b7 readiness not green'}</div>
               </div>
               <button className={`hv-btn${highVol?' on':''}`} onClick={()=>setHighVol(v=>!v)}>{highVol?'ON':'OFF'}</button>
             </div>
@@ -2096,6 +2128,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="rd-mode">{readiness.title}</div>
             <div className="rd-action">{readiness.action}</div>
             {readiness.factors.length > 0 && <div className="rd-factors">{readiness.factors.join(' \u00b7 ')}</div>}
+            {(readiness.cls !== 'green' || pushOverride) && (pushOverride
+              ? <button className="rd-push on" onClick={()=>setPushOverride(false)}>Pushing anyway - tap to respect readiness</button>
+              : <button className="rd-push" onClick={()=>setPushOverride(true)}>Push anyway - train at full prescription</button>)}
           </div>
           <div className="sec-lbl" style={{padding:'0 15px 6px'}}>Sessions</div>
           <div className="sg">
@@ -2354,6 +2389,24 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       {view === 'progress' && (
         <div className="screen">
           <div className="topbar"><span className="logo">Progress</span></div>
+          <div className="hm-card">
+            <div className="hm-head"><span className="hm-ttl">Muscle heat map</span><span className="hm-wk">planned · Wk {week}{hvActive?' · HV':''}</span></div>
+            <div className="hm-grid">
+              {Object.entries(MUSCLES).map(([key,mus])=>{
+                const sets=Math.round((plannedVol[key]||0)*10)/10;
+                if(sets===0 && mus.optional) return null;
+                const c = sets<mus.min?{bg:'rgba(74,158,255,.12)',bd:'rgba(74,158,255,.38)',fg:'#5aa9ff'}:sets>mus.max?{bg:'rgba(255,90,90,.13)',bd:'rgba(255,90,90,.42)',fg:'#ff6b6b'}:{bg:'rgba(0,232,122,.12)',bd:'rgba(0,232,122,.38)',fg:'#00e87a'};
+                return (
+                  <div key={key} className="hm-cell" style={{background:c.bg,borderColor:c.bd}}>
+                    <div className="hm-mus">{mus.name}</div>
+                    <div className="hm-val" style={{color:c.fg}}>{sets}</div>
+                    <div className="hm-rng">{mus.min}-{mus.max}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="hm-legend"><span><i style={{background:'#5aa9ff'}}/>under</span><span><i style={{background:'#00e87a'}}/>in range</span><span><i style={{background:'#ff6b6b'}}/>over</span></div>
+          </div>
           <div className="mv-sec">
             <div className="mv-head">
               <span className="mv-ttl">Weekly Volume</span>
