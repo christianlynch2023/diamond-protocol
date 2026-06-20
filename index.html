@@ -627,44 +627,44 @@ const DLW = new Set([4,8,12]);
 const SESSIONS = {
   upperA:{id:"upperA",name:"Upper A",focus:"Heavy Upper Tension",day:"Monday",time:"70-85 min",maxInt:2,exercises:[
     {id:"ua1",name:"RO-T8 Flat Press",sets:4,rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Neutral to semi-pronated","Deep controlled stretch","Elbows 30-45"],avoidFail:true,avoidReason:"Shoulder and triceps fatigue",int:null,orm:true},
-    {id:"ua2",name:"Weighted Pull-Up",sets:4,rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"Belt/bodyweight",cues:["Full stretch","3-sec eccentric"],avoidFail:true,avoidReason:"Elbow and biceps tendon fatigue",int:null,orm:true},
-    {id:"ua3",name:"RO-T8 Incline Press",sets:3,rMin:8,rMax:10,rirMin:1,rirMax:1,rest:150,handle:"RO-T8",cues:["30-45 bench","Elbows 30-45"],avoidFail:false,int:{label:"0 RIR",desc:"Final set to 0 RIR, no forced reps"},orm:true},
-    {id:"ua4",name:"Short Bar Row",sets:4,rMin:8,rMax:10,rirMin:1,rirMax:1,rest:150,handle:"RO-T8 short bar",cues:["Pull to lower ribs","Chest-supported preferred"],avoidFail:false,int:{label:"REST-PAUSE",desc:"Failure, 20s rest, 3-5 more reps"},orm:false},
-    {id:"ua5",name:"Cable Lateral Raise",sets:4,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Slight lean","Lead with elbow","Scapular plane"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 lengthened partials on final set"},orm:false},
+    {id:"ua2",name:"Weighted Pull-Up",sets:5,rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"Belt/bodyweight",cues:["Full stretch","3-sec eccentric"],avoidFail:true,avoidReason:"Elbow and biceps tendon fatigue",int:null,orm:true},
+    {id:"ua3",name:"RO-T8 Incline Press",sets:4,rMin:8,rMax:10,rirMin:1,rirMax:1,rest:150,handle:"RO-T8",cues:["30-45 bench","Elbows 30-45"],avoidFail:false,int:{label:"0 RIR",desc:"Final set to 0 RIR, no forced reps"},orm:true},
+    {id:"ua4",name:"Short Bar Row",sets:5,rMin:8,rMax:10,rirMin:1,rirMax:1,rest:150,handle:"RO-T8 short bar",cues:["Pull to lower ribs","Chest-supported preferred"],avoidFail:false,int:{label:"REST-PAUSE",desc:"Failure, 20s rest, 3-5 more reps"},orm:false},
+    {id:"ua5",name:"Cable Lateral Raise",sets:5,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Slight lean","Lead with elbow","Scapular plane"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 lengthened partials on final set"},orm:false},
     {id:"ua8",name:"Face Pull",sets:3,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Rope",cues:["Pull to forehead, elbows high","External rotate at the end"],avoidFail:false,int:null,orm:false},
-    {id:"ua6",name:"Overhead Cable Triceps Ext",sets:4,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Rope/single handle",cues:["Deep overhead stretch","Elbows in, full lockout"],avoidFail:false,int:null,orm:false},
-    {id:"ua9",name:"Cable Curl",sets:4,rMin:10,rMax:14,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Elbows pinned","3-sec eccentric","Full stretch"],avoidFail:false,int:{label:"PARTIALS",desc:"+5-8 lengthened partials on final set"},orm:false}
+    {id:"ua6",name:"Overhead Cable Triceps Ext",sets:3,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Rope/single handle",cues:["Deep overhead stretch","Elbows in, full lockout"],avoidFail:false,int:null,orm:false},
+    {id:"ua9",name:"Cable Curl",sets:3,rMin:10,rMax:14,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Elbows pinned","3-sec eccentric","Full stretch"],avoidFail:false,int:{label:"PARTIALS",desc:"+5-8 lengthened partials on final set"},orm:false}
   ]},
   lowerA:{id:"lowerA",name:"Lower A",focus:"Quads and Posterior Chain",day:"Tuesday",time:"85-95 min",maxInt:2,exercises:[
     {id:"la1",name:"Hack Squat",sets:3,rMin:6,rMax:10,rirMin:1,rirMax:1,rest:180,cues:["3-sec eccentric","1-sec controlled bottom"],avoidFail:true,avoidReason:"No grinders on top sets",int:null,orm:true},
     {id:"la2",name:"Hack Squat Back-Off",sets:1,rMin:10,rMax:15,rirMin:0,rirMax:1,rest:150,cues:["Drop 15-20% from top set"],avoidFail:false,int:{label:"0 RIR",desc:"Take this single set to 0 RIR"},orm:false},
     {id:"la3",name:"Romanian Deadlift",sets:3,rMin:8,rMax:10,rirMin:1,rirMax:2,rest:180,cues:["Hips back","3-4 sec eccentric","Spine neutral"],avoidFail:true,avoidReason:"Never to failure",int:null,orm:true},
     {id:"la5",name:"Leg Extension",sets:2,rMin:12,rMax:20,rirMin:0,rirMax:1,rest:90,cues:["1-sec top squeeze","2-3 sec lower","No bounce"],avoidFail:false,int:{label:"FAILURE",desc:"To failure or 10-15 top-half partials"},orm:false},
-    {id:"la6",name:"Seated Leg Curl",sets:3,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,cues:["Full stretch","Controlled curl"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 stretch partials on final set"},orm:false},
-    {id:"la7",name:"Standing Calf Raise",sets:5,rMin:8,rMax:15,rirMin:1,rirMax:1,rest:90,cues:["2-sec deep stretch","Hard top squeeze"],avoidFail:false,int:null,orm:false},
-    {id:"la8",name:"Cable Lateral Raise",sets:2,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Slight lean","Lead with elbow"],avoidFail:false,int:null,orm:false},
-    {id:"la9",name:"Cable Crunch",sets:4,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope/KAZ",opt:true,cues:["Round spine","Elbows to knees"],avoidFail:false,int:null,orm:false}
+    {id:"la6",name:"Seated Leg Curl",sets:2,rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,cues:["Full stretch","Controlled curl"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 stretch partials on final set"},orm:false},
+    {id:"la7",name:"Standing Calf Raise",sets:4,rMin:8,rMax:15,rirMin:1,rirMax:1,rest:90,cues:["2-sec deep stretch","Hard top squeeze"],avoidFail:false,int:null,orm:false},
+    {id:"la8",name:"Cable Lateral Raise",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Slight lean","Lead with elbow"],avoidFail:false,int:null,orm:false},
+    {id:"la9",name:"Cable Crunch",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope/KAZ",opt:true,cues:["Round spine","Elbows to knees"],avoidFail:false,int:null,orm:false}
   ]},
   upperB:{id:"upperB",name:"Upper B",focus:"Delts, Lats and Arms",day:"Thursday",time:"75-90 min",maxInt:3,exercises:[
-    {id:"ub1",name:"Single-Arm Lat Pulldown",sets:4,rMin:10,rMax:12,rirMin:1,rirMax:1,rest:120,handle:"Small KAZ/RO-T8",cues:["Elbow to hip","Slight lean back"],avoidFail:false,int:null,orm:false},
-    {id:"ub2",name:"Seated Cable Press",sets:3,rMin:10,rMax:12,rirMin:1,rirMax:1,rest:150,handle:"RO-T8",cues:["Bench 70-80","Controlled stretch"],avoidFail:false,int:null,orm:false},
+    {id:"ub1",name:"Single-Arm Lat Pulldown",sets:5,rMin:10,rMax:12,rirMin:1,rirMax:1,rest:120,handle:"Small KAZ/RO-T8",cues:["Elbow to hip","Slight lean back"],avoidFail:false,int:null,orm:false},
+    {id:"ub2",name:"Seated Cable Press",sets:2,rMin:10,rMax:12,rirMin:1,rirMax:1,rest:150,handle:"RO-T8",cues:["Bench 70-80","Controlled stretch"],avoidFail:false,int:null,orm:false},
     {id:"ub3",name:"Seated Cable Flye",sets:3,rMin:12,rMax:15,rirMin:1,rirMax:2,rest:90,handle:"Small KAZ",cues:["Deep stretch","Hands to chin line"],avoidFail:false,int:{label:"PARTIALS",desc:"+8-10 lengthened partials on final set"},orm:false},
-    {id:"ub4",name:"Cable Lateral Raise",sets:4,rMin:12,rMax:20,rirMin:0,rirMax:1,rest:90,handle:"Small KAZ",cues:["Lead with elbow","Hand below elbow"],avoidFail:false,int:{label:"MYO-REPS",desc:"1x20 then 4-5 mini-sets of 4 reps"},orm:false},
-    {id:"ub5",name:"Rear Delt Cable Flye",sets:4,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Sweep out into inverted V"],avoidFail:false,int:null,orm:false},
-    {id:"ub6",name:"Lat Cross Extension",sets:3,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ/cuffs",cues:["Soft elbow","Freeze angle","Elbow to back pocket"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 short partials on final set"},orm:false},
-    {id:"ub7",name:"Incline DB Curl",sets:4,rMin:10,rMax:12,rirMin:1,rirMax:1,rest:90,handle:"Dumbbells",cues:["45 bench","3-4 sec eccentric"],avoidFail:false,int:{label:"0 RIR",desc:"Take final set to 0 RIR"},orm:true},
-    {id:"ub8",name:"Overhead Triceps Ext",sets:4,rMin:12,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Deep stretch","Slight elbow flare"],avoidFail:false,int:{label:"REST-PAUSE",desc:"Failure, 20s rest, 3-5 more reps"},orm:false},
+    {id:"ub4",name:"Cable Lateral Raise",sets:5,rMin:12,rMax:20,rirMin:0,rirMax:1,rest:90,handle:"Small KAZ",cues:["Lead with elbow","Hand below elbow"],avoidFail:false,int:{label:"MYO-REPS",desc:"1x20 then 4-5 mini-sets of 4 reps"},orm:false},
+    {id:"ub5",name:"Rear Delt Cable Flye",sets:3,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Sweep out into inverted V"],avoidFail:false,int:null,orm:false},
+    {id:"ub6",name:"Lat Cross Extension",sets:2,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ/cuffs",cues:["Soft elbow","Freeze angle","Elbow to back pocket"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 short partials on final set"},orm:false},
+    {id:"ub7",name:"Incline DB Curl",sets:3,rMin:10,rMax:12,rirMin:1,rirMax:1,rest:90,handle:"Dumbbells",cues:["45 bench","3-4 sec eccentric"],avoidFail:false,int:{label:"0 RIR",desc:"Take final set to 0 RIR"},orm:true},
+    {id:"ub8",name:"Overhead Triceps Ext",sets:3,rMin:12,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Deep stretch","Slight elbow flare"],avoidFail:false,int:{label:"REST-PAUSE",desc:"Failure, 20s rest, 3-5 more reps"},orm:false},
     {id:"ub9",name:"Kaz Chest-Supported Row",sets:4,rMin:8,rMax:12,rirMin:1,rirMax:2,rest:150,handle:"Small KAZ",cues:["Chest on pad","Drive elbows back","Squeeze mid-back"],avoidFail:false,int:null,orm:false}
   ]},
   lowerB:{id:"lowerB",name:"Lower B",focus:"Glutes, Hamstrings and Core",day:"Friday",time:"70-85 min",maxInt:2,exercises:[
     {id:"lb2",name:"Bulgarian Split Squat",sets:3,rMin:8,rMax:12,rirMin:1,rirMax:1,rest:150,cues:["Long stride","Slight forward lean"],avoidFail:true,avoidReason:"Do not take to absolute failure",int:null,orm:false},
     {id:"lb3",name:"Hip Thrust",sets:3,rMin:8,rMax:12,rirMin:1,rirMax:1,rest:150,cues:["1-sec peak squeeze","Ribs down"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR, no forced reps"},orm:false},
-    {id:"lb4",name:"Adductor Machine",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:90,cues:["Full stretch","Hard squeeze"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 short partials on final set"},orm:false},
+    {id:"lb4",name:"Adductor Machine",sets:2,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:90,cues:["Full stretch","Hard squeeze"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 short partials on final set"},orm:false},
     {id:"lb5",name:"Seated Leg Curl",sets:3,rMin:12,rMax:15,rirMin:1,rirMax:1,rest:90,cues:["Full stretch","Controlled negative"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 stretch partials on final set"},orm:false},
-    {id:"lb6",name:"Cable Crunch",sets:4,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,cues:["Round spine","Elbows to knees"],avoidFail:false,int:{label:"0 RIR",desc:"Take final set to 0 RIR"},orm:false},
-    {id:"lb7",name:"Seated Calf Raise",sets:5,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:90,cues:["Deep stretch","Controlled top"],avoidFail:false,int:null,orm:false},
-    {id:"lb8",name:"Cable Lateral Raise",sets:2,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Slight lean","Lead with elbow"],avoidFail:false,int:null,orm:false},
-    {id:"lb9",name:"Rear Delt Cable Flye",sets:3,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Sweep out into inverted V"],avoidFail:false,int:null,orm:false}
+    {id:"lb6",name:"Cable Crunch",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,cues:["Round spine","Elbows to knees"],avoidFail:false,int:{label:"0 RIR",desc:"Take final set to 0 RIR"},orm:false},
+    {id:"lb7",name:"Seated Calf Raise",sets:4,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:90,cues:["Deep stretch","Controlled top"],avoidFail:false,int:null,orm:false},
+    {id:"lb8",name:"Cable Lateral Raise",sets:3,rMin:12,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Slight lean","Lead with elbow"],avoidFail:false,int:null,orm:false},
+    {id:"lb9",name:"Rear Delt Cable Flye",sets:4,rMin:15,rMax:20,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Sweep out into inverted V"],avoidFail:false,int:null,orm:false}
   ]},
 };
 const ALL_EX = Object.values(SESSIONS).flatMap(s => s.exercises.map(e => ({id:e.id,name:e.name,session:s.name})));
@@ -1794,17 +1794,23 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory);
   const hvActive = highVol && (readiness.cls === 'green' || pushOverride) && goalPhase !== 'cut';
   const effPhase = (goalPhase==='cut' && (readiness.cls==='green' || pushOverride)) ? 'maintain' : goalPhase;
-  const plannedVol = (() => {
-    const v={};
+  const volParts = (() => {
+    const dir={}, carry={};
     for (const k of Object.keys(SESSIONS)) for (const e of SESSIONS[k].exercises) {
       const m=EX_MUSCLE[e.id]; if(!m) continue;
       const s=getEffSets(e, week, hvActive);
-      v[m.p]=(v[m.p]||0)+s;
-      if(m.s){ (Array.isArray(m.s)?m.s:[m.s]).forEach(sm=>v[sm]=(v[sm]||0)+s*0.5); }
+      dir[m.p]=(dir[m.p]||0)+s;
+      if(m.s){ (Array.isArray(m.s)?m.s:[m.s]).forEach(sm=>carry[sm]=(carry[sm]||0)+s*0.5); }
     }
+    return {dir, carry};
+  })();
+  const plannedVol = (() => {
+    const v={...volParts.dir};
+    for(const m in volParts.carry) v[m]=(v[m]||0)+volParts.carry[m];
     return v;
   })();
   const CHEAP_MUS = new Set(['sideDelt','rearDelt','biceps','triceps','calves','abs']);
+  const bpGate = (() => { const b=bpLog && bpLog[0]; return b ? bpCategory(b.sys, b.dia).cls === 'red' : false; })();
   const autoReg = (() => {
     const muscleEx = {};
     for (const id in EX_MUSCLE) { const p = EX_MUSCLE[id].p; (muscleEx[p] = muscleEx[p] || []).push(id); }
@@ -1824,6 +1830,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       const cheap = CHEAP_MUS.has(mus);
       let label, cls;
       if (dataN === 0) { label = 'Log 2+ sessions'; cls = 'nd'; }
+      else if (bpGate) { label = 'BP high - hold'; cls = 'back'; }
       else if (score < 0) { label = 'Back off / cut'; cls = 'back'; }
       else if (readiness.cls === 'red') { label = 'Hold today (red)'; cls = 'hold'; }
       else if (score === 0) { label = 'Hold - MRV'; cls = 'hold'; }
@@ -2433,13 +2440,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="hm-grid">
               {Object.entries(MUSCLES).map(([key,mus])=>{
                 const sets=Math.round((plannedVol[key]||0)*10)/10;
-                if(sets===0 && mus.optional) return null;
-                const c = sets<mus.min?{bg:'rgba(74,158,255,.12)',bd:'rgba(74,158,255,.38)',fg:'#5aa9ff'}:sets>mus.max?{bg:'rgba(212,160,23,.14)',bd:'rgba(212,160,23,.5)',fg:'#e0b020'}:{bg:'rgba(0,232,122,.12)',bd:'rgba(0,232,122,.38)',fg:'#00e87a'};
+                const dsets=Math.round((volParts.dir[key]||0)*10)/10;
+                if(dsets===0 && mus.optional) return null;
+                const c = dsets<mus.min?{bg:'rgba(74,158,255,.12)',bd:'rgba(74,158,255,.38)',fg:'#5aa9ff'}:dsets>mus.max?{bg:'rgba(212,160,23,.14)',bd:'rgba(212,160,23,.5)',fg:'#e0b020'}:{bg:'rgba(0,232,122,.12)',bd:'rgba(0,232,122,.38)',fg:'#00e87a'};
                 return (
                   <div key={key} className="hm-cell" style={{background:c.bg,borderColor:c.bd}}>
                     <div className="hm-mus">{mus.name}</div>
-                    <div className="hm-val" style={{color:c.fg}}>{sets}</div>
-                    <div className="hm-rng">{mus.min}-{mus.max}</div>
+                    <div className="hm-val" style={{color:c.fg}}>{dsets}</div>
+                    <div className="hm-rng">{mus.min}-{mus.max} · {sets} eff</div>
                   </div>
                 );
               })}
