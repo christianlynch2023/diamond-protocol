@@ -1295,6 +1295,12 @@ function App() {
   const [bodyMetrics, setBodyMetrics] = useState(() => { try { return JSON.parse(LS.get('body_metrics') || '[]'); } catch(e) { return []; } });
   const [protocolLog, setProtocolLog] = useState(() => { try { return JSON.parse(LS.get('protocol_log') || '[]'); } catch(e) { return []; } });
   const [measurements, setMeasurements] = useState(() => { try { return JSON.parse(LS.get('body_measurements') || '[]'); } catch(e) { return []; } });
+  const [checkins, setCheckins] = useState(() => { try { return JSON.parse(LS.get('checkin_photos') || '[]'); } catch(e) { return []; } });
+  const [ciPose, setCiPose] = useState('front');
+  const [ciCompareA, setCiCompareA] = useState(null);
+  const [ciCompareB, setCiCompareB] = useState(null);
+  const [ciAnalysis, setCiAnalysis] = useState(null);
+  const [ciAnalysing, setCiAnalysing] = useState(false);
   const [mSite, setMSite] = useState('Waist');
   const [mVal, setMVal] = useState('');
   const [showAddMeas, setShowAddMeas] = useState(false);
@@ -1347,6 +1353,7 @@ function App() {
   useEffect(()=>{LS.set('body_metrics',JSON.stringify(bodyMetrics));},[bodyMetrics]);
   useEffect(()=>{LS.set('protocol_log',JSON.stringify(protocolLog));},[protocolLog]);
   useEffect(()=>{LS.set('body_measurements',JSON.stringify(measurements));},[measurements]);
+  useEffect(()=>{ try { LS.set('checkin_photos',JSON.stringify(checkins)); } catch(e) { alert('Storage full - delete an older check-in photo to save new ones.'); } },[checkins]);
   useEffect(()=>{LS.set('nutrition_log',JSON.stringify(nutrition));},[nutrition]);
   useEffect(()=>{LS.set('cardio_log',JSON.stringify(cardioLog));},[cardioLog]);
   useEffect(()=>{LS.set('bp_log',JSON.stringify(bpLog));},[bpLog]);
@@ -1479,7 +1486,7 @@ function App() {
   };
 
   const exportData = () => {
-    const data={version:'2.1',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},bodyMetrics,measurements,nutrition,cardioLog,bpLog,protocolLog};
+    const data={version:'2.2',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,protocolLog};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`diamond-${new Date().toISOString().split('T')[0]}.json`;
@@ -1497,6 +1504,7 @@ function App() {
           if (Array.isArray(data.logs)) { setLogs(data.logs); }
           if (Array.isArray(data.bodyMetrics)) setBodyMetrics(data.bodyMetrics);
           if (Array.isArray(data.measurements)) setMeasurements(data.measurements);
+          if (Array.isArray(data.checkins)) setCheckins(data.checkins);
           if (Array.isArray(data.nutrition)) setNutrition(data.nutrition);
           if (Array.isArray(data.cardioLog)) setCardioLog(data.cardioLog);
           if (Array.isArray(data.bpLog)) setBpLog(data.bpLog);
@@ -1581,6 +1589,72 @@ function App() {
       setReview(text);
     } catch (e) { setReview('Error: ' + e.message); }
     finally { setReviewLoading(false); }
+  };
+
+  // ---- Photo check-in: compress to thumbnail on upload (on-device only) ----
+  const compressImage = (file, maxDim=600, quality=0.6) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
+        else if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const addCheckin = async (file) => {
+    if (!file) return;
+    try {
+      const dataUrl = await compressImage(file);
+      const wk = logs[0]?.week || week;
+      const ph = getPhase(wk);
+      const bw = bodyMetrics[0]?.weight || null;
+      const waist = measurements.find(m => m.site === 'Waist')?.value || null;
+      const entry = { id: Date.now(), date: new Date().toISOString(), pose: ciPose, week: wk, phase: ph.name, weight: bw, waist, img: dataUrl };
+      setCheckins(prev => [entry, ...prev].slice(0, 24));
+    } catch(e) { alert('Could not process image: ' + e.message); }
+  };
+
+  const delCheckin = (id) => setCheckins(prev => prev.filter(c => c.id !== id));
+
+  const analyseProgress = async () => {
+    const key = LS.get('anthropic_key');
+    if (!key) { alert('Add your Anthropic API key in Tools \u2192 AI Coaching first'); return; }
+    if (!ciCompareA || !ciCompareB) { alert('Pick two check-ins to compare (baseline and current).'); return; }
+    const a = checkins.find(c => c.id === ciCompareA);
+    const b = checkins.find(c => c.id === ciCompareB);
+    if (!a || !b) return;
+    // order chronologically: earlier = baseline
+    const [base, cur] = new Date(a.date) < new Date(b.date) ? [a, b] : [b, a];
+    setCiAnalysing(true); setCiAnalysis(null);
+    const wkGap = (cur.week || 0) - (base.week || 0);
+    const bwLine = (base.weight && cur.weight) ? `Bodyweight: ${base.weight}kg to ${cur.weight}kg.` : 'Bodyweight not logged for both.';
+    const waistLine = (base.waist && cur.waist) ? `Waist: ${base.waist}cm to ${cur.waist}cm.` : 'Waist not logged for both.';
+    const prompt = `You are an elite bodybuilding coach comparing two physique check-in photos of a 48-year-old male on an optimised hormonal protocol with enhanced recovery, mid-hypertrophy-block, priorities chest > back > delts. The first image is BASELINE (week ${base.week}, ${base.phase}), the second is CURRENT (week ${cur.week}, ${cur.phase}), roughly ${wkGap} weeks apart. Both are the ${base.pose} pose. Hard data: ${bwLine} ${waistLine}\n\nGive an honest, specific comparison in 2-3 short paragraphs. Be direct and critical, not flattering. Cover: (1) visible structural changes you can actually see between the two images (fullness, conditioning, specific regions), (2) whether the priorities (chest, back, delts) appear to be progressing relative to the rest, (3) one or two concrete actions.\n\nCRITICAL HONESTY RULES: Do NOT estimate body-fat percentage from photos - it is unreliable. Do NOT claim precise muscle gain numbers. Explicitly flag that lighting, pump, water (especially on this protocol) and pose consistency can swamp real weekly change, and anchor your read to the bodyweight/waist trend above rather than the pixels where they disagree. If the two photos are too inconsistent in pose/lighting to judge, say so plainly.`;
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 700, messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base.img.split(',')[1] } },
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: cur.img.split(',')[1] } },
+          { type: 'text', text: prompt }
+        ] }] })
+      });
+      const data = await res.json();
+      setCiAnalysis(data.content?.find(b => b.type === 'text')?.text || 'Could not analyse. Check your API key in Tools.');
+    } catch(e) { setCiAnalysis('Error: ' + e.message); }
+    finally { setCiAnalysing(false); }
   };
 
   const addBP = () => {
@@ -2964,6 +3038,53 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
               {measurements.length === 0 && <div className="empty-msg">No measurements yet.<br/>Log your first site above.</div>}
             </div>
+          </div>
+
+          <div className="body-sec">
+            <div className="body-ttl">Check-In Photos</div>
+            <div className="body-sub">Stored on this device only. Same pose, same light, same time of day — consistency is what makes progress visible. Compress automatically; keeps your most recent 24.</div>
+            <div style={{display:'flex',gap:6,marginBottom:10}}>
+              {['front','side','back'].map(p=>(
+                <button key={p} onClick={()=>setCiPose(p)} style={{flex:1,padding:'7px',fontSize:11,borderRadius:7,border:'1px solid var(--bdr)',background:ciPose===p?'var(--acc)':'var(--sur)',color:ciPose===p?'#000':'var(--t2)',fontWeight:ciPose===p?700:500,textTransform:'capitalize'}}>{p}</button>
+              ))}
+            </div>
+            <label className="add-toggle" style={{cursor:'pointer',display:'flex'}}>
+              <span>Add {ciPose} photo</span><span className="plus">+</span>
+              <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{addCheckin(e.target.files[0]); e.target.value='';}}/>
+            </label>
+
+            {checkins.length>0&&(
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginTop:10}}>
+                {checkins.map(c=>{
+                  const selA=ciCompareA===c.id, selB=ciCompareB===c.id;
+                  return (
+                    <div key={c.id} style={{position:'relative',borderRadius:8,overflow:'hidden',border:selA?'2px solid var(--acc)':selB?'2px solid var(--inf)':'1px solid var(--bdr)'}}>
+                      <img src={c.img} alt={c.pose} style={{width:'100%',aspectRatio:'3/4',objectFit:'cover',display:'block'}}
+                        onClick={()=>{ if(selA){setCiCompareA(null);} else if(selB){setCiCompareB(null);} else if(!ciCompareA){setCiCompareA(c.id);} else if(!ciCompareB){setCiCompareB(c.id);} else {setCiCompareA(c.id);setCiCompareB(null);} }}/>
+                      <div style={{position:'absolute',top:0,left:0,right:0,padding:'3px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff',display:'flex',justifyContent:'space-between'}}>
+                        <span>W{c.week} · {c.pose}</span>
+                        {selA&&<span style={{color:'var(--acc)'}}>A</span>}{selB&&<span style={{color:'var(--inf)'}}>B</span>}
+                      </div>
+                      <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'2px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff'}}>{fmtShort(c.date)}{c.weight?` · ${c.weight}kg`:''}</div>
+                      <button onClick={()=>delCheckin(c.id)} style={{position:'absolute',top:2,right:2,width:16,height:16,borderRadius:8,border:'none',background:'rgba(0,0,0,.6)',color:'#fff',fontSize:11,lineHeight:'14px',padding:0}}>&#215;</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {checkins.length===0&&<div className="empty-msg">No check-ins yet.<br/>Add your week-1 baseline in each pose.</div>}
+
+            {checkins.length>=2&&(
+              <div style={{marginTop:12}}>
+                <div className="body-sub" style={{marginBottom:6}}>Tap two photos (A = baseline, B = current), then analyse. AI gives an honest visual read anchored to your weight/waist trend — it will not invent a body-fat number.</div>
+                <button className="bf-save" style={{opacity:(ciCompareA&&ciCompareB)?1:0.5}} disabled={ciAnalysing||!ciCompareA||!ciCompareB} onClick={analyseProgress}>
+                  {ciAnalysing?'Analysing…':'Analyse progress (A vs B)'}
+                </button>
+                {ciAnalysis&&(
+                  <div style={{marginTop:10,padding:'11px 13px',background:'var(--sur)',border:'1px solid var(--bdr)',borderRadius:9,fontSize:13,lineHeight:1.5,whiteSpace:'pre-wrap',color:'var(--t)'}}>{ciAnalysis}</div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="body-sec">
