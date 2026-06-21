@@ -814,9 +814,34 @@ function getTarget(ex, logs, week, phase) {
   return { weight: topWeight, reps: ex.rMax, note: 'Same weight — beat last session\'s reps' };
 }
 
-function playChime() {
+let _audioCtx = null;
+function getAudioCtx() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    return _audioCtx;
+  } catch(e) { return null; }
+}
+// Call on a user gesture (e.g. starting a set) to unlock audio on iOS.
+function primeAudio() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    g.gain.value=0; o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime+0.01);
+  } catch(e) {}
+}
+function vibrate(pattern) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch(e) {}
+}
+function playChime() {
+  // Haptic first - works even on silent / screen-off, most reliable on phone
+  vibrate([120, 80, 120, 80, 200]);
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    if (ctx.state === 'suspended') ctx.resume();
     [[880,0],[1100,.15],[1320,.3]].forEach(([freq,delay]) => {
       const o=ctx.createOscillator(), g=ctx.createGain();
       o.connect(g); g.connect(ctx.destination); o.frequency.value=freq; o.type='sine';
@@ -1348,7 +1373,7 @@ function App() {
     if (cb) cb();
   }, [timerDone]);
 
-  const startTimer = (secs, msg, cb) => { afterRef.current=cb; endRef.current=Date.now()+secs*1000; setTimerMsg(msg||''); setTimerTotal(secs); setTimerSecs(secs); setTimerDone(false); setTimerOn(true); };
+  const startTimer = (secs, msg, cb) => { primeAudio(); afterRef.current=cb; endRef.current=Date.now()+secs*1000; setTimerMsg(msg||''); setTimerTotal(secs); setTimerSecs(secs); setTimerDone(false); setTimerOn(true); };
   const skipTimer = () => { setTimerOn(false); setTimerDone(false); const cb=afterRef.current; afterRef.current=null; if(cb)cb(); };
 
   const getLastWt = exId => { for(const l of logs){const e=l.exercises?.find(x=>x.id===exId);if(e?.sets?.length)return e.sets[e.sets.length-1].weight||0;} return 0; };
