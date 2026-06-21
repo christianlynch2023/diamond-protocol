@@ -1027,7 +1027,7 @@ function mergeByKey(a, b, keyFn) {
   return out;
 }
 
-const MEAS_SITES = ['Waist','Chest','Shoulders','Neck','Hips','Left Arm','Right Arm','Left Thigh','Right Thigh','Calf'];
+const MEAS_SITES = ['Waist','Chest','Shoulders','Neck','Hips','Left Arm','Right Arm','Left Forearm','Right Forearm','Left Thigh','Right Thigh','Left Calf','Right Calf'];
 
 function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory) {
   const lastLog = logs && logs[0];
@@ -2991,7 +2991,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="body-sub">Track circumference to separate muscle gain from fat and water</div>
             {Object.keys(latestBySite).length > 0 && (
               <div className="meas-grid">
-                {MEAS_SITES.filter(s => latestBySite[s]).map(s => (
+                {[...MEAS_SITES.filter(s => latestBySite[s]), ...Object.keys(latestBySite).filter(s => !MEAS_SITES.includes(s))].map(s => (
                   <div key={s} className="meas-cell" onClick={() => setMViewSite(s)}>
                     <div className="meas-site">{s}</div>
                     <div className="meas-val">{latestBySite[s].value}<span className="meas-unit">cm</span></div>
