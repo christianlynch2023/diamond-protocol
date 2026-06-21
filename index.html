@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Diamond">
@@ -15,7 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden}
+html,body{height:100%;overflow:hidden;touch-action:pan-x pan-y;-ms-touch-action:pan-x pan-y}
 body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
 :root{--bg:#07090c;--sur:#0e1319;--crd:#141b22;--bdr:#1d2733;--acc:#c4ff00;--ag:rgba(196,255,0,.12);--ag2:rgba(196,255,0,.05);--ok:#00e87a;--warn:#ff8c00;--err:#ff4444;--inf:#4a9eff;--t:#dde5ee;--t2:#7b90a8;--t3:#3c4f62}
 #root{height:100%;overflow:hidden}
@@ -599,6 +600,23 @@ if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navi
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script>
+    // Block pinch-zoom and double-tap-zoom on iOS Safari/PWA (ignores user-scalable=no)
+    document.addEventListener('gesturestart', function(e){ e.preventDefault(); }, { passive: false });
+    document.addEventListener('gesturechange', function(e){ e.preventDefault(); }, { passive: false });
+    document.addEventListener('gestureend', function(e){ e.preventDefault(); }, { passive: false });
+    (function(){
+      var lastTouch = 0;
+      document.addEventListener('touchend', function(e){
+        var now = Date.now();
+        if (now - lastTouch <= 300) { e.preventDefault(); }
+        lastTouch = now;
+      }, { passive: false });
+    })();
+    document.addEventListener('touchmove', function(e){
+      if (e.scale && e.scale !== 1) { e.preventDefault(); }
+    }, { passive: false });
+  </script>
   <script type="text/babel" data-presets="react">
 
 const { useState, useEffect, useRef, useCallback } = React;
