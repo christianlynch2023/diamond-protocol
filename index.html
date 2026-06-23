@@ -1122,6 +1122,14 @@ function bpCategory(sys, dia) {
   return { label: 'Normal', cls: 'green' };
 }
 
+function glucoseCategory(g) {
+  // Fasting glucose in mmol/L. Thresholds: normal <5.6, impaired/watch 5.6-6.9, high >=7.0
+  if (g >= 7.0) return { label: 'High - review', cls: 'red' };
+  if (g >= 5.6) return { label: 'Watch (impaired fasting)', cls: 'amber' };
+  if (g < 3.9) return { label: 'Low', cls: 'amber' };
+  return { label: 'Normal', cls: 'green' };
+}
+
 function App() {
 
   // ── WHOOP INTEGRATION ─────────────────────────────────
@@ -1337,6 +1345,9 @@ function App() {
   const [bpSys, setBpSys] = useState('');
   const [bpDia, setBpDia] = useState('');
   const [bpPulse, setBpPulse] = useState('');
+  const [glucoseLog, setGlucoseLog] = useState(() => { try { return JSON.parse(LS.get('glucose_log') || '[]'); } catch(e) { return []; } });
+  const [glVal, setGlVal] = useState('');
+  const [showAddGl, setShowAddGl] = useState(false);
   const [showAddBP, setShowAddBP] = useState(false);
   const [periodReview, setPeriodReview] = useState(null);
   const [periodLoading, setPeriodLoading] = useState(false);
@@ -1375,6 +1386,7 @@ function App() {
   useEffect(()=>{LS.set('nutrition_log',JSON.stringify(nutrition));},[nutrition]);
   useEffect(()=>{LS.set('cardio_log',JSON.stringify(cardioLog));},[cardioLog]);
   useEffect(()=>{LS.set('bp_log',JSON.stringify(bpLog));},[bpLog]);
+  useEffect(()=>{LS.set('glucose_log',JSON.stringify(glucoseLog));},[glucoseLog]);
 
   useEffect(() => {
     if (!timerOn) return;
@@ -1504,7 +1516,7 @@ function App() {
   };
 
   const exportData = () => {
-    const data={version:'2.2',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,protocolLog};
+    const data={version:'2.2',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,glucoseLog,protocolLog};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`diamond-${new Date().toISOString().split('T')[0]}.json`;
@@ -1526,6 +1538,7 @@ function App() {
           if (Array.isArray(data.nutrition)) setNutrition(data.nutrition);
           if (Array.isArray(data.cardioLog)) setCardioLog(data.cardioLog);
           if (Array.isArray(data.bpLog)) setBpLog(data.bpLog);
+          if (Array.isArray(data.glucoseLog)) setGlucoseLog(data.glucoseLog);
           if (Array.isArray(data.protocolLog)) setProtocolLog(data.protocolLog);
           if (data.config) { if(data.config.week)setWeek(data.config.week); if(data.config.recovery)setRecovery(data.config.recovery); if(data.config.block)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase)setGoalPhase(data.config.phase); }
           alert(`Restored ${data.logs?.length||0} sessions plus body, nutrition, BP, cardio and protocol history.`);
@@ -1540,8 +1553,8 @@ function App() {
     setClearConfirm(false);
     setLogs([]); setWeek(1); setBlock(1); setRecovery('normal'); setHighVol(false); setGoalPhase('bulk');
     setWipData(null);
-    setBodyMetrics([]); setMeasurements([]); setNutrition([]); setCardioLog([]); setBpLog([]); setProtocolLog([]);
-    ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','protocol_log'].forEach(k=>LS.del(k));
+    setBodyMetrics([]); setMeasurements([]); setNutrition([]); setCardioLog([]); setBpLog([]); setGlucoseLog([]); setProtocolLog([]);
+    ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','glucose_log','protocol_log'].forEach(k=>LS.del(k));
   };
 
 
@@ -1682,6 +1695,13 @@ function App() {
     setBpSys(''); setBpDia(''); setBpPulse(''); setBpDate(localToday()); setShowAddBP(false);
   };
 
+  const addGlucose = () => {
+    if (!glVal) return;
+    const entry = { date: `${bpDate}T12:00:00.000Z`, value: parseFloat(glVal) };
+    setGlucoseLog(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
+    setGlVal(''); setBpDate(localToday()); setShowAddGl(false);
+  };
+
   const getPeriodReview = async (scope) => {
     const key = LS.get('anthropic_key');
     if (!key) { alert('Add your Anthropic API key in Tools \u2192 AI Coaching first'); return; }
@@ -1765,6 +1785,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     nutrition: { setter:setNutrition, slice:400, dateOnly:true, title:'Edit nutrition', fields:[['protein','Protein (g)','num'],['carbs','Carbs (g)','num'],['fat','Fat (g)','num']], recompute:(d)=>({...d, calories:Math.round((parseFloat(d.protein)||0)*4+(parseFloat(d.carbs)||0)*4+(parseFloat(d.fat)||0)*9)}) },
     cardio:    { setter:setCardioLog, slice:400, dateOnly:false, title:'Edit cardio', fields:[['modality','Type','text'],['minutes','Minutes','num'],['note','Note','text']] },
     bp:        { setter:setBpLog, slice:400, dateOnly:false, title:'Edit blood pressure', fields:[['sys','Systolic','num'],['dia','Diastolic','num'],['pulse','Pulse','num']] },
+    glucose:   { setter:setGlucoseLog, slice:400, dateOnly:false, title:'Edit glucose', fields:[['value','Glucose (mmol/L)','num']] },
     protocol:  { setter:setProtocolLog, slice:500, dateOnly:false, title:'Edit protocol', fields:[['compound','Compound','text'],['dose','Dose','num'],['unit','Unit','text'],['notes','Notes','text']] },
   };
   const openBodyEdit = (type, index, entry) => { setEditBody({type, index}); setEditBodyDraft({...entry}); };
@@ -2067,6 +2088,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const cardioSessions=cardioThisWeek.length;
   const latestBP=bpLog[0]||null;
   const bpSeries=bpLog.slice(0,21).reverse().map(b=>({x:fmtShort(b.date),y:b.sys}));
+  const latestGl=glucoseLog[0]||null;
+  const glSeries=glucoseLog.slice(0,21).reverse().map(g=>({x:fmtShort(g.date),y:g.value}));
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
@@ -3257,6 +3280,47 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 </div>
               ); })}
               {bpLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your blood pressure above.</div>}
+            </div>
+          </div>
+
+          <div className="body-sec">
+            <div className="body-ttl">Fasting Glucose</div>
+            <div className="body-sub">HGH and tren both impair insulin sensitivity &#8212; log fasted (morning, pre-caffeine, pre-training) 2&#8211;3&#215;/week and watch the trend, not single readings</div>
+            {latestGl && (() => { const c = glucoseCategory(latestGl.value); return (
+              <div className="bp-latest">
+                <div className="bp-reading">{latestGl.value}<span className="bp-pulse"> mmol/L</span></div>
+                <span className={`bp-chip ${c.cls}`}>{c.label}</span>
+              </div>
+            ); })()}
+            {glSeries.length > 1 && (
+              <div style={{marginBottom:10}}>
+                <div className="chart-lbl">Fasting glucose &#8212; last {Math.min(glucoseLog.length,21)} readings (mmol/L)</div>
+                <SVGChart data={glSeries} height={110} color="#f0a020"/>
+              </div>
+            )}
+            <button className="add-toggle" onClick={() => setShowAddGl(v => !v)}>
+              <span>Log a reading</span><span className="plus">{showAddGl ? '\u2212' : '+'}</span>
+            </button>
+            {showAddGl && (
+              <div className="body-form">
+                <div className="bf-row">
+                  <div className="bf-grp"><div className="bf-lbl">Glucose (mmol/L)</div><input className="bf-in" type="number" inputMode="decimal" step="0.1" placeholder="5.2" value={glVal} onChange={e => setGlVal(e.target.value)}/></div>
+                  <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={bpDate} onChange={e=>setBpDate(e.target.value)}/></div>
+                </div>
+                <button className="bf-save" onClick={addGlucose}>Save</button>
+              </div>
+            )}
+            <div className="body-list">
+              {glucoseLog.slice(0, 21).map((g, i) => { const c = glucoseCategory(g.value); return (
+                <div key={i} className="bl-row">
+                  <span className="bl-date">{fmtShort(g.date)}</span>
+                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{g.value}<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> mmol/L</span></span>
+                  <span className={`bp-dot ${c.cls}`}></span>
+                  <button className="bl-edit" onClick={()=>openBodyEdit('glucose',i,g)}>&#9998;</button>
+                  <button className="bl-del" onClick={() => setGlucoseLog(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
+                </div>
+              ); })}
+              {glucoseLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your fasting glucose above.</div>}
             </div>
           </div>
 
