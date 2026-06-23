@@ -871,6 +871,44 @@ function playChime() {
   } catch(e) {}
 }
 
+function RecoveryFuelStrip({ rows, height=150 }) {
+  // rows: [{date, recovery, kcal, carbs, sleepH}] oldest->newest
+  if (!rows || rows.length < 3) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12,textAlign:'center'}}>Need 3+ days with both WHOOP and logged nutrition to show the overlay</div>;
+  const W=Math.max(rows.length*30, 300), barH=height-46, pad=4;
+  const kcals=rows.map(r=>r.kcal).filter(v=>v!=null);
+  const maxKcal=kcals.length?Math.max(...kcals):1, minKcal=kcals.length?Math.min(...kcals):0;
+  const range=Math.max(maxKcal-minKcal,1);
+  const colW=(W-pad*2)/rows.length;
+  // recovery line points (0-100 mapped to barH)
+  const pts=rows.map((r,i)=>{
+    const x=pad+colW*i+colW/2;
+    const y=r.recovery!=null ? (barH - (r.recovery/100)*barH) : null;
+    return {x,y,r};
+  });
+  const line=pts.filter(p=>p.y!=null).map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const recColor=r=>r>=67?'#00e87a':r>=34?'#f0c020':'#ff6b6b';
+  return (
+    <div style={{overflowX:'auto'}}>
+      <svg width={W} height={height} style={{display:'block'}}>
+        {rows.map((r,i)=>{
+          const x=pad+colW*i;
+          const kh=r.kcal!=null ? Math.max(((r.kcal-minKcal)/range)*(barH*0.7)+6, 6) : 0;
+          return (
+            <g key={i}>
+              {r.kcal!=null && <rect x={x+colW*0.2} y={barH-kh} width={colW*0.6} height={kh} rx={2} fill="rgba(74,158,255,.32)"/>}
+              <text x={x+colW/2} y={height-26} fontSize="8" fill="var(--t3)" textAnchor="middle">{r.kcal!=null?Math.round(r.kcal/100)/10+'k':''}</text>
+              <text x={x+colW/2} y={height-14} fontSize="8" fill="var(--t3)" textAnchor="middle">{r.date.slice(5)}</text>
+              {r.sleepH!=null && <text x={x+colW/2} y={height-2} fontSize="7.5" fill="var(--t3)" textAnchor="middle">{r.sleepH}h</text>}
+            </g>
+          );
+        })}
+        {line && <path d={line} fill="none" stroke="#00e87a" strokeWidth="2"/>}
+        {pts.filter(p=>p.y!=null).map((p,i)=>(<circle key={i} cx={p.x} cy={p.y} r="3.5" fill={recColor(p.r.recovery)}/>))}
+      </svg>
+    </div>
+  );
+}
+
 function SVGChart({ data, color='#c4ff00', height=130 }) {
   if (!data || data.length < 2) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12}}>Need more sessions to show chart</div>;
   const vals = data.map(d => d.y);
@@ -1576,9 +1614,13 @@ function App() {
       ?`Recovery ${whoopData.recovery}% | HRV ${whoopData.hrv}ms | RHR ${whoopData.rhr}bpm | Sleep ${whoopData.sleepHrs!=null?whoopData.sleepHrs+'h':whoopData.sleep+'%'}${whoopData.respRate!=null?' | Resp '+whoopData.respRate+'br/m':''}${whoopData.sleepDebt!=null?' | Sleep debt '+whoopData.sleepDebt+'h':''}${whoopData.dayCal!=null?' | '+whoopData.dayCal+' cal out':''}`
       :'No Whoop data available';
     const bodyStr=bodyMetrics.length?`Latest weight: ${bodyMetrics[0].weight}kg (${fmtShort(bodyMetrics[0].date)})`:'No body metrics logged';
+    const briefProt=avg7('protein'); const briefCal=avg7('calories');
+    const fuelStr=briefProt!=null?`~${briefProt}g protein, ~${briefCal} kcal/day (7-day avg)${calIn!=null&&calOut!=null?`; yesterday ${calIn} in / ${calOut} out (${calIn-calOut>=0?'+':''}${calIn-calOut} net)`:''}`:'not logged';
+    const bpStr=latestBP?`${latestBP.sys}/${latestBP.dia} (${bpCategory(latestBP.sys,latestBP.dia).label}, ${fmtShort(latestBP.date)})`:'not logged';
+    const glStr=latestGl?`${latestGl.value} mmol/L (${glucoseCategory(latestGl.value).label}, ${fmtShort(latestGl.date)})`:'not logged';
     const painFlags=[]; logs.slice(0,3).forEach(l=>(l.exercises||[]).forEach(ex=>{ if(ex.pain) painFlags.push(`${ex.name} (${ex.pain===2?'sharp':'mild'}, ${fmtShort(l.date)})`); }));
     const painStr=painFlags.length?painFlags.join('; '):'none reported recently';
-    const prompt=`You are a personal strength coach for a 48-year-old male on an optimised hormonal protocol with enhanced recovery capacity. He follows the Diamond Protocol 12-week hypertrophy programme. ${phaseLine}\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\nRecent joint/tendon pain: ${painStr}\nToday's readiness call: ${readiness.title} - ${readiness.action}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. If sharp joint or tendon pain is flagged on any lift, recommend a machine or cable alternative for it today. Keep your guidance consistent with today's readiness call above and explain its reasoning in your own words. Direct, no fluff.`;
+    const prompt=`You are a personal strength coach for a 48-year-old male on an optimised hormonal protocol with enhanced recovery capacity. He follows the Diamond Protocol 12-week hypertrophy programme. ${phaseLine}\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\nFuel: ${fuelStr}\nBlood pressure: ${bpStr}\nFasting glucose: ${glStr}\nRecent joint/tendon pain: ${painStr}\nToday's readiness call: ${readiness.title} - ${readiness.action}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data - and if low recovery lines up with low fuel/protein or poor sleep, say so plainly. If BP is Stage 1+, hold intensifiers/grinders today. If fasting glucose is in the watch/high band, note it briefly as a stack signal to monitor (do not alarm or diagnose). Anchor nutrition comments to the 7-day trend not single days, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. If sharp joint or tendon pain is flagged on any lift, recommend a machine or cable alternative for it today. Keep your guidance consistent with today's readiness call above and explain its reasoning in your own words. Direct, no fluff.`;
     try {
       const res=await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
@@ -2076,6 +2118,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
   const measSeries=measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value}));
   const protSeries=nutrition.slice(0,21).reverse().map(n=>({x:fmtShort(n.date),y:n.protein}));
+  const recFuelRows=(() => {
+    const nutByDate={}; nutrition.forEach(n=>{ const d=(n.date||'').slice(0,10); if(d) nutByDate[d]=n; });
+    return whoopHistory.slice(-14).map(h=>{
+      const d=(h.date||'').slice(0,10); const n=nutByDate[d];
+      return { date:d, recovery:h.recovery??null, kcal:n?n.calories:null, carbs:n?n.carbs:null, sleepH:h.sleepHrs??(h.sleep!=null?null:null) };
+    });
+  })();
+  const recFuelReady=recFuelRows.filter(r=>r.recovery!=null&&r.kcal!=null).length>=3;
   const avg7=(k)=>{ const l7=nutrition.slice(0,7); if(!l7.length) return null; return Math.round(l7.reduce((a,n)=>a+(n[k]||0),0)/l7.length); };
   const _ebToday=new Date().toISOString().slice(0,10);
   const _ebN=nutrition.find(n=>n.date===_ebToday);
@@ -2677,6 +2727,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <>
                     <div className="chart-lbl" style={{marginTop:12}}>HRV trend (ms)</div>
                     <SVGChart data={whoopHistory.slice(-30).filter(h=>h.hrv!=null).map(h=>({x:h.date.slice(5),y:h.hrv}))} height={110} color="#4a9eff"/>
+                  </>
+                )}
+                {recFuelReady && (
+                  <>
+                    <div className="chart-lbl" style={{marginTop:14}}>Recovery vs fuel &#8212; last {recFuelRows.filter(r=>r.recovery!=null).length} days</div>
+                    <div style={{fontSize:10,color:'var(--t3)',marginBottom:4}}>Green/amber/red dots = recovery. Blue bars = calories in. Read it yourself: do low-recovery days follow low-fuel or low-sleep days?</div>
+                    <RecoveryFuelStrip rows={recFuelRows} height={150}/>
                   </>
                 )}
               </>
