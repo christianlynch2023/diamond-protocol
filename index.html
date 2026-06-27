@@ -818,7 +818,7 @@ function getTarget(ex, logs, week, phase) {
   const prev = getPrevHist(ex.id, logs, 1)[0];
   if (!prev) return { weight: 0, reps: ex.rMin, note: 'First time — establish a working weight', first: true };
   const topWeight = Math.max(...prev.sets.map(s => s.weight));
-  const rec = getProgRec(ex.id, ex.rMax, logs);
+  const rec = getProgRec(ex.id, ex.rMax, logs, phase);
   const incr = getIncrement(ex);
   if (DLW.has(week)) {
     return { weight: Math.round((topWeight * 0.85) / 2.5) * 2.5, reps: Math.round((ex.rMin + ex.rMax) / 2), note: 'Deload — keep several reps in reserve' };
@@ -1054,10 +1054,10 @@ const ALT_BY_MUSCLE = {
   adductors:[{name:'Adductor Machine'},{name:'Copenhagen Plank'}],
 };
 const CORE_EX = {
-  upperA: new Set(['ua1','ua2','ua3','ua5','ua6']),
-  lowerA: new Set(['la1','la3','la4','la7']),
-  upperB: new Set(['ub1','ub2','ub4','ub7','ub8']),
-  lowerB: new Set(['lb1','lb2','lb5','lb7']),
+  upperA: new Set(['ua1','ua2','ua3','ua4']),
+  lowerA: new Set(['la1','la2','la3']),
+  upperB: new Set(['ub2','ub1','ub3','ub9']),
+  lowerB: new Set(['lb2','lb5','lb3']),
 };
 
 function mergeLogs(a, b) {
@@ -1085,7 +1085,7 @@ function mergeByKey(a, b, keyFn) {
 
 const MEAS_SITES = ['Waist','Chest','Shoulders','Neck','Hips','Left Arm','Right Arm','Left Forearm','Right Forearm','Left Thigh','Right Thigh','Left Calf','Right Calf'];
 
-function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory) {
+function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, latestBP) {
   const lastLog = logs && logs[0];
   const recentPain = (lastLog?.exercises || []).filter(e => e.pain).map(e => ({ name: e.name, level: e.pain }));
   const sharpPain = recentPain.some(p => p.level === 2);
@@ -1138,6 +1138,17 @@ function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHist
   else mode = 'green_standard';
   if (sharpPain && ORDER.indexOf(mode) > ORDER.indexOf('amber')) mode = 'amber';
   if (peakWk && mode === 'green_standard' && pos >= 1 && major === 0 && !sharpPain) mode = 'green_push';
+
+  // BP hard-gate: a raised morning reading caps readiness regardless of recovery (mirrors autoreg gate).
+  // Stage 2 / Crisis (>=140/90) -> minimum dose, no intensifiers. Stage 1 / Elevated (>=120) -> no grinders.
+  if (latestBP) {
+    const bpc = bpCategory(latestBP.sys, latestBP.dia);
+    if (bpc.cls === 'red' && ORDER.indexOf(mode) > ORDER.indexOf('red_min')) {
+      mode = 'red_min'; factors.push('blood pressure ' + latestBP.sys + '/' + latestBP.dia + ' (' + bpc.label + ')');
+    } else if (bpc.cls === 'amber' && ORDER.indexOf(mode) > ORDER.indexOf('amber')) {
+      mode = 'amber'; factors.push('blood pressure ' + latestBP.sys + '/' + latestBP.dia + ' (' + bpc.label + ')');
+    }
+  }
 
   const META = {
     green_push:     { title: 'Green \u00b7 Push',        cls: 'green', action: 'Full session. Push your top sets and add load wherever your targets call for it. Intensifiers on if this week programmes them.' },
@@ -1971,7 +1982,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const weekDone=new Set(logs.filter(l=>l.week===week && (l.block||1)===block).map(l=>l.sessionId));
   const allDone=weekDone.size>=4;
   const deloadInfo=computeDeloadReadiness(whoopHistory,week);
-  const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory);
+  const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, bpLog[0]||null);
   const hvActive = highVol && (readiness.cls === 'green' || pushOverride) && goalPhase !== 'cut';
   const effPhase = (goalPhase==='cut' && (readiness.cls==='green' || pushOverride)) ? 'maintain' : goalPhase;
   const volParts = (() => {
@@ -1999,12 +2010,17 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     for (const mus in MUSCLES) {
       let score = 0, dataN = 0;
       for (const id of (muscleEx[mus] || [])) {
-        const h = getPrevHist(id, logs, 2);
+        const h = getPrevHist(id, logs, 3);
         if (h.length < 2) continue;
-        const cur = top(h[0].sets), prev = top(h[1].sets);
-        if (!prev) continue;
+        const cur = top(h[0].sets);
+        // 3-session trend: compare most recent vs the average of the prior 1-2 sessions,
+        // so a single anomalous session can't flip progressing/stalled. Falls back to 2 when only 2 exist.
+        const priors = h.slice(1).map(s => top(s.sets)).filter(v => v > 0);
+        if (!priors.length) continue;
+        const base = priors.reduce((a, b) => a + b, 0) / priors.length;
+        if (!base) continue;
         dataN++;
-        const d = (cur - prev) / prev;
+        const d = (cur - base) / base;
         score += d > 0.01 ? 1 : d < -0.01 ? -1 : 0;
       }
       const cheap = CHEAP_MUS.has(mus);
