@@ -2033,11 +2033,11 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     }
     return {dir, carry};
   }, [week, hvActive]);
-  const plannedVol = (() => {
+  const plannedVol = useMemo(() => {
     const v={...volParts.dir};
     for(const m in volParts.carry) v[m]=(v[m]||0)+volParts.carry[m];
     return v;
-  })();
+  }, [volParts]);
   const CHEAP_MUS = new Set(['sideDelt','rearDelt','biceps','triceps','calves','abs']);
   const bpGate = (() => { const b=bpLog && bpLog[0]; return b ? bpCategory(b.sys, b.dia).cls === 'red' : false; })();
   const autoReg = useMemo(() => {
@@ -2092,7 +2092,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const perWeek=(newest.weight-ref.weight)/days*7;
     return { perWeek, pctWeek: perWeek/newest.weight*100 };
   })();
-  const nutriCoach = (() => {
+  const nutriCoach = useMemo(() => {
     const dayMs=86400000, parse=d=>new Date(d).getTime();
     const latestW=(bodyMetrics&&bodyMetrics.length&&bodyMetrics[0].weight)?bodyMetrics[0].weight:null;
     if(!latestW) return { ok:false, reason:'Log your bodyweight to unlock smart targets.' };
@@ -2140,7 +2140,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       cycle={trainDays,restDays,lowCarb:Math.max(0,lowCarb),highCarb:Math.max(0,highCarb)};
     }
     return { ok:true, tdee, conf, avgIntake, ratePerWk, spanDays:Math.round(spanDays), targetCals, proteinG, fatG, carbG, targetRatePct, adjust, cycle, phase:goalPhase };
-  })();
+  }, [logs, nutrition, bodyMetrics, goalPhase]);
   const sess=sel?SESSIONS[sel]:null;
   const baseEx=sess?sess.exercises[exIdx]:null;
   const curEx=baseEx?(subMap[baseEx.id]?{...baseEx,...subMap[baseEx.id]}:baseEx):null;
@@ -2170,15 +2170,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const volSeries=weeklyVolumeSeries(logs,volMuscle,block);
   const plateaus=detectPlateaus(logs);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
-  const measSeries=measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value}));
-  const protSeries=nutrition.slice(0,21).reverse().map(n=>({x:fmtShort(n.date),y:n.protein}));
-  const recFuelRows=(() => {
+  const measSeries=useMemo(()=>measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value})),[measurements,mViewSite]);
+  const protSeries=useMemo(()=>nutrition.slice(0,21).reverse().map(n=>({x:fmtShort(n.date),y:n.protein})),[nutrition]);
+  const recFuelRows = useMemo(() => {
     const nutByDate={}; nutrition.forEach(n=>{ const d=(n.date||'').slice(0,10); if(d) nutByDate[d]=n; });
     return whoopHistory.slice(-14).map(h=>{
       const d=(h.date||'').slice(0,10); const n=nutByDate[d];
       return { date:d, recovery:h.recovery??null, kcal:n?n.calories:null, carbs:n?n.carbs:null, sleepH:h.sleepHrs??(h.sleep!=null?null:null) };
     });
-  })();
+  }, [nutrition, whoopHistory]);
   const recFuelReady=recFuelRows.filter(r=>r.recovery!=null&&r.kcal!=null).length>=3;
   const avg7=(k)=>{ const l7=nutrition.slice(0,7); if(!l7.length) return null; return Math.round(l7.reduce((a,n)=>a+(n[k]||0),0)/l7.length); };
   const _ebToday=new Date().toISOString().slice(0,10);
@@ -2191,9 +2191,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const cardioMins=cardioThisWeek.reduce((a,c)=>a+(c.minutes||0),0);
   const cardioSessions=cardioThisWeek.length;
   const latestBP=bpLog[0]||null;
-  const bpSeries=bpLog.slice(0,21).reverse().map(b=>({x:fmtShort(b.date),y:b.sys}));
+  const bpSeries=useMemo(()=>bpLog.slice(0,21).reverse().map(b=>({x:fmtShort(b.date),y:b.sys})),[bpLog]);
   const latestGl=glucoseLog[0]||null;
-  const glSeries=glucoseLog.slice(0,21).reverse().map(g=>({x:fmtShort(g.date),y:g.value}));
+  const glSeries=useMemo(()=>glucoseLog.slice(0,21).reverse().map(g=>({x:fmtShort(g.date),y:g.value})),[glucoseLog]);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
