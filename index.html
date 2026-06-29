@@ -751,6 +751,18 @@ const fmt = s => { const m=Math.floor(s/60), sc=s%60; return m>0 ? `${m}:${Strin
 const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' ' + new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
+
+// Strict numeric parser for user input at write boundaries.
+// Returns a finite number, or null if the input is empty/blank/non-numeric/non-finite.
+// Guards against: "." "-" "  " "1.2.3" "Infinity" "5e" and comma-decimal locales ("5,5").
+// Returns null (not 0) so callers reject the entry rather than silently store a wrong value.
+const parseNum = (raw) => {
+  if (raw == null) return null;
+  const s = String(raw).trim().replace(',', '.');
+  if (s === '') return null;
+  const n = Number(s);              // Number() is stricter than parseFloat: "1.2.3"->NaN, "5-"->NaN
+  return Number.isFinite(n) ? n : null;
+};
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const RAMP_EX = new Set(['ua3','ua4','ua5','ub3','ub1','ub4','ub5']);
 const RAMP_P1 = new Set([2,6]);
@@ -935,6 +947,10 @@ function RecoveryFuelStrip({ rows, height=150 }) {
 }
 
 function SVGChart({ data, color='#c4ff00', height=130 }) {
+  // Defense-in-depth: drop any points with non-finite y (NaN/Infinity) before plotting.
+  // Protects against legacy localStorage data corrupted before input validation existed,
+  // so a single bad value can never produce a broken "M NaN,NaN" path or blank chart.
+  data = (data || []).filter(d => d && Number.isFinite(d.y));
   if (!data || data.length < 2) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12}}>Need more sessions to show chart</div>;
   const vals = data.map(d => d.y);
   const maxV = Math.max(...vals), minV = Math.min(...vals);
@@ -1760,15 +1776,17 @@ function App() {
   };
 
   const addBP = () => {
-    if (!bpSys || !bpDia) return;
-    const entry = { date: `${bpDate}T12:00:00.000Z`, sys: parseInt(bpSys), dia: parseInt(bpDia), pulse: bpPulse ? parseInt(bpPulse) : null };
+    const sys=parseNum(bpSys), dia=parseNum(bpDia);
+    if (sys==null || dia==null || sys<=0 || dia<=0) return;   // reject NaN/blank - feeds bpCategory + readiness gate
+    const entry = { date: `${bpDate}T12:00:00.000Z`, sys: Math.round(sys), dia: Math.round(dia), pulse: parseNum(bpPulse)!=null ? Math.round(parseNum(bpPulse)) : null };
     setBpLog(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
     setBpSys(''); setBpDia(''); setBpPulse(''); setBpDate(localToday()); setShowAddBP(false);
   };
 
   const addGlucose = () => {
-    if (!glVal) return;
-    const entry = { date: `${bpDate}T12:00:00.000Z`, value: parseFloat(glVal) };
+    const g=parseNum(glVal);
+    if (g==null || g<=0) return;
+    const entry = { date: `${bpDate}T12:00:00.000Z`, value: g };
     setGlucoseLog(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
     setGlVal(''); setBpDate(localToday()); setShowAddGl(false);
   };
@@ -1871,8 +1889,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   };
 
   const addBodyMetric = () => {
-    if (!newWt) return;
-    const e={date:`${wtDate}T12:00:00.000Z`,weight:parseFloat(newWt),bodyFat:newBF?parseFloat(newBF):null,muscle:newMuscle?parseFloat(newMuscle):null,notes:newWtNote};
+    const w=parseNum(newWt);
+    if (w==null || w<=0) return;
+    const e={date:`${wtDate}T12:00:00.000Z`,weight:w,bodyFat:parseNum(newBF),muscle:parseNum(newMuscle),notes:newWtNote};
     setBodyMetrics(prev=>[e,...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,200));
     setNewWt('');setNewBF('');setNewMuscle('');setNewWtNote('');setWtDate(localToday());setShowAddBody(false);
   };
@@ -1893,8 +1912,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   };
 
   const addMeasurement = () => {
-    if (!mVal) return;
-    const entry = { date: `${mDate}T12:00:00.000Z`, site: mSite, value: parseFloat(mVal) };
+    const v=parseNum(mVal);
+    if (v==null || v<=0) return;   // reject blank/NaN/Infinity/non-positive measurement
+    const entry = { date: `${mDate}T12:00:00.000Z`, site: mSite, value: v };
     setMeasurements(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 500));
     setMVal(''); setMDate(localToday()); setShowAddMeas(false);
   };
