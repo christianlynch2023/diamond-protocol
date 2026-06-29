@@ -619,7 +619,32 @@ if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navi
   </script>
   <script type="text/babel" data-presets="react">
 
-const { useState, useEffect, useRef, useCallback } = React;
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ---------------------------------------------------------------------------
+// LAYER 2: Persistence abstraction.
+// Replaces the hand-written `useState(() => JSON.parse(LS.get(k)))` + write-through
+// `useEffect` boilerplate (previously duplicated ~19 times). One choke point for
+// JSON (de)serialisation, error handling, and quota failures — and the single place
+// to add IndexedDB migration or schema versioning later without touching call sites.
+// ---------------------------------------------------------------------------
+function usePersistentState(key, initial) {
+  const [value, setValue] = useState(() => {
+    try {
+      const raw = LS.get(key);
+      return raw != null ? JSON.parse(raw) : initial;
+    } catch (e) { return initial; }
+  });
+  useEffect(() => {
+    try {
+      LS.set(key, JSON.stringify(value));
+    } catch (e) {
+      // Quota exceeded (large base64 photos are the usual culprit) — fail loud, not silent.
+      console.warn('Persistence failed for "' + key + '":', e && e.message);
+    }
+  }, [key, value]);
+  return [value, setValue];
+}
 
 const LS = {
   get: k => { try { return localStorage.getItem(k); } catch(e) { return null; } },
@@ -1184,8 +1209,8 @@ function App() {
   // ── WHOOP INTEGRATION ─────────────────────────────────
   const [whoopData, setWhoopData]       = useState(() => { const c=LS.get('whoop_cache'); return c?JSON.parse(c):null; });
   const [whoopLoading, setWhoopLoading] = useState(false);
-  const [whoopHistory, setWhoopHistory] = useState(() => { try { return JSON.parse(LS.get('whoop_history') || '[]'); } catch(e) { return []; } });
-  const [whoopWorkouts, setWhoopWorkouts] = useState(() => { try { return JSON.parse(LS.get('whoop_workouts') || '[]'); } catch(e) { return []; } });
+  const [whoopHistory, setWhoopHistory] = usePersistentState('whoop_history', []);
+  const [whoopWorkouts, setWhoopWorkouts] = usePersistentState('whoop_workouts', []);
   const whoopConnected = !!LS.get('whoop_access_token');
 
   const getWhoopCls = score => score >= 67 ? 'gr' : score >= 34 ? 'yw' : 'rd';
@@ -1255,10 +1280,10 @@ function App() {
       const newHist = parseWhoopHistory(raw.recovery);
       const todayEntry = parsed.recovery != null ? [{ date: new Date().toISOString().slice(0,10), recovery: parsed.recovery, hrv: parsed.hrv, rhr: parsed.rhr, respRate: parsed.respRate, skinTemp: parsed.skinTemp }] : [];
       if (newHist.length || todayEntry.length) {
-        setWhoopHistory(prev => { const merged = mergeHistory(prev, [...newHist, ...todayEntry]); LS.set('whoop_history', JSON.stringify(merged)); return merged; });
+        setWhoopHistory(prev => mergeHistory(prev, [...newHist, ...todayEntry]));
       }
       const wos = parseWhoopWorkouts(raw.workouts);
-      if (wos.length) { setWhoopWorkouts(wos); LS.set('whoop_workouts', JSON.stringify(wos)); }
+      if (wos.length) { setWhoopWorkouts(wos); }
       applyWhoopRecovery(parsed.recovery);
     } catch(e) {
       const cached = LS.get('whoop_cache');
@@ -1367,9 +1392,9 @@ function App() {
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [review, setReview]           = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
-  const [bodyMetrics, setBodyMetrics] = useState(() => { try { return JSON.parse(LS.get('body_metrics') || '[]'); } catch(e) { return []; } });
-  const [protocolLog, setProtocolLog] = useState(() => { try { return JSON.parse(LS.get('protocol_log') || '[]'); } catch(e) { return []; } });
-  const [measurements, setMeasurements] = useState(() => { try { return JSON.parse(LS.get('body_measurements') || '[]'); } catch(e) { return []; } });
+  const [bodyMetrics, setBodyMetrics] = usePersistentState('body_metrics', []);
+  const [protocolLog, setProtocolLog] = usePersistentState('protocol_log', []);
+  const [measurements, setMeasurements] = usePersistentState('body_measurements', []);
   const [checkins, setCheckins] = useState(() => { try { return JSON.parse(LS.get('checkin_photos') || '[]'); } catch(e) { return []; } });
   const [ciPose, setCiPose] = useState('front');
   const [ciCompareA, setCiCompareA] = useState(null);
@@ -1380,21 +1405,21 @@ function App() {
   const [mVal, setMVal] = useState('');
   const [showAddMeas, setShowAddMeas] = useState(false);
   const [mViewSite, setMViewSite] = useState('Waist');
-  const [nutrition, setNutrition] = useState(() => { try { return JSON.parse(LS.get('nutrition_log') || '[]'); } catch(e) { return []; } });
+  const [nutrition, setNutrition] = usePersistentState('nutrition_log', []);
   const [nP, setNP] = useState('');
   const [nC, setNC] = useState('');
   const [nF, setNF] = useState('');
   const [showAddNutri, setShowAddNutri] = useState(false);
-  const [cardioLog, setCardioLog] = useState(() => { try { return JSON.parse(LS.get('cardio_log') || '[]'); } catch(e) { return []; } });
+  const [cardioLog, setCardioLog] = usePersistentState('cardio_log', []);
   const [cType, setCType] = useState('Zone 2');
   const [cMin, setCMin] = useState('');
   const [cNote, setCNote] = useState('');
   const [showAddCardio, setShowAddCardio] = useState(false);
-  const [bpLog, setBpLog] = useState(() => { try { return JSON.parse(LS.get('bp_log') || '[]'); } catch(e) { return []; } });
+  const [bpLog, setBpLog] = usePersistentState('bp_log', []);
   const [bpSys, setBpSys] = useState('');
   const [bpDia, setBpDia] = useState('');
   const [bpPulse, setBpPulse] = useState('');
-  const [glucoseLog, setGlucoseLog] = useState(() => { try { return JSON.parse(LS.get('glucose_log') || '[]'); } catch(e) { return []; } });
+  const [glucoseLog, setGlucoseLog] = usePersistentState('glucose_log', []);
   const [glVal, setGlVal] = useState('');
   const [showAddGl, setShowAddGl] = useState(false);
   const [showAddBP, setShowAddBP] = useState(false);
@@ -1428,14 +1453,7 @@ function App() {
 
   useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery, block, highVol, phase: goalPhase})); }, [week, recovery, block, highVol, goalPhase]);
   useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
-  useEffect(()=>{LS.set('body_metrics',JSON.stringify(bodyMetrics));},[bodyMetrics]);
-  useEffect(()=>{LS.set('protocol_log',JSON.stringify(protocolLog));},[protocolLog]);
-  useEffect(()=>{LS.set('body_measurements',JSON.stringify(measurements));},[measurements]);
   useEffect(()=>{ try { LS.set('checkin_photos',JSON.stringify(checkins)); } catch(e) { alert('Storage full - delete an older check-in photo to save new ones.'); } },[checkins]);
-  useEffect(()=>{LS.set('nutrition_log',JSON.stringify(nutrition));},[nutrition]);
-  useEffect(()=>{LS.set('cardio_log',JSON.stringify(cardioLog));},[cardioLog]);
-  useEffect(()=>{LS.set('bp_log',JSON.stringify(bpLog));},[bpLog]);
-  useEffect(()=>{LS.set('glucose_log',JSON.stringify(glucoseLog));},[glucoseLog]);
 
   useEffect(() => {
     if (!timerOn) return;
@@ -1985,7 +2003,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, bpLog[0]||null);
   const hvActive = highVol && (readiness.cls === 'green' || pushOverride) && goalPhase !== 'cut';
   const effPhase = (goalPhase==='cut' && (readiness.cls==='green' || pushOverride)) ? 'maintain' : goalPhase;
-  const volParts = (() => {
+  const volParts = useMemo(() => {
     const dir={}, carry={};
     for (const k of Object.keys(SESSIONS)) for (const e of SESSIONS[k].exercises) {
       const m=EX_MUSCLE[e.id]; if(!m) continue;
@@ -1994,7 +2012,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       if(m.s){ (Array.isArray(m.s)?m.s:[m.s]).forEach(sm=>carry[sm]=(carry[sm]||0)+s*0.5); }
     }
     return {dir, carry};
-  })();
+  }, [week, hvActive]);
   const plannedVol = (() => {
     const v={...volParts.dir};
     for(const m in volParts.carry) v[m]=(v[m]||0)+volParts.carry[m];
@@ -2002,7 +2020,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   })();
   const CHEAP_MUS = new Set(['sideDelt','rearDelt','biceps','triceps','calves','abs']);
   const bpGate = (() => { const b=bpLog && bpLog[0]; return b ? bpCategory(b.sys, b.dia).cls === 'red' : false; })();
-  const autoReg = (() => {
+  const autoReg = useMemo(() => {
     const muscleEx = {};
     for (const id in EX_MUSCLE) { const p = EX_MUSCLE[id].p; (muscleEx[p] = muscleEx[p] || []).push(id); }
     const top = ss => (ss && ss.length) ? Math.max(...ss.map(s => epley(s.weight||0, s.reps||0))) : 0;
@@ -2042,7 +2060,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       out[mus] = { label, cls };
     }
     return out;
-  })();
+  }, [logs, volParts, bpGate, readiness]);
   const bwRate = (() => {
     if (!bodyMetrics || bodyMetrics.length < 2) return null;
     const newest = bodyMetrics[0];
