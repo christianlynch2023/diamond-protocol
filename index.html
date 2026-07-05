@@ -2466,7 +2466,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           </div>
           <div className="sec-lbl" style={{padding:'0 15px 6px'}}>Sessions</div>
           <div className="sg">
-            {Object.values(SESSIONS).map(s => (
+            {(() => { const DORD={Monday:1,Tuesday:2,Wednesday:3,Thursday:4,Friday:5,Saturday:6,Sunday:7}; return Object.values(SESSIONS).slice().sort((a,b)=>(DORD[a.day]||9)-(DORD[b.day]||9)); })().map(s => (
               <div key={s.id} className={`sc${doneToday.has(s.id)?' done':''}`}
                 onClick={() => {setSel(s.id);setActiveInts(showInt?new Set(DEF_INTS[s.id]):new Set());setView('session');}}>
                 {doneToday.has(s.id) && <div className="s-done">&#10003;</div>}
