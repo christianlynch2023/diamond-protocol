@@ -74,6 +74,15 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .sc.done{border-color:rgba(0,232,122,.3)}
 .sc.done::before{opacity:1;background:var(--ok)}
 .s-day{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--t3);letter-spacing:.08em;margin-bottom:4px;text-transform:uppercase}
+.wk-strip{display:flex;gap:4px;padding:0 15px 14px}
+.wk-day{flex:1;border-radius:7px;padding:7px 2px;text-align:center;border:1px solid var(--bdr);background:var(--sur)}
+.wk-day.wk-train{border-color:rgba(196,255,0,.35);background:rgba(196,255,0,.06)}
+.wk-day.wk-cardio{border-color:rgba(74,158,255,.35);background:rgba(74,158,255,.06)}
+.wk-day.wk-rest{opacity:.5}
+.wk-dn{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--t3);letter-spacing:.05em;margin-bottom:3px}
+.wk-lbl{font-size:9.5px;font-weight:600;color:var(--t);line-height:1.15}
+.wk-day.wk-cardio .wk-lbl{color:#4a9eff}
+.wk-day.wk-rest .wk-lbl{color:var(--t3);font-weight:400}
 .s-nm{font-size:17px;font-weight:800;margin-bottom:2px;letter-spacing:-.01em}
 .s-foc{font-size:10px;color:var(--t2);line-height:1.4}
 .s-time{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--acc);margin-top:8px}
@@ -671,7 +680,7 @@ const WR = {
 };
 const DLW = new Set([4,8,12]);
 const SESSIONS = {
-  upperA:{id:"upperA",name:"Upper 1",focus:"Horizontal Push & Back Thickness",day:"Monday",time:"80-90 min",maxInt:2,exercises:[
+  upperA:{id:"upperA",name:"Upper 1",focus:"Horizontal Push & Back Thickness",day:"Saturday",time:"80-90 min",maxInt:2,exercises:[
     {id:"ua1",name:"RO-T8 Flat Press",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Neutral grip","Deep controlled stretch","Elbows 30-45"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR only if form stays locked"},orm:true},
     {id:"ua2",name:"Kaz Chest-Supported Row",sets:4,tempo:"3-1-1",struct:"1 top set 8-10, then back-offs 10-12",rMin:8,rMax:12,rirMin:1,rirMax:2,rest:150,handle:"Small KAZ",cues:["Chest on pad","Drive elbows back","Squeeze mid-back"],avoidFail:true,avoidReason:"Stop at 1 RIR - no form breakdown",int:null,orm:false},
     {id:"ua3",name:"RO-T8 Incline Press",sets:2,tempo:"3-1-1",rMin:8,rMax:12,rirMin:1,rirMax:1,rest:150,handle:"RO-T8",cues:["30-45 bench","Elbows 30-45","Second chest angle"],avoidFail:false,int:null,orm:true},
@@ -681,7 +690,7 @@ const SESSIONS = {
     {id:"ua6",name:"Cable Pushdown",sets:2,tempo:"2-1-2",rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Rope/bar",cues:["Elbows pinned","Full lockout"],avoidFail:false,int:null,orm:false},
     {id:"ua7",name:"Standing Calf Raise",sets:3,tempo:"3-1-1",rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Machine",cues:["Full stretch","Hard pause top","Floor top-up"],avoidFail:false,int:null,orm:false}
   ]},
-  lowerA:{id:"lowerA",name:"Lower",focus:"Complete Legs",day:"Tuesday",time:"80-90 min",maxInt:2,exercises:[
+  lowerA:{id:"lowerA",name:"Lower",focus:"Complete Legs",day:"Sunday",time:"80-90 min",maxInt:2,exercises:[
     {id:"la1",name:"Leg Press",sets:4,tempo:"3-0-1",struct:"1 top set 6-8, back-offs 8-10, final 10-15",rMin:6,rMax:10,rirMin:1,rirMax:1,rest:180,handle:"Machine",cues:["Foot mid-platform","Deep ROM to just before pelvic tuck","No lower-back rounding"],avoidFail:true,avoidReason:"No true failure - stable but heavy",int:null,orm:true},
     {id:"la2",name:"Leg Press Back-Off",sets:1,tempo:"3-0-1",rMin:10,rMax:15,rirMin:0,rirMax:1,rest:150,handle:"Machine",cues:["Drop 15-20% from top set"],avoidFail:false,int:{label:"0 RIR",desc:"Final set to 0 RIR, spine supported"},orm:false},
     {id:"la3",name:"Romanian Deadlift",sets:3,tempo:"3-1-1",rMin:8,rMax:10,rirMin:1,rirMax:1,rest:180,handle:"Short bar",cues:["Hips back","Spine neutral","Never grind"],avoidFail:true,avoidReason:"Connective tissue - stay 1-2 RIR",int:null,orm:true},
@@ -692,7 +701,7 @@ const SESSIONS = {
     {id:"la7",name:"Standing Calf Raise",sets:5,tempo:"3-1-1",rMin:8,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Machine",cues:["Full stretch","Hard pause top"],avoidFail:false,int:null,orm:false},
     {id:"la9",name:"Cable Crunch",sets:3,tempo:"2-1-2",rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope",cues:["Controlled flexion","No hip drive"],avoidFail:false,int:null,orm:false}
   ]},
-  upperB:{id:"upperB",name:"Upper 2",focus:"Incline / Vertical & Lat Width",day:"Thursday",time:"80-90 min",maxInt:2,exercises:[
+  upperB:{id:"upperB",name:"Upper 2",focus:"Incline / Vertical & Lat Width",day:"Tuesday",time:"80-90 min",maxInt:2,exercises:[
     {id:"ub2",name:"RO-T8 Incline Press",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Upper chest primary today","Deep stretch","Elbows 30-45"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR only if shoulders perfect"},orm:true},
     {id:"ub1",name:"Weighted Pull-Up",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"Belt/bodyweight",cues:["Full stretch","3-sec eccentric","Primary lat"],avoidFail:true,avoidReason:"Elbow/biceps tendon fatigue",int:null,orm:true},
     {id:"ub3",name:"Seated Cable Press",sets:3,tempo:"3-1-1",rMin:8,rMax:12,rirMin:0,rirMax:1,rest:150,handle:"RO-T8",cues:["Second chest angle","No rest-pause","Controlled stretch"],avoidFail:false,int:null,orm:false},
@@ -702,7 +711,7 @@ const SESSIONS = {
     {id:"ub5",name:"Rear Delt Cable Flye",sets:3,tempo:"2-0-1",rMin:15,rMax:20,rirMin:0,rirMax:1,rest:90,handle:"Small KAZ",cues:["Sweep out","No traps"],avoidFail:false,int:null,orm:false},
     {id:"ub7",name:"Incline DB Curl",sets:3,tempo:"3-1-1",rMin:10,rMax:12,rirMin:1,rirMax:2,rest:90,handle:"DB",cues:["Lengthened biceps","3-sec eccentric"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR"},orm:false}
   ]},
-  lowerB:{id:"lowerB",name:"Upper 3",focus:"Delt-Led, Lengthened Chest & Arms",day:"Saturday",time:"75-85 min",maxInt:2,exercises:[
+  lowerB:{id:"lowerB",name:"Upper 3",focus:"Delt-Led, Lengthened Chest & Arms",day:"Thursday",time:"75-85 min",maxInt:2,exercises:[
     {id:"lb2",name:"Cable Lateral Raise",sets:5,tempo:"2-1-2",rMin:12,rMax:20,rirMin:0,rirMax:2,rest:90,handle:"Small KAZ",cues:["Side delt priority - done fresh","Slight lean","Lead with elbow"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 lengthened partials final set"},orm:false},
     {id:"lb5",name:"Seated Cable Flye",sets:3,tempo:"2-1-2",rMin:12,rMax:15,rirMin:0,rirMax:1,rest:90,handle:"Small KAZ",cues:["Deep stretch","Hands to chin line","Lengthened chest"],avoidFail:false,int:{label:"PARTIALS / FAILURE",desc:"Lengthened partials or controlled failure final set"},orm:false},
     {id:"lb3",name:"Lat Cross Extension",sets:4,tempo:"2-1-2",rMin:15,rMax:20,rirMin:0,rirMax:1,rest:90,handle:"Small KAZ",cues:["Low-fatigue lat isolation","Full lengthening"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 short partials"},orm:false},
@@ -2445,6 +2454,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {(readiness.cls !== 'green' || pushOverride) && (pushOverride
               ? <button className="rd-push on" onClick={()=>setPushOverride(false)}>Pushing anyway - tap to respect readiness</button>
               : <button className="rd-push" onClick={()=>setPushOverride(true)}>Push anyway - train at full prescription</button>)}
+          </div>
+          <div className="sec-lbl" style={{padding:'0 15px 6px'}}>This week</div>
+          <div className="wk-strip">
+            {[['Mon','rest'],['Tue','Upper 2'],['Wed','Z2'],['Thu','Upper 3'],['Fri','Z2'],['Sat','Upper 1'],['Sun','Lower']].map(([d,label]) => (
+              <div key={d} className={`wk-day${label==='rest'?' wk-rest':label==='Z2'?' wk-cardio':' wk-train'}`}>
+                <div className="wk-dn">{d}</div>
+                <div className="wk-lbl">{label==='Z2'?'Zone 2':label==='rest'?'Rest':label}</div>
+              </div>
+            ))}
           </div>
           <div className="sec-lbl" style={{padding:'0 15px 6px'}}>Sessions</div>
           <div className="sg">
