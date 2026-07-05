@@ -2588,7 +2588,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   {prevHist.map((h,i) => (
                     <div key={i} className="prev-item">
                       <span className="prev-dt">{fmtShort(h.date)}</span>
-                      <span>{h.sets.map(s=>`${s.weight}&#215;${s.reps}`).join('  ')}</span>
+                      <span>{h.sets.map(s=>`${s.weight}\u00d7${s.reps}`).join('  ')}</span>
                       {h.swapped && <span className="prev-prog" style={{color:'var(--t3)'}}>via {h.swapped}</span>}
                       {i===0 && progRec?.type==='inc' && <span className="prev-prog">add weight</span>}
                     </div>
