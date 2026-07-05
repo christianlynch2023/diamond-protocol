@@ -225,6 +225,9 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .h-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);margin-bottom:3px}
 .h-nm{font-size:15px;font-weight:700;margin-bottom:2px}
 .h-det{font-size:11px;color:var(--t2)}
+.h-vol{font-size:11px;color:var(--t3);margin-top:2px;font-variant-numeric:tabular-nums}
+.h-vol.vl-up{color:#00e87a}
+.h-vol.vl-dn{color:#f0a020}
 .h-exp{margin-top:10px;padding-top:10px;border-top:1px solid var(--bdr)}
 .h-ex{margin-bottom:7px}
 .h-ex-nm{font-size:12px;font-weight:700;margin-bottom:3px}
@@ -752,6 +755,13 @@ const fmt = s => { const m=Math.floor(s/60), sc=s%60; return m>0 ? `${m}:${Strin
 const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' ' + new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
+
+// Volume-load (tonnage) for a set array: sum of weight x reps, in kg.
+// A supporting metric only — e1RM and hitting rep targets at RIR are the primary
+// hypertrophy signals. Tonnage can rise on lighter/higher-rep work, so read it as
+// "total work done", not "did I get stronger".
+const volLoad = (sets) => (sets || []).reduce((a, s) => a + ((+s.weight || 0) * (+s.reps || 0)), 0);
+const sessionVol = (log) => (log && log.exercises ? log.exercises.reduce((a, e) => a + volLoad(e.sets), 0) : 0);
 
 // Strict numeric parser for user input at write boundaries.
 // Returns a finite number, or null if the input is empty/blank/non-numeric/non-finite.
@@ -2585,14 +2595,21 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               {prevHist.length > 0 && (
                 <div className="prev-sec">
                   <div className="prev-lbl">Previous sessions</div>
-                  {prevHist.map((h,i) => (
+                  {prevHist.map((h,i) => {
+                    const vl = volLoad(h.sets);
+                    const older = prevHist[i+1];
+                    const olderVl = older ? volLoad(older.sets) : null;
+                    const pct = (olderVl && olderVl > 0) ? Math.round(((vl - olderVl) / olderVl) * 100) : null;
+                    return (
                     <div key={i} className="prev-item">
                       <span className="prev-dt">{fmtShort(h.date)}</span>
                       <span>{h.sets.map(s=>`${s.weight}\u00d7${s.reps}`).join('  ')}</span>
+                      <span className="prev-prog" style={{color:'var(--t3)'}}>{vl.toLocaleString()}kg{pct!==null?` (${pct>=0?'+':''}${pct}%)`:''}</span>
                       {h.swapped && <span className="prev-prog" style={{color:'var(--t3)'}}>via {h.swapped}</span>}
                       {i===0 && progRec?.type==='inc' && <span className="prev-prog">add weight</span>}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               <div className="inp-sec">
@@ -2884,6 +2901,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <div className="h-date">{fmtDate(log.date)} — Block {log.block||1} · Week {log.week}</div>
                     <div className="h-nm">{log.sessionName}</div>
                     <div className="h-det">{log.exercises.length} exercises · {log.duration||'?'} min · {log.exercises.reduce((a,e)=>a+e.sets.length,0)} sets</div>
+                    {(() => {
+                      const vl = sessionVol(log);
+                      // compare to the previous session of the SAME type (e.g. last Upper 1), not just the prior day
+                      const priorSame = logs.slice(i+1).find(l => l.sessionId === log.sessionId);
+                      const priorVl = priorSame ? sessionVol(priorSame) : null;
+                      const pct = (priorVl && priorVl > 0) ? Math.round(((vl - priorVl) / priorVl) * 100) : null;
+                      const cls = pct === null ? '' : pct >= 3 ? 'vl-up' : pct <= -8 ? 'vl-dn' : '';
+                      return <div className={`h-vol ${cls}`}>Volume: {vl.toLocaleString()}kg{pct!==null?` (${pct>=0?'+':''}${pct}% vs last ${log.sessionName})`:''}</div>;
+                    })()}
                     {(() => { const w = matchWorkout(log, whoopWorkouts); return w ? <div className="h-whoop">&#9889; {w.strain} strain{w.avgHr?` \u00b7 ${w.avgHr} avg HR`:''}{w.maxHr?` \u00b7 ${w.maxHr} max`:''}{w.kcal?` \u00b7 ${w.kcal} cal`:''}</div> : null; })()}
                     {expandLog===i && editingLog!==i && (
                       <div className="h-exp">
