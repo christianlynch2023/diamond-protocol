@@ -839,8 +839,11 @@ function getProgRec(exId, rMax, logs, phase) {
 function getPrevHist(exId, logs, limit=3) {
   const res = [];
   for (const s of logs) {
-    const ex = s.exercises?.find(e => e.id === exId);
-    if (ex?.sets?.length) { res.push({date:s.date, sets:ex.sets, week:s.week}); if(res.length>=limit) break; }
+    // Match either the exercise actually logged under this ID, or one that was
+    // swapped FROM this ID (origId) — so a substitution doesn't create a blind
+    // spot in "previous sessions" for the originally-planned exercise.
+    const ex = s.exercises?.find(e => e.id === exId || e.origId === exId);
+    if (ex?.sets?.length) { res.push({date:s.date, sets:ex.sets, week:s.week, swapped: ex.id!==exId ? ex.name : null}); if(res.length>=limit) break; }
   }
   return res;
 }
@@ -861,13 +864,16 @@ function getTarget(ex, logs, week, phase) {
   if (DLW.has(week)) {
     return { weight: Math.round((topWeight * 0.85) / 2.5) * 2.5, reps: Math.round((ex.rMin + ex.rMax) / 2), note: 'Deload — keep several reps in reserve' };
   }
-  if (phase === 'cut') {
+  if (phase === 'cut' && rec.type !== 'inc') {
     return { weight: topWeight, reps: ex.rMax, note: 'Cut — hold load, retain muscle' };
   }
   if (rec.type === 'inc') {
     return { weight: topWeight + incr, reps: ex.rMin, note: 'Up ' + incr + 'kg — you hit top reps last time' };
   }
-  return { weight: topWeight, reps: ex.rMax, note: 'Same weight — beat last session\'s reps' };
+  if (rec.type === 'beat') {
+    return { weight: topWeight, reps: ex.rMax, note: 'Same weight — some sets hit target, beat the weaker ones' };
+  }
+  return { weight: topWeight, reps: ex.rMax, note: 'Same weight — no sets hit target reps yet, keep building' };
 }
 
 let _audioCtx = null;
@@ -1531,7 +1537,7 @@ function App() {
     const sess=SESSIONS[sel];
     const dur=Math.round((Date.now()-(startRef.current||Date.now()))/60000);
     const log={date:new Date().toISOString(),sessionId:sel,sessionName:sess.name,week,block,duration:dur,
-      exercises:sess.exercises.map(ex=>{const e=subMap[ex.id]?{...ex,...subMap[ex.id]}:ex; return {id:e.id,name:e.name,sets:(newData||setData)[e.id]||[],pain:painRef.current[e.id]||0};}).filter(ex=>ex.sets.length>0)};
+      exercises:sess.exercises.map(ex=>{const e=subMap[ex.id]?{...ex,...subMap[ex.id]}:ex; return {id:e.id,name:e.name,...(subMap[ex.id]?{origId:ex.id}:{}),sets:(newData||setData)[e.id]||[],pain:painRef.current[e.id]||0};}).filter(ex=>ex.sets.length>0)};
     setLogs(prev => [log,...prev].slice(0,200));
     clearWip(); setReview(null); setView('complete');
   };
@@ -1615,7 +1621,7 @@ function App() {
       reader.onload = ev => {
         try {
           const data=JSON.parse(ev.target.result);
-          if (Array.isArray(data.logs)) { setLogs(data.logs); }
+          if (Array.isArray(data.logs)) { setLogs([...data.logs].sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,200)); }
           if (Array.isArray(data.bodyMetrics)) setBodyMetrics(data.bodyMetrics);
           if (Array.isArray(data.measurements)) setMeasurements(data.measurements);
           if (Array.isArray(data.checkins)) setCheckins(data.checkins);
@@ -2583,6 +2589,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <div key={i} className="prev-item">
                       <span className="prev-dt">{fmtShort(h.date)}</span>
                       <span>{h.sets.map(s=>`${s.weight}&#215;${s.reps}`).join('  ')}</span>
+                      {h.swapped && <span className="prev-prog" style={{color:'var(--t3)'}}>via {h.swapped}</span>}
                       {i===0 && progRec?.type==='inc' && <span className="prev-prog">add weight</span>}
                     </div>
                   ))}
