@@ -1206,14 +1206,20 @@ function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHist
   if (sharpPain && ORDER.indexOf(mode) > ORDER.indexOf('amber')) mode = 'amber';
   if (peakWk && mode === 'green_standard' && pos >= 1 && major === 0 && !sharpPain) mode = 'green_push';
 
-  // BP hard-gate: a raised morning reading caps readiness regardless of recovery (mirrors autoreg gate).
-  // Stage 2 / Crisis (>=140/90) -> minimum dose, no intensifiers. Stage 1 / Elevated (>=120) -> no grinders.
+  // BP hard-gate: a raised MORNING reading caps readiness regardless of recovery (mirrors autoreg gate).
+  // Only valid on a same-day reading — BP varies daily, so a stale reading must not gate today's call.
+  // Stage 2 / Crisis (>=140/90) -> minimum dose. Stage 1 / Elevated (>=120) -> no grinders.
   if (latestBP) {
     const bpc = bpCategory(latestBP.sys, latestBP.dia);
-    if (bpc.cls === 'red' && ORDER.indexOf(mode) > ORDER.indexOf('red_min')) {
+    const bpAgeDays = (Date.now() - new Date(latestBP.date).getTime()) / 86400000;
+    const bpFresh = bpAgeDays <= 1.0;   // reading from today (or last ~24h) only
+    if (bpFresh && bpc.cls === 'red' && ORDER.indexOf(mode) > ORDER.indexOf('red_min')) {
       mode = 'red_min'; factors.push('blood pressure ' + latestBP.sys + '/' + latestBP.dia + ' (' + bpc.label + ')');
-    } else if (bpc.cls === 'amber' && ORDER.indexOf(mode) > ORDER.indexOf('amber')) {
+    } else if (bpFresh && bpc.cls === 'amber' && ORDER.indexOf(mode) > ORDER.indexOf('amber')) {
       mode = 'amber'; factors.push('blood pressure ' + latestBP.sys + '/' + latestBP.dia + ' (' + bpc.label + ')');
+    } else if (!bpFresh && (bpc.cls === 'red' || bpc.cls === 'amber')) {
+      // stale elevated reading: inform, do not gate — prompt a fresh measurement
+      factors.push('last BP ' + latestBP.sys + '/' + latestBP.dia + ' (' + bpc.label + ') was ' + Math.round(bpAgeDays) + 'd ago \u2014 measure again today');
     }
   }
 
@@ -2083,7 +2089,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     return v;
   }, [volParts]);
   const CHEAP_MUS = new Set(['sideDelt','rearDelt','biceps','triceps','calves','abs']);
-  const bpGate = (() => { const b=bpLog && bpLog[0]; return b ? bpCategory(b.sys, b.dia).cls === 'red' : false; })();
+  const bpGate = (() => { const b=bpLog && bpLog[0]; if(!b) return false; const fresh=(Date.now()-new Date(b.date).getTime())/86400000 <= 1.0; return fresh && bpCategory(b.sys, b.dia).cls === 'red'; })();
   const autoReg = useMemo(() => {
     const muscleEx = {};
     for (const id in EX_MUSCLE) { const p = EX_MUSCLE[id].p; (muscleEx[p] = muscleEx[p] || []).push(id); }
