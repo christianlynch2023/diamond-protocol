@@ -234,6 +234,7 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .h-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);margin-bottom:3px}
 .h-nm{font-size:15px;font-weight:700;margin-bottom:2px}
 .h-det{font-size:11px;color:var(--t2)}
+.hl-avg{font-size:11px;color:var(--t2);margin:-4px 0 10px;font-variant-numeric:tabular-nums}
 .dash-cards{display:flex;gap:8px;margin-bottom:10px}
 .dash-card{flex:1;background:var(--sur);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px}
 .dc-lbl{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);font-family:'JetBrains Mono',monospace}
@@ -1482,6 +1483,10 @@ function App() {
   const [expandedSite, setExpandedSite] = useState(null);
   const [showAllMeas, setShowAllMeas] = useState(false);
   const [showWtLog, setShowWtLog] = useState(false);
+  const [showBpLog, setShowBpLog] = useState(false);
+  const [showGlLog, setShowGlLog] = useState(false);
+  const [showCalLog, setShowCalLog] = useState(false);
+  const [expandedWeek, setExpandedWeek] = useState(null);
   const [nutrition, setNutrition] = usePersistentState('nutrition_log', []);
   const [nP, setNP] = useState('');
   const [nC, setNC] = useState('');
@@ -2298,6 +2303,27 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const bpSeries=useMemo(()=>bpLog.slice(0,21).reverse().map(b=>({x:fmtShort(b.date),y:b.sys})),[bpLog]);
   const latestGl=glucoseLog[0]||null;
   const glSeries=useMemo(()=>glucoseLog.slice(0,21).reverse().map(g=>({x:fmtShort(g.date),y:g.value})),[glucoseLog]);
+  // --- Health-log headline stats (latest, 7-reading avg, in-range %) ---
+  const bpStats = useMemo(() => {
+    const l7 = bpLog.slice(0,7); if (!l7.length) return null;
+    const avgSys = Math.round(l7.reduce((a,b)=>a+b.sys,0)/l7.length);
+    const avgDia = Math.round(l7.reduce((a,b)=>a+b.dia,0)/l7.length);
+    const inRange = Math.round(100*l7.filter(b=>bpCategory(b.sys,b.dia).cls==='green').length/l7.length);
+    return { avgSys, avgDia, inRange, n:l7.length };
+  }, [bpLog]);
+  const glStats = useMemo(() => {
+    const l7 = glucoseLog.slice(0,7); if (!l7.length) return null;
+    const avg = +(l7.reduce((a,g)=>a+g.value,0)/l7.length).toFixed(1);
+    const inRange = Math.round(100*l7.filter(g=>glucoseCategory(g.value).cls==='green').length/l7.length);
+    return { avg, inRange, n:l7.length };
+  }, [glucoseLog]);
+  const calStats = useMemo(() => {
+    const l7 = nutrition.slice(0,7); if (!l7.length) return null;
+    const avgCal = Math.round(l7.reduce((a,n)=>a+(n.calories||0),0)/l7.length);
+    const avgP = Math.round(l7.reduce((a,n)=>a+(n.protein||0),0)/l7.length);
+    const calTgt = 2250, pTgt = 210; // plan training-day target
+    return { avgCal, avgP, calTgt, pTgt, calDelta: avgCal-calTgt, pDelta: avgP-pTgt, n:l7.length };
+  }, [nutrition]);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
@@ -3364,25 +3390,39 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{addCheckin(e.target.files[0]); e.target.value='';}}/>
             </label>
 
-            {checkins.length>0&&(
-              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginTop:10}}>
-                {checkins.map(c=>{
-                  const selA=ciCompareA===c.id, selB=ciCompareB===c.id;
-                  return (
-                    <div key={c.id} style={{position:'relative',borderRadius:8,overflow:'hidden',border:selA?'2px solid var(--acc)':selB?'2px solid var(--inf)':'1px solid var(--bdr)'}}>
-                      <img src={c.img} alt={c.pose} style={{width:'100%',aspectRatio:'3/4',objectFit:'cover',display:'block'}}
-                        onClick={()=>{ if(selA){setCiCompareA(null);} else if(selB){setCiCompareB(null);} else if(!ciCompareA){setCiCompareA(c.id);} else if(!ciCompareB){setCiCompareB(c.id);} else {setCiCompareA(c.id);setCiCompareB(null);} }}/>
-                      <div style={{position:'absolute',top:0,left:0,right:0,padding:'3px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff',display:'flex',justifyContent:'space-between'}}>
-                        <span>W{c.week} · {c.pose}</span>
-                        {selA&&<span style={{color:'var(--acc)'}}>A</span>}{selB&&<span style={{color:'var(--inf)'}}>B</span>}
+            {checkins.length>0&&(() => {
+              // group the SELECTED pose by week, newest week first
+              const posed = checkins.filter(c => c.pose === ciPose);
+              const byWeek = {};
+              posed.forEach(c => { (byWeek[c.week] = byWeek[c.week] || []).push(c); });
+              const weeks = Object.keys(byWeek).map(Number).sort((a,b)=>b-a);
+              if (!posed.length) return <div className="empty-msg">No {ciPose} photos yet.<br/>Add one above.</div>;
+              return (
+                <div style={{marginTop:10}}>
+                  {weeks.map(wk => (
+                    <div key={wk} style={{marginBottom:10}}>
+                      <div className="dc-lbl" style={{marginBottom:5}}>Week {wk}</div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
+                        {byWeek[wk].map(c=>{
+                          const selA=ciCompareA===c.id, selB=ciCompareB===c.id;
+                          return (
+                            <div key={c.id} style={{position:'relative',borderRadius:8,overflow:'hidden',border:selA?'2px solid var(--acc)':selB?'2px solid var(--inf)':'1px solid var(--bdr)'}}>
+                              <img src={c.img} alt={c.pose} style={{width:'100%',aspectRatio:'3/4',objectFit:'cover',display:'block'}}
+                                onClick={()=>{ if(selA){setCiCompareA(null);} else if(selB){setCiCompareB(null);} else if(!ciCompareA){setCiCompareA(c.id);} else if(!ciCompareB){setCiCompareB(c.id);} else {setCiCompareA(c.id);setCiCompareB(null);} }}/>
+                              <div style={{position:'absolute',top:0,left:0,right:0,padding:'3px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff',display:'flex',justifyContent:'flex-end'}}>
+                                {selA&&<span style={{color:'var(--acc)',fontWeight:700}}>A</span>}{selB&&<span style={{color:'var(--inf)',fontWeight:700}}>B</span>}
+                              </div>
+                              <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'2px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff'}}>{fmtShort(c.date)}{c.weight?` · ${c.weight}kg`:''}</div>
+                              <button onClick={()=>delCheckin(c.id)} style={{position:'absolute',top:2,right:2,width:16,height:16,borderRadius:8,border:'none',background:'rgba(0,0,0,.6)',color:'#fff',fontSize:11,lineHeight:'14px',padding:0}}>&#215;</button>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'2px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff'}}>{fmtShort(c.date)}{c.weight?` · ${c.weight}kg`:''}</div>
-                      <button onClick={()=>delCheckin(c.id)} style={{position:'absolute',top:2,right:2,width:16,height:16,borderRadius:8,border:'none',background:'rgba(0,0,0,.6)',color:'#fff',fontSize:11,lineHeight:'14px',padding:0}}>&#215;</button>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  ))}
+                </div>
+              );
+            })()}
             {checkins.length===0&&<div className="empty-msg">No check-ins yet.<br/>Add your week-1 baseline in each pose.</div>}
 
             {checkins.length>=2&&(
@@ -3432,10 +3472,22 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div className="eb-item"><div className="eb-v" style={{color: calNet>=0?'var(--acc)':'var(--warn)'}}>{calNet>=0?'+':''}{calNet}</div><div className="eb-l">net</div></div>
               </div>
             )}
-            {nutrition.length > 0 && (
-              <div className="meas-grid">
-                <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">7-day protein</div><div className="meas-val">{avg7('protein') ?? '\u2014'}<span className="meas-unit">g/day</span></div></div>
-                <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">7-day calories</div><div className="meas-val">{avg7('calories') ?? '\u2014'}<span className="meas-unit">kcal</span></div></div>
+            {calStats && (
+              <div className="dash-cards">
+                <div className="dash-card">
+                  <div className="dc-lbl">7-day calories</div>
+                  <div className="dc-val">{calStats.avgCal}<span className="dc-u">kcal</span></div>
+                  <div className="dc-sub" style={{color: Math.abs(calStats.calDelta)<=100?'var(--t2)':calStats.calDelta<0?'var(--warn)':'var(--inf)'}}>
+                    {calStats.calDelta>=0?'+':''}{calStats.calDelta} vs {calStats.calTgt} target
+                  </div>
+                </div>
+                <div className="dash-card">
+                  <div className="dc-lbl">7-day protein</div>
+                  <div className="dc-val">{calStats.avgP}<span className="dc-u">g</span></div>
+                  <div className="dc-sub" style={{color: calStats.pDelta>=-10?'var(--ok)':'var(--warn)'}}>
+                    {calStats.pDelta>=0?'+':''}{calStats.pDelta} vs {calStats.pTgt}g target
+                  </div>
+                </div>
               </div>
             )}
             {protSeries.length > 1 && (
@@ -3459,7 +3511,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <button className="bf-save" onClick={addNutrition}>Save</button>
               </div>
             )}
-            <div className="body-list">
+            <button className="add-toggle" onClick={()=>setShowCalLog(v=>!v)} style={{marginTop:8}}>
+              <span>Full log ({nutrition.length})</span><span className="plus">{showCalLog?'−':'+'}</span>
+            </button>
+            {showCalLog && <div className="body-list">
               {nutrition.slice(0, 21).map((n, i) => (
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(n.date)}</span>
@@ -3470,7 +3525,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 </div>
               ))}
               {nutrition.length === 0 && <div className="empty-msg">No macros logged yet.<br/>Log today's totals above.</div>}
-            </div>
+            </div>}
           </div>
 
           <div className="body-sec">
@@ -3519,6 +3574,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <span className={`bp-chip ${c.cls}`}>{c.label}</span>
               </div>
             ); })()}
+            {bpStats && <div className="hl-avg">7-reading avg {bpStats.avgSys}/{bpStats.avgDia} &#183; {bpStats.inRange}% in range</div>}
             {bpSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Systolic &#8212; last {Math.min(bpLog.length,21)} readings</div>
@@ -3539,7 +3595,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <button className="bf-save" onClick={addBP}>Save</button>
               </div>
             )}
-            <div className="body-list">
+            <button className="add-toggle" onClick={()=>setShowBpLog(v=>!v)} style={{marginTop:8}}>
+              <span>Full log ({bpLog.length})</span><span className="plus">{showBpLog?'−':'+'}</span>
+            </button>
+            {showBpLog && <div className="body-list">
               {bpLog.slice(0, 21).map((b, i) => { const c = bpCategory(b.sys, b.dia); return (
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(b.date)}</span>
@@ -3550,7 +3609,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 </div>
               ); })}
               {bpLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your blood pressure above.</div>}
-            </div>
+            </div>}
           </div>
 
           <div className="body-sec">
@@ -3562,6 +3621,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <span className={`bp-chip ${c.cls}`}>{c.label}</span>
               </div>
             ); })()}
+            {glStats && <div className="hl-avg">7-reading avg {glStats.avg} mmol/L &#183; {glStats.inRange}% in range</div>}
             {glSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Fasting glucose &#8212; last {Math.min(glucoseLog.length,21)} readings (mmol/L)</div>
@@ -3580,7 +3640,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <button className="bf-save" onClick={addGlucose}>Save</button>
               </div>
             )}
-            <div className="body-list">
+            <button className="add-toggle" onClick={()=>setShowGlLog(v=>!v)} style={{marginTop:8}}>
+              <span>Full log ({glucoseLog.length})</span><span className="plus">{showGlLog?'−':'+'}</span>
+            </button>
+            {showGlLog && <div className="body-list">
               {glucoseLog.slice(0, 21).map((g, i) => { const c = glucoseCategory(g.value); return (
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(g.date)}</span>
@@ -3591,7 +3654,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 </div>
               ); })}
               {glucoseLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your fasting glucose above.</div>}
-            </div>
+            </div>}
           </div>
 
           <div className="body-sec">
