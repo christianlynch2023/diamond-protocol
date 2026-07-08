@@ -234,6 +234,25 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .h-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);margin-bottom:3px}
 .h-nm{font-size:15px;font-weight:700;margin-bottom:2px}
 .h-det{font-size:11px;color:var(--t2)}
+.dash-cards{display:flex;gap:8px;margin-bottom:10px}
+.dash-card{flex:1;background:var(--sur);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px}
+.dc-lbl{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);font-family:'JetBrains Mono',monospace}
+.dc-val{font-size:22px;font-weight:800;color:var(--t);margin-top:2px;line-height:1}
+.dc-u{font-size:12px;font-weight:600;color:var(--t3);margin-left:2px}
+.dc-sub{font-size:10.5px;color:var(--t2);margin-top:3px}
+.site-trends{display:flex;flex-direction:column;margin-bottom:8px}
+.site-row{border-bottom:1px solid var(--bdr)}
+.site-main{display:flex;align-items:center;gap:8px;padding:9px 2px;cursor:pointer}
+.site-nm{flex:1;font-size:12.5px;font-weight:600;color:var(--t2)}
+.site-key .site-nm{color:var(--t)}
+.site-spark{width:54px;flex-shrink:0}
+.site-latest{font-size:14px;font-weight:700;color:var(--t);font-variant-numeric:tabular-nums;min-width:52px;text-align:right}
+.site-u{font-size:9px;color:var(--t3);margin-left:1px}
+.site-chg{font-size:11px;font-weight:700;min-width:38px;text-align:right;font-variant-numeric:tabular-nums}
+.site-hist{padding:2px 0 8px 8px}
+.sh-row{display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:11.5px}
+.sh-date{color:var(--t3);font-family:'JetBrains Mono',monospace;font-size:10px;min-width:44px}
+.sh-val{flex:1;color:var(--t2);font-weight:600}
 .h-vol{font-size:11px;color:var(--t3);margin-top:2px;font-variant-numeric:tabular-nums}
 .h-vol.vl-up{color:#00e87a}
 .h-vol.vl-dn{color:#f0a020}
@@ -972,6 +991,13 @@ function RecoveryFuelStrip({ rows, height=150 }) {
   );
 }
 
+function Sparkline({ vals, color='#4a9eff', w=54, h=18 }) {
+  const nums = (vals||[]).filter(v=>typeof v==='number'&&isFinite(v));
+  if (nums.length < 2) return <svg width={w} height={h}/>;
+  const min=Math.min(...nums), max=Math.max(...nums), rng=(max-min)||1;
+  const pts=nums.map((v,i)=>`${(i/(nums.length-1))*w},${h-((v-min)/rng)*h}`).join(' ');
+  return <svg width={w} height={h} style={{display:'block'}}><polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/></svg>;
+}
 function SVGChart({ data, color='#c4ff00', height=130 }) {
   // Defense-in-depth: drop any points with non-finite y (NaN/Infinity) before plotting.
   // Protects against legacy localStorage data corrupted before input validation existed,
@@ -1453,6 +1479,9 @@ function App() {
   const [mVal, setMVal] = useState('');
   const [showAddMeas, setShowAddMeas] = useState(false);
   const [mViewSite, setMViewSite] = useState('Waist');
+  const [expandedSite, setExpandedSite] = useState(null);
+  const [showAllMeas, setShowAllMeas] = useState(false);
+  const [showWtLog, setShowWtLog] = useState(false);
   const [nutrition, setNutrition] = usePersistentState('nutrition_log', []);
   const [nP, setNP] = useState('');
   const [nC, setNC] = useState('');
@@ -2220,6 +2249,31 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const volSeries=weeklyVolumeSeries(logs,volMuscle,block);
   const plateaus=detectPlateaus(logs);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
+  // --- Body dashboard derived data ---
+  const bodyDash = useMemo(() => {
+    // 7-day weight average (bodyMetrics sorted desc)
+    const now = Date.now();
+    const last7 = bodyMetrics.filter(m => (now - new Date(m.date).getTime())/86400000 <= 7 && m.weight!=null);
+    const avg7 = last7.length ? last7.reduce((a,m)=>a+m.weight,0)/last7.length : (bodyMetrics[0]?.weight ?? null);
+    const curW = bodyMetrics[0]?.weight ?? null;
+    // lean mass: prefer logged muscle, else weight*(1-bf/100)
+    const leanOf = (m) => m.muscle!=null ? m.muscle : (m.bodyFat!=null && m.weight!=null ? +(m.weight*(1-m.bodyFat/100)).toFixed(1) : null);
+    const leanSeries = bodyMetrics.filter(m=>leanOf(m)!=null).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:leanOf(m)}));
+    const curLean = bodyMetrics.length ? leanOf(bodyMetrics[0]) : null;
+    const leanChange = leanSeries.length>=2 ? +(leanSeries[leanSeries.length-1].y - leanSeries[0].y).toFixed(1) : null;
+    const wtSpark = bodyMetrics.slice(0,14).reverse().map(m=>m.weight);
+    // per-site: latest value, change vs oldest-in-window, sparkline
+    const perSite = {};
+    Object.keys(latestBySite).forEach(site => {
+      const rows = measurements.filter(m=>m.site===site).slice(0,12); // newest-first
+      const latest = rows[0]?.value ?? null;
+      const oldest = rows[rows.length-1]?.value ?? null;
+      const change = (latest!=null && oldest!=null && rows.length>=2) ? +(latest-oldest).toFixed(1) : null;
+      perSite[site] = { latest, change, spark: rows.slice().reverse().map(r=>r.value), n: rows.length };
+    });
+    return { avg7, curW, curLean, leanChange, leanSeries, wtSpark, perSite };
+  }, [bodyMetrics, measurements]);
+  const KEY_SITES = ['Waist','Chest','Left Thigh','Right Thigh'];
   const measSeries=useMemo(()=>measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value})),[measurements,mViewSite]);
   const protSeries=useMemo(()=>nutrition.slice(0,21).reverse().map(n=>({x:fmtShort(n.date),y:n.protein})),[nutrition]);
   const recFuelRows = useMemo(() => {
@@ -3153,6 +3207,26 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="body-sec">
             <div className="body-ttl">Body Weight</div>
             <div className="body-sub">Weekly weigh-in — track alongside your training block</div>
+            {(bodyDash.curW!=null) && (
+              <div className="dash-cards">
+                <div className="dash-card">
+                  <div className="dc-lbl">Weight</div>
+                  <div className="dc-val">{bodyDash.curW}<span className="dc-u">kg</span></div>
+                  <div className="dc-sub">{bodyDash.avg7!=null?`7-day avg ${bodyDash.avg7.toFixed(1)}kg`:''}</div>
+                  {bodyDash.wtSpark.length>1 && <div style={{marginTop:4}}><Sparkline vals={bodyDash.wtSpark} color="#c4ff00" w={90}/></div>}
+                </div>
+                {bodyDash.curLean!=null && (
+                  <div className="dash-card">
+                    <div className="dc-lbl">Lean mass</div>
+                    <div className="dc-val">{bodyDash.curLean}<span className="dc-u">kg</span></div>
+                    <div className="dc-sub" style={{color: bodyDash.leanChange>0?'var(--ok)':bodyDash.leanChange<0?'var(--warn)':'var(--t2)'}}>
+                      {bodyDash.leanChange!=null?`${bodyDash.leanChange>0?'+':''}${bodyDash.leanChange}kg over ${bodyDash.leanSeries.length} logs`:'\u2014'}
+                    </div>
+                    {bodyDash.leanSeries.length>1 && <div style={{marginTop:4}}><Sparkline vals={bodyDash.leanSeries.map(p=>p.y)} color="#00e87a" w={90}/></div>}
+                  </div>
+                )}
+              </div>
+            )}
             {bwRate && (
               <div className="bw-rate">
                 <span className="bw-rate-v" style={{color: bwRate.perWeek<0?'var(--ok)':bwRate.perWeek>0?'var(--inf)':'var(--t2)'}}>{bwRate.perWeek>0?'+':''}{bwRate.perWeek.toFixed(2)} kg/wk</span>
@@ -3163,12 +3237,6 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {bodyMetrics.length>1&&(
               <div style={{marginBottom:10}}>
                 <SVGChart data={bodyMetrics.slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.weight}))} height={120}/>
-              </div>
-            )}
-            {bodyMetrics.filter(m=>m.bodyFat!=null).length>1&&(
-              <div style={{marginBottom:10}}>
-                <div className="chart-lbl">Body fat %</div>
-                <SVGChart data={bodyMetrics.filter(m=>m.bodyFat!=null).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.bodyFat}))} height={110} color="#ff9f43"/>
               </div>
             )}
             <button className="add-toggle" onClick={()=>setShowAddBody(v=>!v)}>
@@ -3200,7 +3268,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <button className="bf-save" onClick={addBodyMetric}>Save</button>
               </div>
             )}
-            <div className="body-list">
+            <button className="add-toggle" onClick={()=>setShowWtLog(v=>!v)} style={{marginTop:8}}>
+              <span>Full weight log ({bodyMetrics.length})</span><span className="plus">{showWtLog?'−':'+'}</span>
+            </button>
+            {showWtLog && <div className="body-list">
               {bodyMetrics.slice(0,20).map((m,i)=>(
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(m.date)}</span>
@@ -3211,24 +3282,47 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 </div>
               ))}
               {bodyMetrics.length===0&&<div className="empty-msg">No entries yet — log your first weigh-in above.</div>}
-            </div>
+            </div>}
           </div>
 
           <div className="body-sec">
             <div className="body-ttl">Measurements</div>
             <div className="body-sub">Track circumference to separate muscle gain from fat and water</div>
             {Object.keys(latestBySite).length > 0 && (
-              <div className="meas-grid">
-                {[...MEAS_SITES.filter(s => latestBySite[s]), ...Object.keys(latestBySite).filter(s => !MEAS_SITES.includes(s))].map(s => (
-                  <div key={s} className="meas-cell" onClick={() => setMViewSite(s)}>
-                    <div className="meas-site">{s}</div>
-                    <div className="meas-val">{latestBySite[s].value}<span className="meas-unit">cm</span></div>
-                  </div>
-                ))}
+              <div className="site-trends">
+                {[...MEAS_SITES.filter(s=>latestBySite[s]), ...Object.keys(latestBySite).filter(s=>!MEAS_SITES.includes(s))].map(s => {
+                  const d = bodyDash.perSite[s] || {};
+                  const key = KEY_SITES.includes(s);
+                  const expanded = expandedSite===s;
+                  return (
+                    <div key={s} className={`site-row${key?' site-key':''}`}>
+                      <div className="site-main" onClick={()=>{setExpandedSite(expanded?null:s); setMViewSite(s);}}>
+                        <span className="site-nm">{s}</span>
+                        <span className="site-spark">{d.spark && d.spark.length>1 && <Sparkline vals={d.spark} color={key?'#4a9eff':'#5a6b7a'}/>}</span>
+                        <span className="site-latest">{d.latest!=null?d.latest:'—'}<span className="site-u">cm</span></span>
+                        <span className="site-chg" style={{color: d.change>0?'var(--inf)':d.change<0?'var(--ok)':'var(--t3)'}}>
+                          {d.change!=null?`${d.change>0?'▲':d.change<0?'▼':''}${Math.abs(d.change)}`:''}
+                        </span>
+                      </div>
+                      {expanded && (
+                        <div className="site-hist">
+                          {measurements.filter(m=>m.site===s).slice(0,12).map((m,i)=>(
+                            <div key={i} className="sh-row">
+                              <span className="sh-date">{fmtShort(m.date)}</span>
+                              <span className="sh-val">{m.value}cm</span>
+                              <button className="bl-edit" onClick={()=>openBodyEdit('meas',measurements.indexOf(m),m)}>&#9998;</button>
+                              <button className="bl-del" onClick={()=>setMeasurements(prev=>prev.filter(x=>x!==m))}>&#215;</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
-            {measSeries.length > 1 && (
-              <div style={{marginTop:2,marginBottom:10}}>
+            {measSeries.length > 1 && expandedSite && (
+              <div style={{marginTop:8,marginBottom:10}}>
                 <div className="chart-lbl">{mViewSite} — trend (cm)</div>
                 <SVGChart data={measSeries} height={120} color="#4a9eff"/>
               </div>
@@ -3254,18 +3348,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <button className="bf-save" onClick={addMeasurement}>Save</button>
               </div>
             )}
-            <div className="body-list">
-              {measurements.slice(0, 30).map((m, i) => (
-                <div key={i} className="bl-row">
-                  <span className="bl-date">{fmtShort(m.date)}</span>
-                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{m.site}</span>
-                  <span className="bl-val">{m.value}cm</span>
-                  <button className="bl-edit" onClick={()=>openBodyEdit('meas',i,m)}>&#9998;</button>
-                  <button className="bl-del" onClick={() => setMeasurements(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
-                </div>
-              ))}
-              {measurements.length === 0 && <div className="empty-msg">No measurements yet.<br/>Log your first site above.</div>}
-            </div>
+            {measurements.length === 0 && <div className="empty-msg">No measurements yet.<br/>Log your first site above.</div>}
           </div>
 
           <div className="body-sec">
