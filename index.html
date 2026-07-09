@@ -562,6 +562,10 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .nc-meta{font-size:11px;color:var(--t2);font-family:'JetBrains Mono',monospace}
 .nc-tgt{background:var(--sur);border:1px solid var(--bdr);border-radius:9px;padding:11px}
 .nc-tgt-hd{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:5px}
+.nc-daytoggle{display:flex;gap:6px;margin-bottom:8px}
+.nc-dtb{flex:1;padding:6px 4px;border-radius:7px;border:1px solid var(--bdr);background:var(--sur);color:var(--t3);font-size:11px;font-weight:600}
+.nc-dtb.on{border-color:var(--acc);background:rgba(196,255,0,.08);color:var(--acc)}
+.nc-tgt-avg{font-size:10.5px;color:var(--t3);margin-top:7px;line-height:1.4}
 .nc-tgt-cal{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--t)}
 .nc-tgt-cal span{font-size:12px;color:var(--t3);font-weight:400}
 .nc-macros{display:flex;gap:6px;margin-top:8px}
@@ -1487,6 +1491,7 @@ function App() {
   const [showGlLog, setShowGlLog] = useState(false);
   const [showCalLog, setShowCalLog] = useState(false);
   const [expandedWeek, setExpandedWeek] = useState(null);
+  const [nutriDayType, setNutriDayType] = useState(() => { const d=new Date().getDay(); return [2,4,6,0].includes(d)?'train':'rest'; }); // Tue/Thu/Sat/Sun train
   const [nutrition, setNutrition] = usePersistentState('nutrition_log', []);
   const [nP, setNP] = useState('');
   const [nC, setNC] = useState('');
@@ -2215,15 +2220,22 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       else if(actPct<-1.0){ const k=150; adjust={dir:'up',kcal:k,carb:Math.round(k/4),fat:0}; }
       else adjust={dir:'hold'};
     }
-    let cycle=null;
+    let cycle=null, dayTargets=null;
     if(carbG>0){
-      const wkAgo=anchor-7*dayMs;
-      const td=new Set((logs||[]).filter(l=>{const t=parse(l.date); return !isNaN(t)&&t>=wkAgo;}).map(l=>new Date(l.date).toDateString()));
-      const trainDays=Math.min(6,Math.max(2,td.size||4)), restDays=7-trainDays, weekly=carbG*7;
+      // Training days come from the ACTUAL program schedule (number of sessions defined),
+      // not from counting logged workouts in the last 7 days (which under-counts when logging is sparse).
+      const scheduledTrainDays = Object.keys(SESSIONS).length; // 4-day split: U1,U2,U3,Lower
+      const trainDays=Math.min(6,Math.max(2,scheduledTrainDays||4)), restDays=7-trainDays, weekly=carbG*7;
       const lowCarb=Math.round(carbG*0.6), highCarb=restDays>0?Math.round((weekly-lowCarb*restDays)/trainDays):carbG;
       cycle={trainDays,restDays,lowCarb:Math.max(0,lowCarb),highCarb:Math.max(0,highCarb)};
+      // per-day-type calories: protein+fat constant, carbs vary
+      const baseKcal=proteinG*4+fatG*9;
+      dayTargets={
+        train:{cals:Math.round(baseKcal+cycle.highCarb*4),carb:cycle.highCarb,protein:proteinG,fat:fatG},
+        rest:{cals:Math.round(baseKcal+cycle.lowCarb*4),carb:cycle.lowCarb,protein:proteinG,fat:fatG}
+      };
     }
-    return { ok:true, tdee, conf, avgIntake, ratePerWk, spanDays:Math.round(spanDays), targetCals, proteinG, fatG, carbG, targetRatePct, adjust, cycle, phase:goalPhase };
+    return { ok:true, tdee, conf, avgIntake, ratePerWk, spanDays:Math.round(spanDays), targetCals, proteinG, fatG, carbG, targetRatePct, adjust, cycle, dayTargets, phase:goalPhase };
   }, [logs, nutrition, bodyMetrics, goalPhase]);
   const sess=sel?SESSIONS[sel]:null;
   const baseEx=sess?sess.exercises[exIdx]:null;
@@ -2295,6 +2307,16 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const calIn=_ebN?_ebN.calories:null;
   const calOut=whoopData?.dayCal??null;
   const calNet=(calIn!=null&&calOut!=null)?calIn-calOut:null;
+  // 7-day rolling energy balance: avg intake vs avg WHOOP burn (far less noisy than a single day)
+  const eb7 = useMemo(() => {
+    const now=Date.now();
+    const ins=nutrition.filter(n=>(now-new Date(n.date).getTime())/86400000<=7 && n.calories!=null);
+    const outs=(whoopHistory||[]).filter(w=>w.dayCal!=null && (now-new Date(w.date).getTime())/86400000<=7);
+    if(!ins.length || !outs.length) return null;
+    const avgIn=Math.round(ins.reduce((a,n)=>a+n.calories,0)/ins.length);
+    const avgOut=Math.round(outs.reduce((a,w)=>a+w.dayCal,0)/outs.length);
+    return {avgIn,avgOut,net:avgIn-avgOut,nIn:ins.length,nOut:outs.length};
+  }, [nutrition, whoopHistory]);
   const cardioWeekStart=(()=>{ const d=new Date(); const day=(d.getDay()+6)%7; d.setHours(0,0,0,0); d.setDate(d.getDate()-day); return d.getTime(); })();
   const cardioThisWeek=cardioLog.filter(c=>new Date(c.date).getTime()>=cardioWeekStart);
   const cardioMins=cardioThisWeek.reduce((a,c)=>a+(c.minutes||0),0);
@@ -3452,24 +3474,48 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <div className="nc-meta">Logging ~{nutriCoach.avgIntake} kcal/day, trending {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk.toFixed(2)} kg/wk over {nutriCoach.spanDays}d</div>
                   </div>
                   <div className="nc-tgt">
-                    <div className="nc-tgt-hd">{nutriCoach.phase==='cut'?('Cut target (-'+nutriCoach.targetRatePct+'%/wk)'):nutriCoach.phase==='bulk'?'Lean-gain target':'Maintenance target'}</div>
-                    <div className="nc-tgt-cal">{nutriCoach.targetCals} <span>kcal/day</span></div>
-                    <div className="nc-macros"><span className="nc-mac p">P {nutriCoach.proteinG}g</span><span className="nc-mac c">C {nutriCoach.carbG}g</span><span className="nc-mac f">F {nutriCoach.fatG}g</span></div>
+                    {nutriCoach.dayTargets ? (() => {
+                      const dt = nutriCoach.dayTargets[nutriDayType];
+                      return (
+                        <>
+                          <div className="nc-daytoggle">
+                            <button className={`nc-dtb${nutriDayType==='train'?' on':''}`} onClick={()=>setNutriDayType('train')}>Training day</button>
+                            <button className={`nc-dtb${nutriDayType==='rest'?' on':''}`} onClick={()=>setNutriDayType('rest')}>Rest day</button>
+                          </div>
+                          <div className="nc-tgt-cal">{dt.cals} <span>kcal today</span></div>
+                          <div className="nc-macros"><span className="nc-mac p">P {dt.protein}g</span><span className="nc-mac c">C {dt.carb}g</span><span className="nc-mac f">F {dt.fat}g</span></div>
+                          <div className="nc-tgt-avg">Weekly avg {nutriCoach.targetCals} kcal &#183; C {nutriCoach.carbG}g/day ({nutriCoach.cycle.trainDays} train / {nutriCoach.cycle.restDays} rest) &#183; cut −{nutriCoach.targetRatePct}%/wk</div>
+                        </>
+                      );
+                    })() : (
+                      <>
+                        <div className="nc-tgt-hd">{nutriCoach.phase==='cut'?('Cut target (-'+nutriCoach.targetRatePct+'%/wk)'):nutriCoach.phase==='bulk'?'Lean-gain target':'Maintenance target'}</div>
+                        <div className="nc-tgt-cal">{nutriCoach.targetCals} <span>kcal/day</span></div>
+                        <div className="nc-macros"><span className="nc-mac p">P {nutriCoach.proteinG}g</span><span className="nc-mac c">C {nutriCoach.carbG}g</span><span className="nc-mac f">F {nutriCoach.fatG}g</span></div>
+                      </>
+                    )}
                   </div>
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='down' && <div className="nc-adj down">Loss has stalled versus target. Drop ~{nutriCoach.adjust.kcal} kcal/day: -{nutriCoach.adjust.carb}g carb and -{nutriCoach.adjust.fat}g fat, protein held.</div>}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='up' && <div className="nc-adj up">Dropping faster than 1%/wk. Add ~{nutriCoach.adjust.kcal} kcal/day (+{nutriCoach.adjust.carb}g carb) to protect muscle.</div>}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='hold' && <div className="nc-adj hold">On track. Loss rate is in the target range, hold these numbers.</div>}
-                  {nutriCoach.cycle && <div className="nc-cyc"><span className="nc-cyc-t">Carb cycling</span>{nutriCoach.cycle.trainDays} train / {nutriCoach.cycle.restDays} rest days. Training days <b>{nutriCoach.cycle.highCarb}g</b> carb, rest days <b>{nutriCoach.cycle.lowCarb}g</b> carb. <span className="nc-cyc-n">Protein and fat stay constant.</span></div>}
                 </div>
               )}
             </div>
-            {calNet != null && (
+            {eb7 ? (
+              <div className="energy-bal">
+                <div className="eb-item"><div className="eb-v">{eb7.avgIn}</div><div className="eb-l">avg in</div></div>
+                <div className="eb-op">&#8722;</div>
+                <div className="eb-item"><div className="eb-v">{eb7.avgOut}</div><div className="eb-l">avg out</div></div>
+                <div className="eb-op">=</div>
+                <div className="eb-item"><div className="eb-v" style={{color: eb7.net>=0?'var(--acc)':'var(--warn)'}}>{eb7.net>=0?'+':''}{eb7.net}</div><div className="eb-l">7-day net</div></div>
+              </div>
+            ) : calNet != null && (
               <div className="energy-bal">
                 <div className="eb-item"><div className="eb-v">{calIn}</div><div className="eb-l">in</div></div>
                 <div className="eb-op">&#8722;</div>
                 <div className="eb-item"><div className="eb-v">{calOut}</div><div className="eb-l">out</div></div>
                 <div className="eb-op">=</div>
-                <div className="eb-item"><div className="eb-v" style={{color: calNet>=0?'var(--acc)':'var(--warn)'}}>{calNet>=0?'+':''}{calNet}</div><div className="eb-l">net</div></div>
+                <div className="eb-item"><div className="eb-v" style={{color: calNet>=0?'var(--acc)':'var(--warn)'}}>{calNet>=0?'+':''}{calNet}</div><div className="eb-l">today net</div></div>
               </div>
             )}
             {calStats && (
@@ -3478,7 +3524,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="dc-lbl">7-day calories</div>
                   <div className="dc-val">{calStats.avgCal}<span className="dc-u">kcal</span></div>
                   <div className="dc-sub" style={{color: Math.abs(calStats.calDelta)<=100?'var(--t2)':calStats.calDelta<0?'var(--warn)':'var(--inf)'}}>
-                    {calStats.calDelta>=0?'+':''}{calStats.calDelta} vs {calStats.calTgt} target
+                    {calStats.calDelta>=0?'+':''}{calStats.calDelta} vs {calStats.calTgt} plan target
                   </div>
                 </div>
                 <div className="dash-card">
