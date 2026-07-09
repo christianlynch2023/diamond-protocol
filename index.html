@@ -555,17 +555,17 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .nc-conf.low{background:var(--sur);color:var(--t3)}
 .nc-note{font-size:12px;color:var(--t2);line-height:1.5}
 .nc-body{display:flex;flex-direction:column;gap:10px}
-.nc-main{display:flex;flex-direction:column;gap:4px}
-.nc-est{display:flex;align-items:baseline;gap:8px}
-.nc-est-v{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--acc)}
-.nc-est-l{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em}
-.nc-meta{font-size:11px;color:var(--t2);font-family:'JetBrains Mono',monospace}
 .nc-tgt{background:var(--sur);border:1px solid var(--bdr);border-radius:9px;padding:11px}
 .nc-tgt-hd{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:5px}
 .nc-daytoggle{display:flex;gap:6px;margin-bottom:8px}
 .nc-dtb{flex:1;padding:6px 4px;border-radius:7px;border:1px solid var(--bdr);background:var(--sur);color:var(--t3);font-size:11px;font-weight:600}
 .nc-dtb.on{border-color:var(--acc);background:rgba(196,255,0,.08);color:var(--acc)}
 .nc-tgt-avg{font-size:10.5px;color:var(--t3);margin-top:7px;line-height:1.4}
+.nc-hero{background:linear-gradient(180deg,rgba(196,255,0,.06),rgba(196,255,0,.02));border-color:rgba(196,255,0,.25)}
+.nc-eat{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--acc);font-weight:700;margin-bottom:2px}
+.nc-tgt-hero{font-size:34px!important;line-height:1}
+.nc-tgt-hero span{font-size:14px}
+.nc-ctx{font-size:10px;color:var(--t3);line-height:1.45;margin-top:2px;font-family:'JetBrains Mono',monospace}
 .nc-tgt-cal{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--t)}
 .nc-tgt-cal span{font-size:12px;color:var(--t3);font-weight:400}
 .nc-macros{display:flex;gap:6px;margin-top:8px}
@@ -3469,11 +3469,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               {!nutriCoach.ok && nutriCoach.partial && <div className="nc-note">Need ~1-2 weeks of consistent logging to estimate your maintenance. So far: {nutriCoach.foodDays} food day{nutriCoach.foodDays===1?'':'s'} and {nutriCoach.weighIns} weigh-in{nutriCoach.weighIns===1?'':'s'} in the last 14 days.</div>}
               {nutriCoach.ok && (
                 <div className="nc-body">
-                  <div className="nc-main">
-                    <div className="nc-est"><div className="nc-est-v">{nutriCoach.tdee}</div><div className="nc-est-l">est. maintenance kcal/day</div></div>
-                    <div className="nc-meta">Logging ~{nutriCoach.avgIntake} kcal/day, trending {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk.toFixed(2)} kg/wk over {nutriCoach.spanDays}d</div>
-                  </div>
-                  <div className="nc-tgt">
+                  <div className="nc-tgt nc-hero">
                     {nutriCoach.dayTargets ? (() => {
                       const dt = nutriCoach.dayTargets[nutriDayType];
                       return (
@@ -3482,7 +3478,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                             <button className={`nc-dtb${nutriDayType==='train'?' on':''}`} onClick={()=>setNutriDayType('train')}>Training day</button>
                             <button className={`nc-dtb${nutriDayType==='rest'?' on':''}`} onClick={()=>setNutriDayType('rest')}>Rest day</button>
                           </div>
-                          <div className="nc-tgt-cal">{dt.cals} <span>kcal today</span></div>
+                          <div className="nc-eat">Eat today</div>
+                          <div className="nc-tgt-cal nc-tgt-hero">{dt.cals} <span>kcal</span></div>
                           <div className="nc-macros"><span className="nc-mac p">P {dt.protein}g</span><span className="nc-mac c">C {dt.carb}g</span><span className="nc-mac f">F {dt.fat}g</span></div>
                           <div className="nc-tgt-avg">Weekly avg {nutriCoach.targetCals} kcal &#183; C {nutriCoach.carbG}g/day ({nutriCoach.cycle.trainDays} train / {nutriCoach.cycle.restDays} rest) &#183; cut −{nutriCoach.targetRatePct}%/wk</div>
                         </>
@@ -3490,7 +3487,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     })() : (
                       <>
                         <div className="nc-tgt-hd">{nutriCoach.phase==='cut'?('Cut target (-'+nutriCoach.targetRatePct+'%/wk)'):nutriCoach.phase==='bulk'?'Lean-gain target':'Maintenance target'}</div>
-                        <div className="nc-tgt-cal">{nutriCoach.targetCals} <span>kcal/day</span></div>
+                        <div className="nc-tgt-cal nc-tgt-hero">{nutriCoach.targetCals} <span>kcal/day</span></div>
                         <div className="nc-macros"><span className="nc-mac p">P {nutriCoach.proteinG}g</span><span className="nc-mac c">C {nutriCoach.carbG}g</span><span className="nc-mac f">F {nutriCoach.fatG}g</span></div>
                       </>
                     )}
@@ -3498,6 +3495,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='down' && <div className="nc-adj down">Loss has stalled versus target. Drop ~{nutriCoach.adjust.kcal} kcal/day: -{nutriCoach.adjust.carb}g carb and -{nutriCoach.adjust.fat}g fat, protein held.</div>}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='up' && <div className="nc-adj up">Dropping faster than 1%/wk. Add ~{nutriCoach.adjust.kcal} kcal/day (+{nutriCoach.adjust.carb}g carb) to protect muscle.</div>}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='hold' && <div className="nc-adj hold">On track. Loss rate is in the target range, hold these numbers.</div>}
+                  <div className="nc-ctx">est. maintenance ~{nutriCoach.tdee} kcal ({nutriCoach.conf} confidence) &#183; logging ~{nutriCoach.avgIntake}/day &#183; {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk.toFixed(2)} kg/wk over {nutriCoach.spanDays}d</div>
                 </div>
               )}
             </div>
