@@ -2343,9 +2343,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const l7 = nutrition.slice(0,7); if (!l7.length) return null;
     const avgCal = Math.round(l7.reduce((a,n)=>a+(n.calories||0),0)/l7.length);
     const avgP = Math.round(l7.reduce((a,n)=>a+(n.protein||0),0)/l7.length);
-    const calTgt = 2250, pTgt = 210; // plan training-day target
+    // Compare the 7-day average (which blends training + rest days) against the BLENDED weekly
+    // target from Smart targets (~1990), NOT the training-day-only 2250 — otherwise it always
+    // reads ~250 under even when eating exactly to plan. Fall back to 1990 if Smart isn't ready.
+    const calTgt = (nutriCoach && nutriCoach.ok && nutriCoach.targetCals) ? nutriCoach.targetCals : 1990;
+    const pTgt = (nutriCoach && nutriCoach.ok && nutriCoach.proteinG) ? nutriCoach.proteinG : 210;
     return { avgCal, avgP, calTgt, pTgt, calDelta: avgCal-calTgt, pDelta: avgP-pTgt, n:l7.length };
-  }, [nutrition]);
+  }, [nutrition, nutriCoach]);
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
@@ -3522,7 +3526,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="dc-lbl">7-day calories</div>
                   <div className="dc-val">{calStats.avgCal}<span className="dc-u">kcal</span></div>
                   <div className="dc-sub" style={{color: Math.abs(calStats.calDelta)<=100?'var(--t2)':calStats.calDelta<0?'var(--warn)':'var(--inf)'}}>
-                    {calStats.calDelta>=0?'+':''}{calStats.calDelta} vs {calStats.calTgt} plan target
+                    {calStats.calDelta>=0?'+':''}{calStats.calDelta} vs {calStats.calTgt} weekly-avg target
                   </div>
                 </div>
                 <div className="dash-card">
