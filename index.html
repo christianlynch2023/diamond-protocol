@@ -1179,24 +1179,35 @@ const CORE_EX = {
 };
 
 function mergeLogs(a, b) {
-  const seen = new Set(); const out = [];
+  const map = new Map(); const order = [];
   for (const l of [...(a || []), ...(b || [])]) {
     if (!l || !l.date) continue;
     const key = l.date + '|' + (l.sessionId || '');
-    if (seen.has(key)) continue;
-    seen.add(key); out.push(l);
+    if (map.has(key)) { map.set(key, pickNewer(map.get(key), l)); }
+    else { map.set(key, l); order.push(key); }
   }
+  const out = order.map(k => map.get(k));
   out.sort((x, y) => x.date < y.date ? 1 : -1);
   return out.slice(0, 200);
 }
+// LAST-WRITE-WINS merge. The old implementation was first-wins over [...local, ...cloud],
+// so the LOCAL copy always beat the cloud copy even when the cloud held a newer edit —
+// the newer edit was discarded and then overwritten on the next push. Records now carry
+// updatedAt (stamped on save); when both sides hold the same key we keep the newer one.
+function pickNewer(x, y) {
+  const tx = x && x.updatedAt != null ? x.updatedAt : 0;
+  const ty = y && y.updatedAt != null ? y.updatedAt : 0;
+  return ty > tx ? y : x;   // ties keep the incumbent (local) — deterministic
+}
 function mergeByKey(a, b, keyFn) {
-  const seen = new Set(); const out = [];
+  const map = new Map(); const order = [];
   for (const e of [...(a || []), ...(b || [])]) {
     if (!e) continue;
     const k = keyFn(e);
-    if (seen.has(k)) continue;
-    seen.add(k); out.push(e);
+    if (map.has(k)) { map.set(k, pickNewer(map.get(k), e)); }
+    else { map.set(k, e); order.push(k); }
   }
+  const out = order.map(k => map.get(k));
   out.sort((x, y) => (x.date || '') < (y.date || '') ? 1 : -1);
   return out;
 }
@@ -1314,7 +1325,10 @@ function glucoseCategory(g) {
 function App() {
 
   // ── WHOOP INTEGRATION ─────────────────────────────────
-  const [whoopData, setWhoopData]       = useState(() => { const c=LS.get('whoop_cache'); return c?JSON.parse(c):null; });
+  // Unguarded JSON.parse in a useState initialiser: a truncated/corrupt whoop_cache threw
+  // during the FIRST render, so React could not mount and the whole app failed to open.
+  const [whoopData, setWhoopData]       = useState(() => { try { const c=LS.get('whoop_cache'); return c?JSON.parse(c):null; } catch(e) { LS.del('whoop_cache'); return null; } });
+  const [whoopAuthFail, setWhoopAuthFail] = useState(false);
   const [whoopLoading, setWhoopLoading] = useState(false);
   const [whoopHistory, setWhoopHistory] = usePersistentState('whoop_history', []);
   const [whoopWorkouts, setWhoopWorkouts] = usePersistentState('whoop_workouts', []);
@@ -1401,13 +1415,15 @@ function App() {
       if (wos.length) { setWhoopWorkouts(prev => { const m={}; [...(prev||[]), ...wos].forEach(w=>{ const k=(w.id!=null?String(w.id):(w.start||'')+'|'+(w.strain||'')); if(k) m[k]=w; }); return Object.values(m).sort((a,b)=>((a.start||'')<(b.start||'')?1:-1)).slice(0,200); }); }
     } catch(e) {
       const cached = LS.get('whoop_cache');
-      if (cached) { const d=JSON.parse(cached); setWhoopData(d); }
+      if (cached) { try { setWhoopData(JSON.parse(cached)); } catch(e) { LS.del('whoop_cache'); } }
     } finally { setWhoopLoading(false); }
   };
 
+  // Returns true/false. Previously every failure was swallowed by `catch(e) {}`, so a dead
+  // refresh token left the app LOOKING connected while WHOOP silently never worked again.
   const refreshWhoopToken = async () => {
     const rt = LS.get('whoop_refresh_token');
-    if (!rt) return;
+    if (!rt) { setWhoopAuthFail(true); return false; }
     try {
       const res = await fetch('/.netlify/functions/whoop-refresh', {
         method: 'POST', headers: {'Content-Type':'application/json'},
@@ -1415,13 +1431,20 @@ function App() {
       });
       if (!res.ok) throw new Error('WHOOP refresh failed: ' + res.status);
       const tokens = await res.json();
-      if (tokens.access_token) {
-        LS.set('whoop_access_token', tokens.access_token);
-        if (tokens.refresh_token) LS.set('whoop_refresh_token', tokens.refresh_token);
-        LS.set('whoop_expires_at', String(Date.now() + (tokens.expires_in||3600)*1000));
-        await fetchWhoopData(tokens.access_token);
-      }
-    } catch(e) {}
+      if (!tokens.access_token) throw new Error('WHOOP refresh returned no access token');
+      LS.set('whoop_access_token', tokens.access_token);
+      if (tokens.refresh_token) LS.set('whoop_refresh_token', tokens.refresh_token);
+      LS.set('whoop_expires_at', String(Date.now() + (tokens.expires_in||3600)*1000));
+      setWhoopAuthFail(false);
+      await fetchWhoopData(tokens.access_token);
+      return true;
+    } catch(e) {
+      console.warn('WHOOP refresh failed:', e && e.message);
+      ['whoop_access_token','whoop_refresh_token','whoop_expires_at'].forEach(k => LS.del(k));
+      setWhoopData(null);
+      setWhoopAuthFail(true);   // surfaces "reconnect required" in the UI
+      return false;
+    }
   };
 
   const disconnectWhoop = () => {
@@ -1641,7 +1664,7 @@ function App() {
     const dur=Math.round((Date.now()-(startRef.current||Date.now()))/60000);
     const log={date:new Date().toISOString(),sessionId:sel,sessionName:sess.name,week,block,duration:dur,
       exercises:sess.exercises.map(ex=>{const e=subMap[ex.id]?{...ex,...subMap[ex.id]}:ex; return {id:e.id,name:e.name,...(subMap[ex.id]?{origId:ex.id}:{}),sets:(newData||setData)[e.id]||[],pain:painRef.current[e.id]||0};}).filter(ex=>ex.sets.length>0)};
-    setLogs(prev => [log,...prev].slice(0,200));
+    setLogs(prev => [{...log, updatedAt: Date.now()},...prev].slice(0,200));
     clearWip(); setReview(null); setView('complete');
   };
 
@@ -1921,7 +1944,7 @@ function App() {
     const sys=parseNum(bpSys), dia=parseNum(bpDia);
     if (sys==null || dia==null || sys<=0 || dia<=0) return;   // reject NaN/blank - feeds bpCategory + readiness gate
     const entry = { date: `${bpDate}T12:00:00.000Z`, sys: Math.round(sys), dia: Math.round(dia), pulse: parseNum(bpPulse)!=null ? Math.round(parseNum(bpPulse)) : null };
-    setBpLog(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
+    setBpLog(prev => [{...entry, updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
     setBpSys(''); setBpDia(''); setBpPulse(''); setBpDate(localToday()); setShowAddBP(false);
   };
 
@@ -1929,7 +1952,7 @@ function App() {
     const g=parseNum(glVal);
     if (g==null || g<=0) return;
     const entry = { date: `${glDate}T12:00:00.000Z`, value: g };
-    setGlucoseLog(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
+    setGlucoseLog(prev => [{...entry, updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
     setGlVal(''); setGlDate(localToday()); setShowAddGl(false);
   };
 
@@ -2006,7 +2029,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const saveEdit = () => {
     if (!editDraft) return;
     const cleaned = {...editDraft, exercises: editDraft.exercises.map(ex => ({...ex, sets: ex.sets.map(s=>({weight:parseFloat(s.weight)||0, reps:parseInt(s.reps)||0, rir:(s.rir===''||s.rir==null)?null:parseInt(s.rir)})).filter(s=>s.weight>0||s.reps>0)})).filter(ex=>ex.sets.length>0)};
-    setLogs(prev => prev.map(l => l.date===cleaned.date ? cleaned : l));
+    // Match on date + sessionId, not date alone: duplicate dates (imports, two sessions in a
+    // day) meant editing one session overwrote EVERY log sharing that date. Shallow-merge so
+    // fields not represented in the editor draft (e.g. later WHOOP enrichment) survive.
+    setLogs(prev => prev.map(l => (l.date===cleaned.date && l.sessionId===cleaned.sessionId) ? { ...l, ...cleaned, updatedAt: Date.now() } : l));
     setEditingLog(null); setEditDraft(null);
   };
 
@@ -2026,7 +2052,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     let d = {...editBodyDraft};
     cfg.fields.forEach(([k,,kind])=>{ if(kind==='num') d[k] = (d[k]===''||d[k]==null)?null:parseFloat(d[k]); });
     if(cfg.recompute) d = cfg.recompute(d);
-    cfg.setter(prev => { const arr = prev.map((e,idx)=> idx===editBody.index ? d : e); arr.sort((a,b)=> (a.date<b.date?1:a.date>b.date?-1:0)); return arr.slice(0, cfg.slice); });
+    // stamp updatedAt so an edit reliably beats an older copy of the same record on merge
+    cfg.setter(prev => { const arr = prev.map((e,idx)=> idx===editBody.index ? {...d, updatedAt: Date.now()} : e); arr.sort((a,b)=> (a.date<b.date?1:a.date>b.date?-1:0)); return arr.slice(0, cfg.slice); });
     setEditBody(null); setEditBodyDraft(null);
   };
 
@@ -2034,14 +2061,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const w=parseNum(newWt);
     if (w==null || w<=0) return;
     const e={date:`${wtDate}T12:00:00.000Z`,weight:w,bodyFat:parseNum(newBF),muscle:parseNum(newMuscle),notes:newWtNote};
-    setBodyMetrics(prev=>[e,...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,200));
+    setBodyMetrics(prev=>[{...e, updatedAt: Date.now()},...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,200));
     setNewWt('');setNewBF('');setNewMuscle('');setNewWtNote('');setWtDate(localToday());setShowAddBody(false);
   };
 
   const addCardio = () => {
     if (!cMin) return;
     const entry = { date: `${cDate}T12:00:00.000Z`, modality: cType, minutes: parseFloat(cMin), note: cNote };
-    setCardioLog(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
+    setCardioLog(prev => [{...entry, updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
     setCMin(''); setCNote(''); setCDate(localToday()); setShowAddCardio(false);
   };
 
@@ -2049,7 +2076,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!nP && !nC && !nF) return;
     const p = parseFloat(nP) || 0, c = parseFloat(nC) || 0, f = parseFloat(nF) || 0;
     const entry = { date: nDate, protein: p, carbs: c, fat: f, calories: Math.round(p*4 + c*4 + f*9) };
-    setNutrition(prev => { const filtered = prev.filter(e => e.date !== entry.date); return [entry, ...filtered].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400); });
+    setNutrition(prev => { const filtered = prev.filter(e => e.date !== entry.date); return [{...entry, updatedAt: Date.now()}, ...filtered].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400); });
     setNP(''); setNC(''); setNF(''); setNDate(localToday()); setShowAddNutri(false);
   };
 
@@ -2057,14 +2084,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const v=parseNum(mVal);
     if (v==null || v<=0) return;   // reject blank/NaN/Infinity/non-positive measurement
     const entry = { date: `${mDate}T12:00:00.000Z`, site: mSite, value: v };
-    setMeasurements(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 500));
+    setMeasurements(prev => [{...entry, updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 500));
     setMVal(''); setMDate(localToday()); setShowAddMeas(false);
   };
 
   const addProtocol = () => {
     if (!pDose) return;
     const e={date:`${pDate}T12:00:00.000Z`,compound:pCmp,dose:parseFloat(pDose),unit:pUnit,notes:pNote};
-    setProtocolLog(prev=>[e,...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,500));
+    setProtocolLog(prev=>[{...e, updatedAt: Date.now()},...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,500));
     setPDose('');setPNote('');setPDate(localToday());setShowAddProt(false);
   };
 
@@ -2077,9 +2104,18 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       const res = await fetch('/.netlify/functions/sync-data', { headers: { 'x-sync-code': c } });
       if (!res.ok) { setCloudStatus('error'); return false; }
       const data = await res.json();
-      if (data && Array.isArray(data.logs)) {
+      // Do NOT use data.logs as the existence test. A valid cloud snapshot holding health
+      // data but no logs was skipped, pullFromCloud returned false, and connectSync then
+      // called syncNow() which OVERWROTE that cloud data with the local (empty) state.
+      const hasSnapshot = data && typeof data === 'object' && (
+        Array.isArray(data.logs) || Array.isArray(data.bodyMetrics) || Array.isArray(data.nutrition) ||
+        Array.isArray(data.bpLog) || Array.isArray(data.glucoseLog) || Array.isArray(data.protocolLog) ||
+        Array.isArray(data.measurements) || Array.isArray(data.cardioLog) || Array.isArray(data.whoopHistory) ||
+        !!data.config
+      );
+      if (hasSnapshot) {
         // Merge cloud with current local so offline sessions are never lost
-        const mergedLogs = mergeLogs(logs, data.logs);
+        const mergedLogs = mergeLogs(logs, Array.isArray(data.logs) ? data.logs : []);
         const mergedBody = mergeByKey(bodyMetrics, Array.isArray(data.bodyMetrics) ? data.bodyMetrics : [], e => e.date + '|' + e.weight);
         const mergedProt = mergeByKey(protocolLog, Array.isArray(data.protocolLog) ? data.protocolLog : [], e => e.date + '|' + e.compound + '|' + e.dose);
         const mergedMeas = mergeByKey(measurements, Array.isArray(data.measurements) ? data.measurements : [], e => e.date + '|' + e.site + '|' + e.value);
@@ -3307,7 +3343,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           </div>
           <div className="tool-sec">
             <div className="tool-ttl">WHOOP</div>
-            <div className="tool-sub">{whoopConnected?'Connected — recovery syncs automatically on app open':'Connect to pull recovery, HRV and sleep data automatically'}</div>
+            <div className="tool-sub">{whoopAuthFail?'Reconnect required — your WHOOP authorisation expired':(whoopConnected?'Connected — recovery syncs automatically on app open':'Connect to pull recovery, HRV and sleep data automatically')}</div>
+            {whoopAuthFail && <div className="info-banner err" style={{margin:'0 0 10px'}}>WHOOP disconnected — tap Connect WHOOP to re-authorise. Readiness will use your manual recovery selection until then.</div>}
             {whoopConnected?(
               <div>
                 {whoopData?.recovery!=null&&<div style={{fontFamily:'JetBrains Mono,monospace',fontSize:12,color:'var(--ok)',marginBottom:10}}>&#10003; Recovery {whoopData.recovery}% · HRV {whoopData.hrv}ms · RHR {whoopData.rhr}bpm</div>}
