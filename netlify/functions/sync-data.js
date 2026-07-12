@@ -11,7 +11,12 @@ exports.handler = async (event) => {
   const key = 'dp_' + crypto.createHash('sha256').update(code).digest('hex').slice(0, 40);
 
   try {
-    const store = getStore('diamond-sync');
+    const store = getStore({
+  name: 'diamond-sync',
+  siteID: process.env.NETLIFY_SITE_ID,
+  token: process.env.NETLIFY_API_TOKEN,
+});
+
 
     if (event.httpMethod === 'GET') {
       const data = await store.get(key);
