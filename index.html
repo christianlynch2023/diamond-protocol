@@ -672,11 +672,13 @@ function usePersistentState(key, initial) {
     } catch (e) { return initial; }
   });
   useEffect(() => {
-    try {
-      LS.set(key, JSON.stringify(value));
-    } catch (e) {
-      // Quota exceeded (large base64 photos are the usual culprit) — fail loud, not silent.
-      console.warn('Persistence failed for "' + key + '":', e && e.message);
+    // LS.set returns false on failure (quota, private mode). Previously the error was
+    // swallowed inside LS.set so this could never be detected — writes silently no-op'd
+    // and data vanished on reload with no warning.
+    const ok = LS.set(key, JSON.stringify(value));
+    if (!ok) {
+      console.warn('Persistence FAILED for "' + key + '" — storage full or blocked.');
+      try { window.dispatchEvent(new CustomEvent('dp-storage-fail', { detail: { key } })); } catch(_) {}
     }
   }, [key, value]);
   return [value, setValue];
@@ -684,7 +686,9 @@ function usePersistentState(key, initial) {
 
 const LS = {
   get: k => { try { return localStorage.getItem(k); } catch(e) { return null; } },
-  set: (k, v) => { try { localStorage.setItem(k, v); } catch(e) {} },
+  // Returns true on success. Does NOT swallow the error silently — callers that care
+  // (usePersistentState, photo saving) need to know when a write actually failed.
+  set: (k, v) => { try { localStorage.setItem(k, v); return true; } catch(e) { return false; } },
   del: k => { try { localStorage.removeItem(k); } catch(e) {} },
 };
 
@@ -838,13 +842,17 @@ function calcWarmups(working) {
   return res;
 }
 
+// Substituted exercises are logged under a generated id (sub_<baseId>_<name>) which is NOT
+// in EX_MUSCLE. Without falling back to origId, every set done on a swapped exercise
+// contributed ZERO to volume, heat map, autoregulation and plateau detection.
+function exMuscle(ex) { return EX_MUSCLE[ex.origId || ex.id] || EX_MUSCLE[ex.id]; }
 function weekMuscleVolume(logs, wk, block) {
   const v = {};
   for (const l of logs) {
     if (l.week !== wk) continue;
     if (block != null && (l.block||1) !== block) continue;
     for (const ex of (l.exercises || [])) {
-      const m = EX_MUSCLE[ex.id]; if (!m) continue;
+      const m = exMuscle(ex); if (!m) continue;
       const sets = ex.sets?.length || 0;
       v[m.p] = (v[m.p] || 0) + sets;
       if (m.s) { const ss=Array.isArray(m.s)?m.s:[m.s]; for(const sm of ss) v[sm]=(v[sm]||0)+sets*0.5; }
@@ -857,7 +865,7 @@ function weeklyVolumeSeries(logs, muscle, block) {
   for (const l of logs) {
     if (block != null && (l.block||1) !== block) continue;
     for (const ex of (l.exercises || [])) {
-      const m = EX_MUSCLE[ex.id]; if (!m) continue;
+      const m = exMuscle(ex); if (!m) continue;
       const sets = ex.sets?.length || 0;
       if (muscle === 'all') { byWeek[l.week] = (byWeek[l.week] || 0) + sets; }
       else { let add = 0; if (m.p === muscle) add += sets; if (m.s) { const ss=Array.isArray(m.s)?m.s:[m.s]; if(ss.includes(muscle)) add += sets * 0.5; } if (add) byWeek[l.week] = (byWeek[l.week] || 0) + add; }
@@ -898,11 +906,14 @@ function getIncrement(ex) {
   if (/(lateral|fly|crunch|curl|ext|raise|face pull|adductor|pulldown|cross)/.test(n)) return 1;
   return 2.5;
 }
-function getTarget(ex, logs, week, phase) {
-  const prev = getPrevHist(ex.id, logs, 1)[0];
+function getTarget(ex, logs, week, phase, histId) {
+  // histId lets a substituted exercise read its own logged history. Without it, a swap
+  // inherited the base exercise's loads (e.g. machine press targeted at RO-T8 weights).
+  const _hid = histId || ex.id;
+  const prev = getPrevHist(_hid, logs, 1)[0];
   if (!prev) return { weight: 0, reps: ex.rMin, note: 'First time — establish a working weight', first: true };
   const topWeight = Math.max(...prev.sets.map(s => s.weight));
-  const rec = getProgRec(ex.id, ex.rMax, logs, phase);
+  const rec = getProgRec(_hid, ex.rMax, logs, phase);
   const incr = getIncrement(ex);
   if (DLW.has(week)) {
     return { weight: Math.round((topWeight * 0.85) / 2.5) * 2.5, reps: Math.round((ex.rMin + ex.rMax) / 2), note: 'Deload — keep several reps in reserve' };
@@ -1127,9 +1138,10 @@ function detectPlateaus(logs) {
   for (const l of logs) {
     for (const ex of (l.exercises || [])) {
       if (!ex.sets?.length) continue;
-      if (!ORM_IDS.has(ex.id)) continue;
+      const _pid = ex.origId || ex.id;
+      if (!ORM_IDS.has(_pid)) continue;
       const best = Math.max(...ex.sets.map(s => epley(s.weight, s.reps)));
-      (byEx[ex.id] = byEx[ex.id] || { name: ex.name, vals: [] }).vals.push(best);
+      (byEx[_pid] = byEx[_pid] || { name: ex.name, vals: [] }).vals.push(best);
     }
   }
   const stalled = [];
@@ -1193,15 +1205,22 @@ const MEAS_SITES = ['Waist','Chest','Shoulders','Neck','Hips','Left Arm','Right 
 
 function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, latestBP) {
   const lastLog = logs && logs[0];
-  const recentPain = (lastLog?.exercises || []).filter(e => e.pain).map(e => ({ name: e.name, level: e.pain }));
+  // Pain only counts if it is recent. Previously a sharp-pain flag from the last logged
+  // workout capped readiness indefinitely, even after months away.
+  const painFresh = lastLog && lastLog.date ? ((Date.now() - new Date(lastLog.date).getTime())/86400000 <= 14) : false;
+  const recentPain = painFresh ? (lastLog?.exercises || []).filter(e => e.pain).map(e => ({ name: e.name, level: e.pain })) : [];
   const sharpPain = recentPain.some(p => p.level === 2);
   const nigglePain = recentPain.some(p => p.level === 1);
   const sharpName = recentPain.find(p => p.level === 2)?.name;
-  const rec = whoopData?.recovery;
+  // WHOOP freshness: cached recovery must not gate today. BP already had this guard;
+  // WHOOP did not, so a stale green score could still trigger green_push / high volume.
+  const whoopAgeH = whoopData?.cachedAt ? (Date.now() - whoopData.cachedAt)/3600000 : null;
+  const whoopStale = whoopAgeH != null && whoopAgeH > 30; // >~1 day old
+  const rec = whoopStale ? null : whoopData?.recovery;
   const recLow = rec != null && rec < 34;
   const recMidLow = rec != null && rec >= 34 && rec < 50;
   const recHigh = rec != null && rec >= 67;
-  const sleep = whoopData?.sleep;
+  const sleep = whoopStale ? null : whoopData?.sleep;
   const sleepPoor = sleep != null && sleep < 70;
   const sleepGreat = sleep != null && sleep >= 85;
   const subjBeat = recovery === 'beat';
@@ -1370,7 +1389,9 @@ function App() {
         setWhoopHistory(prev => mergeHistory(prev, [...newHist, ...todayEntry]));
       }
       const wos = parseWhoopWorkouts(raw.workouts);
-      if (wos.length) { setWhoopWorkouts(wos); }
+      // Merge, don't replace: the endpoint returns a recent page, so a wholesale replace
+      // silently deleted all older locally-stored workouts.
+      if (wos.length) { setWhoopWorkouts(prev => { const m={}; [...(prev||[]), ...wos].forEach(w=>{ const k=(w.id!=null?String(w.id):(w.start||'')+'|'+(w.strain||'')); if(k) m[k]=w; }); return Object.values(m).sort((a,b)=>((a.start||'')<(b.start||'')?1:-1)).slice(0,200); }); }
       applyWhoopRecovery(parsed.recovery);
     } catch(e) {
       const cached = LS.get('whoop_cache');
@@ -1538,6 +1559,7 @@ function App() {
   const [nDate, setNDate] = useState(localToday());
   const [cDate, setCDate] = useState(localToday());
   const [bpDate, setBpDate] = useState(localToday());
+  const [glDate, setGlDate] = useState(localToday()); // separate from bpDate: they were coupled, so editing one silently changed the other
   const [pDate, setPDate] = useState(localToday());
   const [syncCode, setSyncCode]       = useState(() => LS.get('sync_code') || '');
   const [syncCodeInput, setSyncCodeInput] = useState('');
@@ -1548,7 +1570,7 @@ function App() {
 
   useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery, block, highVol, phase: goalPhase})); }, [week, recovery, block, highVol, goalPhase]);
   useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
-  useEffect(()=>{ try { LS.set('checkin_photos',JSON.stringify(checkins)); } catch(e) { alert('Storage full - delete an older check-in photo to save new ones.'); } },[checkins]);
+  useEffect(()=>{ if(!checkins.length) return; const ok = LS.set('checkin_photos',JSON.stringify(checkins)); if(!ok) alert('Storage full — your check-in photo was NOT saved. Delete an older photo and try again.'); },[checkins]);
 
   useEffect(() => {
     if (!timerOn) return;
@@ -1652,7 +1674,7 @@ function App() {
     const baseEx=sess.exercises[idx]; const eid=subMap[baseEx.id]?subMap[baseEx.id].id:baseEx.id;
     const logged=setData[eid]||[];
     setExIdx(idx); setCurSet(logged.length); setEditIdx(null); setReviseMode(true); setFinishModal(false);
-    const t=getTarget(baseEx,logs,week,effPhase);
+    const t=getTarget(baseEx,logs,week,effPhase,eid);
     setWt(logged.length?logged[logged.length-1].weight:(t.weight||60));
     setRp(t.reps||baseEx.rMin); setRir(WR[week].rirN);
     saveWip(sel,setData,idx,logged.length);
@@ -1694,14 +1716,18 @@ function App() {
         try {
           const data=JSON.parse(ev.target.result);
           if (Array.isArray(data.logs)) { setLogs([...data.logs].sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,200)); }
-          if (Array.isArray(data.bodyMetrics)) setBodyMetrics(data.bodyMetrics);
-          if (Array.isArray(data.measurements)) setMeasurements(data.measurements);
-          if (Array.isArray(data.checkins)) setCheckins(data.checkins);
-          if (Array.isArray(data.nutrition)) setNutrition(data.nutrition);
-          if (Array.isArray(data.cardioLog)) setCardioLog(data.cardioLog);
-          if (Array.isArray(data.bpLog)) setBpLog(data.bpLog);
-          if (Array.isArray(data.glucoseLog)) setGlucoseLog(data.glucoseLog);
-          if (Array.isArray(data.protocolLog)) setProtocolLog(data.protocolLog);
+          // The app assumes every log is newest-first ([0] === latest). A backup with
+          // oldest-first arrays previously imported "successfully" but corrupted every
+          // latest-value, average, chart and readiness gate.
+          const desc = arr => [...arr].sort((a,b)=> (a.date<b.date?1:a.date>b.date?-1:0));
+          if (Array.isArray(data.bodyMetrics)) setBodyMetrics(desc(data.bodyMetrics));
+          if (Array.isArray(data.measurements)) setMeasurements(desc(data.measurements));
+          if (Array.isArray(data.checkins)) setCheckins(desc(data.checkins));
+          if (Array.isArray(data.nutrition)) setNutrition(desc(data.nutrition));
+          if (Array.isArray(data.cardioLog)) setCardioLog(desc(data.cardioLog));
+          if (Array.isArray(data.bpLog)) setBpLog(desc(data.bpLog));
+          if (Array.isArray(data.glucoseLog)) setGlucoseLog(desc(data.glucoseLog));
+          if (Array.isArray(data.protocolLog)) setProtocolLog(desc(data.protocolLog));
           if (data.config) { if(data.config.week)setWeek(data.config.week); if(data.config.recovery)setRecovery(data.config.recovery); if(data.config.block)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase)setGoalPhase(data.config.phase); }
           alert(`Restored ${data.logs?.length||0} sessions plus body, nutrition, BP, cardio and protocol history.`);
         } catch(err) { alert('Could not read file. Make sure it is a valid Diamond Protocol backup.'); }
@@ -1716,7 +1742,11 @@ function App() {
     setLogs([]); setWeek(1); setBlock(1); setRecovery('normal'); setHighVol(false); setGoalPhase('bulk');
     setWipData(null);
     setBodyMetrics([]); setMeasurements([]); setNutrition([]); setCardioLog([]); setBpLog([]); setGlucoseLog([]); setProtocolLog([]);
-    ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','glucose_log','protocol_log'].forEach(k=>LS.del(k));
+    // Previously left photos, WHOOP history/cache/tokens and the sync code behind,
+    // so "Clear All Data" did not actually clear all data.
+    setCheckins([]); setWhoopHistory([]); setWhoopWorkouts([]); setWhoopData(null); setWhoopConnected(false);
+    ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','glucose_log','protocol_log',
+     'checkin_photos','whoop_history','whoop_workouts','whoop_cache','whoop_access_token','whoop_refresh_token'].forEach(k=>LS.del(k));
   };
 
 
@@ -1883,9 +1913,9 @@ function App() {
   const addGlucose = () => {
     const g=parseNum(glVal);
     if (g==null || g<=0) return;
-    const entry = { date: `${bpDate}T12:00:00.000Z`, value: g };
+    const entry = { date: `${glDate}T12:00:00.000Z`, value: g };
     setGlucoseLog(prev => [entry, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
-    setGlVal(''); setBpDate(localToday()); setShowAddGl(false);
+    setGlVal(''); setGlDate(localToday()); setShowAddGl(false);
   };
 
   const getPeriodReview = async (scope) => {
@@ -1926,7 +1956,7 @@ Write a concise weekly check-in in 2-3 short paragraphs. Cover: (1) how the week
     } else {
       const blockLogs = logs.filter(l => (l.block||1) === block);
       const vol = {};
-      for (const l of blockLogs) for (const ex of (l.exercises||[])) { const m=EX_MUSCLE[ex.id]; if(!m)continue; const s=ex.sets?.length||0; vol[m.p]=(vol[m.p]||0)+s; if(m.s){const ss=Array.isArray(m.s)?m.s:[m.s];for(const sm of ss)vol[sm]=(vol[sm]||0)+s*0.5;} }
+      for (const l of blockLogs) for (const ex of (l.exercises||[])) { const m=exMuscle(ex); if(!m)continue; const s=ex.sets?.length||0; vol[m.p]=(vol[m.p]||0)+s; if(m.s){const ss=Array.isArray(m.s)?m.s:[m.s];for(const sm of ss)vol[sm]=(vol[sm]||0)+s*0.5;} }
       const sessLines = blockLogs.length ? blockLogs.slice(0,40).map(l => `- W${l.week} ${l.sessionName||l.sessionId}: ${l.exercises.reduce((a,e)=>a+e.sets.length,0)} sets`).join('\n') : 'none logged';
       prompt = `You are a personal strength coach writing an end-of-block retrospective for a 48-year-old male on an optimised hormonal protocol with enhanced recovery, who has run the Diamond Protocol 12-week hypertrophy programme (currently week ${week}). ${phaseLine}
 
@@ -2030,6 +2060,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     setCloudStatus('syncing');
     try {
       const res = await fetch('/.netlify/functions/sync-data', { headers: { 'x-sync-code': c } });
+      if (!res.ok) { setCloudStatus('error'); return false; }
       const data = await res.json();
       if (data && Array.isArray(data.logs)) {
         // Merge cloud with current local so offline sessions are never lost
@@ -2040,6 +2071,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         const mergedNutri = mergeByKey(nutrition, Array.isArray(data.nutrition) ? data.nutrition : [], e => e.date);
         const mergedCardio = mergeByKey(cardioLog, Array.isArray(data.cardioLog) ? data.cardioLog : [], e => e.date + '|' + e.modality + '|' + e.minutes);
         const mergedBP = mergeByKey(bpLog, Array.isArray(data.bpLog) ? data.bpLog : [], e => e.date + '|' + e.sys + '|' + e.dia);
+        const mergedGl = mergeByKey(glucoseLog, Array.isArray(data.glucoseLog) ? data.glucoseLog : [], e => e.date + '|' + e.value);
         skipPush.current = true;
         setLogs(mergedLogs);
         setBodyMetrics(mergedBody);
@@ -2048,9 +2080,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setNutrition(mergedNutri);
         setCardioLog(mergedCardio);
         setBpLog(mergedBP);
+        setGlucoseLog(mergedGl);
         if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); if (data.config.block) setBlock(data.config.block); if (data.config.highVol!=null) setHighVol(data.config.highVol); if (data.config.phase) setGoalPhase(data.config.phase); }
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery, block: data.config?.block || block, highVol: data.config?.highVol != null ? data.config.highVol : highVol, phase: data.config?.phase || goalPhase }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, cardioLog: mergedCardio, bpLog: mergedBP, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery, block: data.config?.block || block, highVol: data.config?.highVol != null ? data.config.highVol : highVol, phase: data.config?.phase || goalPhase }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, cardioLog: mergedCardio, bpLog: mergedBP, glucoseLog: mergedGl, updatedAt: Date.now() });
         fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot }).catch(() => {});
         setCloudStatus('synced');
         return true;
@@ -2065,8 +2098,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, updatedAt: Date.now() });
-      await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, updatedAt: Date.now() });
+      const r = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
+      if (!r.ok) { setCloudStatus('error'); return; }
       setCloudStatus('synced');
     } catch (e) { setCloudStatus('error'); }
   };
@@ -2090,15 +2124,18 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
-        await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': syncCode }, body: snapshot });
+        const r = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': syncCode }, body: snapshot });
+        // fetch() only rejects on network failure; a 4xx/5xx resolves normally, so an
+        // unchecked call could report 'synced' when the server actually rejected the data.
+        if (!r.ok) { setCloudStatus('error'); return; }
         setCloudStatus('synced');
       } catch (e) { setCloudStatus('error'); }
     }, 3000);
-  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, week, recovery, syncCode]);
+  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, week, recovery, block, highVol, goalPhase, syncCode]);
 
   const applySwap = o => {
     const base = SESSIONS[sel]?.exercises[exIdx];
@@ -2107,6 +2144,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     setSubMap(prev => ({ ...prev, [base.id]: { id: subId, name: o.name } }));
     setSetData(prev => { if (prev[base.id]) { const n = { ...prev }; n[subId] = prev[base.id]; delete n[base.id]; return n; } return prev; });
     if (painRef.current[base.id]) { painRef.current[subId] = painRef.current[base.id]; delete painRef.current[base.id]; }
+    // Keep React state in step with the ref, or the pain chip visually disappears after a
+    // swap while the ref still holds it (displayed state and saved state diverge).
+    setPainData(prev => { if (prev && prev[base.id] != null) { const n = { ...prev }; n[subId] = prev[base.id]; delete n[base.id]; return n; } return prev; });
     setShowSwap(false);
   };
 
@@ -2197,6 +2237,11 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     (nutrition||[]).forEach(e=>{const t=parse(e.date); if(!isNaN(t)) allD.push(t);});
     (bodyMetrics||[]).forEach(e=>{const t=parse(e.date); if(!isNaN(t)) allD.push(t);});
     const anchor=allD.length?Math.max(...allD):Date.now();
+    // Targets must expire. Anchoring the 14-day window to the newest LOGGED date meant that
+    // if the user stopped logging two months ago, the coach still returned ok:true with
+    // confident-looking targets derived entirely from stale data.
+    const anchorAgeDays = (Date.now()-anchor)/dayMs;
+    if (anchorAgeDays > 10) return { ok:false, reason:'stale', ageDays:Math.round(anchorAgeDays) };
     const winStart=anchor-14*dayMs;
     const nutWin=(nutrition||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&e.calories>0;});
     const wWin=(bodyMetrics||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&e.weight>0;}).sort((a,b)=>parse(a.date)-parse(b.date));
@@ -2252,7 +2297,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const loggedSetsArr=curEx?(setData[curEx.id]||[]):[];
   const prevHist=curEx?getPrevHist(curEx.id,logs,3):[];
   const progRec=curEx?getProgRec(curEx.id,curEx.rMax,logs,effPhase):null;
-  const curTarget=curEx?getTarget(curEx,logs,week,effPhase):null;
+  const _curHistId = (curEx && baseEx && subMap[baseEx.id]) ? subMap[baseEx.id].id : (curEx?curEx.id:null);
+  const curTarget=curEx?getTarget(curEx,logs,week,effPhase,_curHistId):null;
   const R=88, CIRC=2*Math.PI*R;
   const dashOff=CIRC*(1-(timerTotal>0?timerSecs/timerTotal:0));
   const totalSets=Object.values(setData).reduce((a,s)=>a+s.length,0);
@@ -2278,8 +2324,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const bodyDash = useMemo(() => {
     // 7-day weight average (bodyMetrics sorted desc)
     const now = Date.now();
-    const last7 = bodyMetrics.filter(m => (now - new Date(m.date).getTime())/86400000 <= 7 && m.weight!=null);
-    const avg7 = last7.length ? last7.reduce((a,m)=>a+m.weight,0)/last7.length : (bodyMetrics[0]?.weight ?? null);
+    // Reject future-dated entries, and do NOT fall back to an arbitrarily old reading:
+    // a 3-month-old weight was previously surfaced under the name "7-day average".
+    const last7 = bodyMetrics.filter(m => { const age=(now - new Date(m.date).getTime())/86400000; return age>=0 && age<=7 && m.weight!=null; });
+    const avg7 = last7.length ? last7.reduce((a,m)=>a+m.weight,0)/last7.length : null;
     const curW = bodyMetrics[0]?.weight ?? null;
     // lean mass: prefer logged muscle, else weight*(1-bf/100)
     const leanOf = (m) => m.muscle!=null ? m.muscle : (m.bodyFat!=null && m.weight!=null ? +(m.weight*(1-m.bodyFat/100)).toFixed(1) : null);
@@ -2313,20 +2361,22 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const _ebToday=new Date().toISOString().slice(0,10);
   const _ebN=nutrition.find(n=>n.date===_ebToday);
   const calIn=_ebN?_ebN.calories:null;
-  const calOut=whoopData?.dayCal??null;
+  // Only treat WHOOP burn as "today's" if the cache is actually from today.
+  const _whoopFresh = whoopData?.cachedAt ? (new Date(whoopData.cachedAt).toISOString().slice(0,10) === _ebToday) : false;
+  const calOut=_whoopFresh ? (whoopData?.dayCal??null) : null;
   const calNet=(calIn!=null&&calOut!=null)?calIn-calOut:null;
   // 7-day rolling energy balance: avg intake vs avg WHOOP burn (far less noisy than a single day)
   const eb7 = useMemo(() => {
+    // Must compare the SAME calendar days on both sides. Averaging intake over one set of
+    // days and expenditure over a different set produced a meaningless "net".
     const now=Date.now();
-    const ins=nutrition.filter(n=>(now-new Date(n.date).getTime())/86400000<=7 && n.calories!=null);
-    const outs=(whoopHistory||[]).filter(w=>w.dayCal!=null && (now-new Date(w.date).getTime())/86400000<=7);
-    // need at least 3 days on each side to be meaningful; dayCal only accrues from the day
-    // this build ships, so this activates after ~3 days of WHOOP syncing.
-    if(ins.length<3 || outs.length<3) return null;
-    const avgIn=Math.round(ins.reduce((a,n)=>a+n.calories,0)/ins.length);
-    const avgOut=Math.round(outs.reduce((a,w)=>a+w.dayCal,0)/outs.length);
-    const days=Math.min(ins.length,outs.length);
-    return {avgIn,avgOut,net:avgIn-avgOut,days};
+    const inBy={}; nutrition.forEach(n=>{ const d=(n.date||'').slice(0,10); if(d && n.calories!=null && (now-new Date(d).getTime())/86400000<=7) inBy[d]=n.calories; });
+    const outBy={}; (whoopHistory||[]).forEach(w=>{ const d=(w.date||'').slice(0,10); if(d && w.dayCal!=null && (now-new Date(d).getTime())/86400000<=7) outBy[d]=w.dayCal; });
+    const matched=Object.keys(inBy).filter(d=>outBy[d]!=null);
+    if(matched.length<3) return null;
+    const avgIn=Math.round(matched.reduce((a,d)=>a+inBy[d],0)/matched.length);
+    const avgOut=Math.round(matched.reduce((a,d)=>a+outBy[d],0)/matched.length);
+    return {avgIn,avgOut,net:avgIn-avgOut,days:matched.length};
   }, [nutrition, whoopHistory]);
   const cardioWeekStart=(()=>{ const d=new Date(); const day=(d.getDay()+6)%7; d.setHours(0,0,0,0); d.setDate(d.getDate()-day); return d.getTime(); })();
   const cardioThisWeek=cardioLog.filter(c=>new Date(c.date).getTime()>=cardioWeekStart);
@@ -3480,7 +3530,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="body-sub">Daily macro totals — read them off your tracker and log them here to line fuel up with training</div>
             <div className="nc">
               <div className="nc-hd"><span className="nc-ttl">Smart targets</span>{nutriCoach.ok && <span className={'nc-conf '+nutriCoach.conf}>{nutriCoach.conf} confidence</span>}</div>
-              {!nutriCoach.ok && nutriCoach.reason && <div className="nc-note">{nutriCoach.reason}</div>}
+              {!nutriCoach.ok && nutriCoach.reason==='stale' && <div className="nc-note">Your most recent food/weight log is {nutriCoach.ageDays} days old, so these targets have expired. Log a few days of food and a weigh-in to recalculate.</div>}
+              {!nutriCoach.ok && nutriCoach.reason && nutriCoach.reason!=='stale' && <div className="nc-note">{nutriCoach.reason}</div>}
               {!nutriCoach.ok && nutriCoach.partial && <div className="nc-note">Need ~1-2 weeks of consistent logging to estimate your maintenance. So far: {nutriCoach.foodDays} food day{nutriCoach.foodDays===1?'':'s'} and {nutriCoach.weighIns} weigh-in{nutriCoach.weighIns===1?'':'s'} in the last 14 days.</div>}
               {nutriCoach.ok && (
                 <div className="nc-body">
@@ -3694,7 +3745,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               <div className="body-form">
                 <div className="bf-row">
                   <div className="bf-grp"><div className="bf-lbl">Glucose (mmol/L)</div><input className="bf-in" type="number" inputMode="decimal" step="0.1" placeholder="5.2" value={glVal} onChange={e => setGlVal(e.target.value)}/></div>
-                  <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={bpDate} onChange={e=>setBpDate(e.target.value)}/></div>
+                  <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={glDate} onChange={e=>setGlDate(e.target.value)}/></div>
                 </div>
                 <button className="bf-save" onClick={addGlucose}>Save</button>
               </div>
