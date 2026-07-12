@@ -1207,7 +1207,8 @@ function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHist
   const lastLog = logs && logs[0];
   // Pain only counts if it is recent. Previously a sharp-pain flag from the last logged
   // workout capped readiness indefinitely, even after months away.
-  const painFresh = lastLog && lastLog.date ? ((Date.now() - new Date(lastLog.date).getTime())/86400000 <= 14) : false;
+  const _painAge = lastLog && lastLog.date ? (Date.now() - new Date(lastLog.date).getTime())/86400000 : null;
+  const painFresh = _painAge != null && _painAge >= 0 && _painAge <= 14;  // >=0 rejects future-dated logs
   const recentPain = painFresh ? (lastLog?.exercises || []).filter(e => e.pain).map(e => ({ name: e.name, level: e.pain })) : [];
   const sharpPain = recentPain.some(p => p.level === 2);
   const nigglePain = recentPain.some(p => p.level === 1);
@@ -1365,12 +1366,12 @@ function App() {
     return r;
   };
 
-  const applyWhoopRecovery = rec => {
-    if (rec === null) return;
-    if (rec >= 67) setRecovery('excellent');
-    else if (rec >= 34) setRecovery('normal');
-    else setRecovery('beat');
-  };
+  // NOTE: WHOOP deliberately does NOT write into `recovery`. That state is the USER'S
+  // SUBJECTIVE selection (Excellent/Normal/Beat Up) which computeReadiness reads as
+  // subjBeat / subjExcellent. Letting WHOOP set it created a back door: once a fresh green
+  // score wrote 'excellent', it kept adding a positive readiness factor for days after the
+  // WHOOP data itself went stale and was correctly nulled by the freshness guard.
+  // WHOOP recovery reaches readiness properly via whoopData.recovery (freshness-gated).
 
   const fetchWhoopData = async token => {
     const t = token || LS.get('whoop_access_token');
@@ -1379,12 +1380,18 @@ function App() {
     try {
       const res = await fetch('/.netlify/functions/whoop-data', { headers: { Authorization: `Bearer ${t}` } });
       if (res.status === 401) { await refreshWhoopToken(); return; }
+      // Without this, a 400/403/429/500 JSON body was parsed as valid WHOOP data, produced an
+      // all-null record, was stamped cachedAt: now (so it looked FRESH), and overwrote the
+      // last good cache.
+      if (!res.ok) throw new Error('WHOOP request failed: ' + res.status);
       const raw = await res.json();
       const parsed = { ...parseWhoop(raw), cachedAt: Date.now() };
       setWhoopData(parsed);
       LS.set('whoop_cache', JSON.stringify(parsed));
       const newHist = parseWhoopHistory(raw.recovery);
-      const todayEntry = parsed.recovery != null ? [{ date: new Date().toISOString().slice(0,10), recovery: parsed.recovery, hrv: parsed.hrv, rhr: parsed.rhr, respRate: parsed.respRate, skinTemp: parsed.skinTemp, dayCal: parsed.dayCal, sleepHrs: parsed.sleepHrs, sleepDebt: parsed.sleepDebt, strain: parsed.strain }] : [];
+      // localToday(), not UTC: during BST between 00:00-00:59 local, toISOString() still
+      // returns YESTERDAY, so today's entry was filed under the wrong date.
+      const todayEntry = parsed.recovery != null ? [{ date: localToday(), recovery: parsed.recovery, hrv: parsed.hrv, rhr: parsed.rhr, respRate: parsed.respRate, skinTemp: parsed.skinTemp, dayCal: parsed.dayCal, sleepHrs: parsed.sleepHrs, sleepDebt: parsed.sleepDebt, strain: parsed.strain }] : [];
       if (newHist.length || todayEntry.length) {
         setWhoopHistory(prev => mergeHistory(prev, [...newHist, ...todayEntry]));
       }
@@ -1392,17 +1399,9 @@ function App() {
       // Merge, don't replace: the endpoint returns a recent page, so a wholesale replace
       // silently deleted all older locally-stored workouts.
       if (wos.length) { setWhoopWorkouts(prev => { const m={}; [...(prev||[]), ...wos].forEach(w=>{ const k=(w.id!=null?String(w.id):(w.start||'')+'|'+(w.strain||'')); if(k) m[k]=w; }); return Object.values(m).sort((a,b)=>((a.start||'')<(b.start||'')?1:-1)).slice(0,200); }); }
-      applyWhoopRecovery(parsed.recovery);
     } catch(e) {
       const cached = LS.get('whoop_cache');
-      if (cached) {
-        const d=JSON.parse(cached); setWhoopData(d);
-        // Only let the cache drive the subjective recovery selector if it is actually fresh.
-        // Otherwise a stale green score re-enters readiness as 'subjExcellent', bypassing
-        // the staleness guard in computeReadiness entirely.
-        const ageH = d.cachedAt != null ? (Date.now()-d.cachedAt)/3600000 : Infinity;
-        if (ageH <= 30) applyWhoopRecovery(d.recovery);
-      }
+      if (cached) { const d=JSON.parse(cached); setWhoopData(d); }
     } finally { setWhoopLoading(false); }
   };
 
@@ -1414,6 +1413,7 @@ function App() {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ refresh_token: rt }),
       });
+      if (!res.ok) throw new Error('WHOOP refresh failed: ' + res.status);
       const tokens = await res.json();
       if (tokens.access_token) {
         LS.set('whoop_access_token', tokens.access_token);
@@ -1761,7 +1761,7 @@ function App() {
     // load and resurrects everything the user just deleted.
     setSyncCode(''); setCloudStatus('idle');
     ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','glucose_log','protocol_log',
-     'checkin_photos','whoop_history','whoop_workouts','whoop_cache','whoop_access_token','whoop_refresh_token','sync_code'].forEach(k=>LS.del(k));
+     'checkin_photos','whoop_history','whoop_workouts','whoop_cache','whoop_access_token','whoop_refresh_token','whoop_expires_at','sync_code'].forEach(k=>LS.del(k));
   };
 
 
@@ -2087,6 +2087,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         const mergedCardio = mergeByKey(cardioLog, Array.isArray(data.cardioLog) ? data.cardioLog : [], e => e.date + '|' + e.modality + '|' + e.minutes);
         const mergedBP = mergeByKey(bpLog, Array.isArray(data.bpLog) ? data.bpLog : [], e => e.date + '|' + e.sys + '|' + e.dia);
         const mergedGl = mergeByKey(glucoseLog, Array.isArray(data.glucoseLog) ? data.glucoseLog : [], e => e.date + '|' + e.value);
+        const mergedWhoop = mergeHistory(whoopHistory, Array.isArray(data.whoopHistory) ? data.whoopHistory : []);
         skipPush.current = true;
         setLogs(mergedLogs);
         setBodyMetrics(mergedBody);
@@ -2096,9 +2097,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setCardioLog(mergedCardio);
         setBpLog(mergedBP);
         setGlucoseLog(mergedGl);
+        setWhoopHistory(mergedWhoop);
         if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); if (data.config.block) setBlock(data.config.block); if (data.config.highVol!=null) setHighVol(data.config.highVol); if (data.config.phase) setGoalPhase(data.config.phase); }
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery, block: data.config?.block || block, highVol: data.config?.highVol != null ? data.config.highVol : highVol, phase: data.config?.phase || goalPhase }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, cardioLog: mergedCardio, bpLog: mergedBP, glucoseLog: mergedGl, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery, block: data.config?.block || block, highVol: data.config?.highVol != null ? data.config.highVol : highVol, phase: data.config?.phase || goalPhase }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, cardioLog: mergedCardio, bpLog: mergedBP, glucoseLog: mergedGl, whoopHistory: mergedWhoop, updatedAt: Date.now() });
         // Must await and check: an un-awaited, unchecked POST let the UI report 'synced'
         // while the merged superset was never actually written to the cloud.
         try {
@@ -2118,7 +2120,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, whoopHistory, updatedAt: Date.now() });
       const r = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       if (!r.ok) { setCloudStatus('error'); return; }
       setCloudStatus('synced');
@@ -2144,7 +2146,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, whoopHistory, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -2155,7 +2157,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setCloudStatus('synced');
       } catch (e) { setCloudStatus('error'); }
     }, 3000);
-  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, week, recovery, block, highVol, goalPhase, syncCode]);
+  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, whoopHistory, week, recovery, block, highVol, goalPhase, syncCode]);
 
   const applySwap = o => {
     const base = SESSIONS[sel]?.exercises[exIdx];
@@ -2167,6 +2169,17 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // Keep React state in step with the ref, or the pain chip visually disappears after a
     // swap while the ref still holds it (displayed state and saved state diverge).
     setPainData(prev => { if (prev && prev[base.id] != null) { const n = { ...prev }; n[subId] = prev[base.id]; delete n[base.id]; return n; } return prev; });
+    // The wt/rp inputs were populated from the BASE exercise's target before the swap. Without
+    // resetting them, the user would swap RO-T8 press -> machine press and still be shown (and
+    // log) the 90kg RO-T8 load. Recompute the target against the SUBSTITUTE's own history.
+    const substituted = { ...base, id: subId, name: o.name };
+    const existing = setData[base.id] || setData[subId] || [];
+    const st = getTarget(substituted, logs, week, effPhase, subId);
+    if (!existing.length) {
+      setWt(st.weight || 0);
+      setRp(st.reps || substituted.rMin);
+      setRir(WR[week].rirN);
+    }
     setShowSwap(false);
   };
 
@@ -2256,7 +2269,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const allD=[];
     (nutrition||[]).forEach(e=>{const t=parse(e.date); if(!isNaN(t)) allD.push(t);});
     (bodyMetrics||[]).forEach(e=>{const t=parse(e.date); if(!isNaN(t)) allD.push(t);});
-    const anchor=allD.length?Math.max(...allD):Date.now();
+    // Anchor to NOW, not the newest supplied date: a future-dated record previously became
+    // the anchor and sailed through the freshness test with a negative age.
+    const nowTs=Date.now();
+    const anchor=Math.min(allD.length?Math.max(...allD):nowTs, nowTs);
     // Targets must expire. Anchoring the 14-day window to the newest LOGGED date meant that
     // if the user stopped logging two months ago, the coach still returned ok:true with
     // confident-looking targets derived entirely from stale data.
@@ -2269,8 +2285,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const weightAgeDays = !isNaN(_lwTs) ? (Date.now()-_lwTs)/dayMs : Infinity;
     if (weightAgeDays < 0 || weightAgeDays > 10) return { ok:false, reason:'stale_weight', ageDays:isFinite(weightAgeDays)?Math.round(weightAgeDays):null };
     const winStart=anchor-14*dayMs;
-    const nutWin=(nutrition||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&e.calories>0;});
-    const wWin=(bodyMetrics||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&e.weight>0;}).sort((a,b)=>parse(a.date)-parse(b.date));
+    const nutWin=(nutrition||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&t<=nowTs&&e.calories>0;});
+    const wWin=(bodyMetrics||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&t<=nowTs&&e.weight>0;}).sort((a,b)=>parse(a.date)-parse(b.date));
     let tdee=null, conf='low', spanDays=0, avgIntake=null, ratePerWk=null;
     if(nutWin.length>=7&&wWin.length>=2){
       avgIntake=Math.round(nutWin.reduce((s,e)=>s+e.calories,0)/nutWin.length);
@@ -2394,11 +2410,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const rows=Object.values(by); if(!rows.length) return null;
     return Math.round(rows.reduce((a,n)=>a+(n[k]||0),0)/rows.length);
   };
-  const _ebToday=new Date().toISOString().slice(0,10);
+  const _ebToday=localToday();
   const _ebN=nutrition.find(n=>n.date===_ebToday);
   const calIn=_ebN?_ebN.calories:null;
   // Only treat WHOOP burn as "today's" if the cache is actually from today.
-  const _whoopFresh = whoopData?.cachedAt ? (new Date(whoopData.cachedAt).toISOString().slice(0,10) === _ebToday) : false;
+  const _localDateOf = ts => { const d=new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+  const _whoopFresh = whoopData?.cachedAt ? (_localDateOf(whoopData.cachedAt) === _ebToday) : false;
   const calOut=_whoopFresh ? (whoopData?.dayCal??null) : null;
   const calNet=(calIn!=null&&calOut!=null)?calIn-calOut:null;
   // 7-day rolling energy balance: avg intake vs avg WHOOP burn (far less noisy than a single day)
@@ -3307,7 +3324,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           </div>
           <div className="tool-sec">
             <div className="tool-ttl">Cloud Sync</div>
-            <div className="tool-sub">Back up your full training history to the cloud so it survives clearing Safari or switching phones. Enter the same code on another device to restore everything.</div>
+            <div className="tool-sub">Back up your training, body, nutrition and health logs to the cloud so they survive clearing Safari or switching phones. Enter the same code on another device to restore. <b>Check-in photos are NOT cloud-synced</b> — they stay on this device only, so export a backup if you want to keep them.</div>
             {syncCode ? (
               <div>
                 <div className={`sync-status ${cloudStatus}`}>
