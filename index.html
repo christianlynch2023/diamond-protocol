@@ -1062,7 +1062,15 @@ function parseWhoopHistory(rec) {
 }
 function mergeHistory(a, b) {
   const map = {};
-  [...(a || []), ...(b || [])].forEach(e => { if (e && e.date) map[e.date] = e; });
+  // Field-level merge: a later entry must not wipe fields it simply doesn't carry
+  // (e.g. parseWhoopHistory has no dayCal; a wholesale replace would erase it).
+  [...(a || []), ...(b || [])].forEach(e => {
+    if (!e || !e.date) return;
+    const prev = map[e.date] || {};
+    const merged = { ...prev };
+    Object.keys(e).forEach(k => { if (e[k] != null) merged[k] = e[k]; });
+    map[e.date] = merged;
+  });
   return Object.values(map).sort((x, y) => x.date < y.date ? -1 : 1).slice(-60);
 }
 function computeDeloadReadiness(history, week) {
@@ -1357,7 +1365,7 @@ function App() {
       setWhoopData(parsed);
       LS.set('whoop_cache', JSON.stringify(parsed));
       const newHist = parseWhoopHistory(raw.recovery);
-      const todayEntry = parsed.recovery != null ? [{ date: new Date().toISOString().slice(0,10), recovery: parsed.recovery, hrv: parsed.hrv, rhr: parsed.rhr, respRate: parsed.respRate, skinTemp: parsed.skinTemp }] : [];
+      const todayEntry = parsed.recovery != null ? [{ date: new Date().toISOString().slice(0,10), recovery: parsed.recovery, hrv: parsed.hrv, rhr: parsed.rhr, respRate: parsed.respRate, skinTemp: parsed.skinTemp, dayCal: parsed.dayCal, sleepHrs: parsed.sleepHrs, sleepDebt: parsed.sleepDebt, strain: parsed.strain }] : [];
       if (newHist.length || todayEntry.length) {
         setWhoopHistory(prev => mergeHistory(prev, [...newHist, ...todayEntry]));
       }
@@ -2297,7 +2305,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const nutByDate={}; nutrition.forEach(n=>{ const d=(n.date||'').slice(0,10); if(d) nutByDate[d]=n; });
     return whoopHistory.slice(-14).map(h=>{
       const d=(h.date||'').slice(0,10); const n=nutByDate[d];
-      return { date:d, recovery:h.recovery??null, kcal:n?n.calories:null, carbs:n?n.carbs:null, sleepH:h.sleepHrs??(h.sleep!=null?null:null) };
+      return { date:d, recovery:h.recovery??null, kcal:n?n.calories:null, carbs:n?n.carbs:null, sleepH:h.sleepHrs??null };
     });
   }, [nutrition, whoopHistory]);
   const recFuelReady=recFuelRows.filter(r=>r.recovery!=null&&r.kcal!=null).length>=3;
@@ -2312,10 +2320,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const now=Date.now();
     const ins=nutrition.filter(n=>(now-new Date(n.date).getTime())/86400000<=7 && n.calories!=null);
     const outs=(whoopHistory||[]).filter(w=>w.dayCal!=null && (now-new Date(w.date).getTime())/86400000<=7);
-    if(!ins.length || !outs.length) return null;
+    // need at least 3 days on each side to be meaningful; dayCal only accrues from the day
+    // this build ships, so this activates after ~3 days of WHOOP syncing.
+    if(ins.length<3 || outs.length<3) return null;
     const avgIn=Math.round(ins.reduce((a,n)=>a+n.calories,0)/ins.length);
     const avgOut=Math.round(outs.reduce((a,w)=>a+w.dayCal,0)/outs.length);
-    return {avgIn,avgOut,net:avgIn-avgOut,nIn:ins.length,nOut:outs.length};
+    const days=Math.min(ins.length,outs.length);
+    return {avgIn,avgOut,net:avgIn-avgOut,days};
   }, [nutrition, whoopHistory]);
   const cardioWeekStart=(()=>{ const d=new Date(); const day=(d.getDay()+6)%7; d.setHours(0,0,0,0); d.setDate(d.getDate()-day); return d.getTime(); })();
   const cardioThisWeek=cardioLog.filter(c=>new Date(c.date).getTime()>=cardioWeekStart);
@@ -3509,7 +3520,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div className="eb-op">&#8722;</div>
                 <div className="eb-item"><div className="eb-v">{eb7.avgOut}</div><div className="eb-l">avg out</div></div>
                 <div className="eb-op">=</div>
-                <div className="eb-item"><div className="eb-v" style={{color: eb7.net>=0?'var(--acc)':'var(--warn)'}}>{eb7.net>=0?'+':''}{eb7.net}</div><div className="eb-l">7-day net</div></div>
+                <div className="eb-item"><div className="eb-v" style={{color: eb7.net>=0?'var(--acc)':'var(--warn)'}}>{eb7.net>=0?'+':''}{eb7.net}</div><div className="eb-l">{eb7.days}-day net</div></div>
               </div>
             ) : calNet != null && (
               <div className="energy-bal">
