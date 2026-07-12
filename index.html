@@ -1244,10 +1244,10 @@ function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHist
   if (sleepGreat) { pos++; factors.push('strong sleep (' + sleep + '%)'); }
 
   // Cumulative-fatigue + illness signals from the richer WHOOP feed
-  const sd = whoopData?.sleepDebt;
+  const sd = whoopStale ? null : whoopData?.sleepDebt;
   if (sd != null && sd >= 2) { minor++; factors.push('sleep debt ' + sd + 'h'); }
   const rrVals = (whoopHistory || []).map(h => h.respRate).filter(v => v != null);
-  if (whoopData?.respRate != null && rrVals.length >= 5) {
+  if (!whoopStale && whoopData?.respRate != null && rrVals.length >= 5) {
     const baseArr = rrVals.slice(0, -1).slice(-14);
     const baseAvg = baseArr.reduce((a, b) => a + b, 0) / baseArr.length;
     if (whoopData.respRate >= baseAvg + 1) { major++; factors.push('respiratory rate up vs baseline (possible illness)'); }
@@ -1395,7 +1395,14 @@ function App() {
       applyWhoopRecovery(parsed.recovery);
     } catch(e) {
       const cached = LS.get('whoop_cache');
-      if (cached) { const d=JSON.parse(cached); setWhoopData(d); applyWhoopRecovery(d.recovery); }
+      if (cached) {
+        const d=JSON.parse(cached); setWhoopData(d);
+        // Only let the cache drive the subjective recovery selector if it is actually fresh.
+        // Otherwise a stale green score re-enters readiness as 'subjExcellent', bypassing
+        // the staleness guard in computeReadiness entirely.
+        const ageH = d.cachedAt != null ? (Date.now()-d.cachedAt)/3600000 : Infinity;
+        if (ageH <= 30) applyWhoopRecovery(d.recovery);
+      }
     } finally { setWhoopLoading(false); }
   };
 
@@ -1570,7 +1577,9 @@ function App() {
 
   useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery, block, highVol, phase: goalPhase})); }, [week, recovery, block, highVol, goalPhase]);
   useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
-  useEffect(()=>{ if(!checkins.length) return; const ok = LS.set('checkin_photos',JSON.stringify(checkins)); if(!ok) alert('Storage full — your check-in photo was NOT saved. Delete an older photo and try again.'); },[checkins]);
+  // Must persist even when checkins is empty, or deleting the last photo never writes and
+  // the old array resurrects on reload. Only warn when a WRITE of actual content fails.
+  useEffect(()=>{ const ok = LS.set('checkin_photos',JSON.stringify(checkins)); if(!ok && checkins.length) alert('Storage full — your check-in photo was NOT saved. Delete an older photo and try again.'); },[checkins]);
 
   useEffect(() => {
     if (!timerOn) return;
@@ -1744,9 +1753,15 @@ function App() {
     setBodyMetrics([]); setMeasurements([]); setNutrition([]); setCardioLog([]); setBpLog([]); setGlucoseLog([]); setProtocolLog([]);
     // Previously left photos, WHOOP history/cache/tokens and the sync code behind,
     // so "Clear All Data" did not actually clear all data.
-    setCheckins([]); setWhoopHistory([]); setWhoopWorkouts([]); setWhoopData(null); setWhoopConnected(false);
+    // NOTE: whoopConnected is a DERIVED constant (from the stored token), not state.
+    // Calling a non-existent setWhoopConnected() threw a ReferenceError here and aborted
+    // the whole function, so the localStorage wipe below never ran.
+    setCheckins([]); setWhoopHistory([]); setWhoopWorkouts([]); setWhoopData(null);
+    // sync_code MUST be cleared: otherwise the mount effect calls pullFromCloud() on next
+    // load and resurrects everything the user just deleted.
+    setSyncCode(''); setCloudStatus('idle');
     ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','glucose_log','protocol_log',
-     'checkin_photos','whoop_history','whoop_workouts','whoop_cache','whoop_access_token','whoop_refresh_token'].forEach(k=>LS.del(k));
+     'checkin_photos','whoop_history','whoop_workouts','whoop_cache','whoop_access_token','whoop_refresh_token','sync_code'].forEach(k=>LS.del(k));
   };
 
 
@@ -2084,7 +2099,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); if (data.config.block) setBlock(data.config.block); if (data.config.highVol!=null) setHighVol(data.config.highVol); if (data.config.phase) setGoalPhase(data.config.phase); }
         // Push the merged superset back so the cloud gets any offline sessions too
         const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery, block: data.config?.block || block, highVol: data.config?.highVol != null ? data.config.highVol : highVol, phase: data.config?.phase || goalPhase }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, cardioLog: mergedCardio, bpLog: mergedBP, glucoseLog: mergedGl, updatedAt: Date.now() });
-        fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot }).catch(() => {});
+        // Must await and check: an un-awaited, unchecked POST let the UI report 'synced'
+        // while the merged superset was never actually written to the cloud.
+        try {
+          const pushRes = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
+          if (!pushRes.ok) { setCloudStatus('error'); return false; }
+        } catch (e) { setCloudStatus('error'); return false; }
         setCloudStatus('synced');
         return true;
       }
@@ -2242,6 +2262,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // confident-looking targets derived entirely from stale data.
     const anchorAgeDays = (Date.now()-anchor)/dayMs;
     if (anchorAgeDays > 10) return { ok:false, reason:'stale', ageDays:Math.round(anchorAgeDays) };
+    // Each REQUIRED input must be fresh independently. A fresh food log paired with a
+    // two-month-old bodyweight previously produced confident targets built on a stale weight.
+    const _lw = (bodyMetrics||[])[0];
+    const _lwTs = _lw ? parse(_lw.date) : NaN;
+    const weightAgeDays = !isNaN(_lwTs) ? (Date.now()-_lwTs)/dayMs : Infinity;
+    if (weightAgeDays < 0 || weightAgeDays > 10) return { ok:false, reason:'stale_weight', ageDays:isFinite(weightAgeDays)?Math.round(weightAgeDays):null };
     const winStart=anchor-14*dayMs;
     const nutWin=(nutrition||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&e.calories>0;});
     const wWin=(bodyMetrics||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&e.weight>0;}).sort((a,b)=>parse(a.date)-parse(b.date));
@@ -2294,19 +2320,22 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const baseEx=sess?sess.exercises[exIdx]:null;
   const curEx=baseEx?(subMap[baseEx.id]?{...baseEx,...subMap[baseEx.id]}:baseEx):null;
   const effSets=curEx?getEffSets(curEx,week,hvActive):0;
-  const loggedSetsArr=curEx?(setData[curEx.id]||[]):[];
-  const prevHist=curEx?getPrevHist(curEx.id,logs,3):[];
-  const progRec=curEx?getProgRec(curEx.id,curEx.rMax,logs,effPhase):null;
   const _curHistId = (curEx && baseEx && subMap[baseEx.id]) ? subMap[baseEx.id].id : (curEx?curEx.id:null);
+  const loggedSetsArr=curEx?(setData[_curHistId]||setData[curEx.id]||[]):[];
+  const prevHist=curEx?getPrevHist(_curHistId,logs,3):[];
+  const progRec=curEx?getProgRec(_curHistId,curEx.rMax,logs,effPhase):null;
   const curTarget=curEx?getTarget(curEx,logs,week,effPhase,_curHistId):null;
   const R=88, CIRC=2*Math.PI*R;
   const dashOff=CIRC*(1-(timerTotal>0?timerSecs/timerTotal:0));
   const totalSets=Object.values(setData).reduce((a,s)=>a+s.length,0);
   const dur=startRef.current?Math.round((Date.now()-startRef.current)/60000):0;
+  // Sets for a swapped exercise are stored under the substitute id, so the base id finds
+  // nothing and the e1RM highlight silently vanishes for substituted compounds.
   const ormHL=sess?sess.exercises.filter(ex=>ex.orm).map(ex=>{
-    const sets=setData[ex.id]||[]; if(!sets.length)return null;
+    const mapped=subMap[ex.id]; const eid=mapped?mapped.id:ex.id;
+    const sets=setData[eid]||[]; if(!sets.length)return null;
     const best=sets.reduce((a,s)=>epley(s.weight,s.reps)>epley(a.weight,a.reps)?s:a,sets[0]);
-    return {name:ex.name, orm:epley(best.weight,best.reps)};
+    return {name:(mapped&&mapped.name)||ex.name, orm:epley(best.weight,best.reps)};
   }).filter(Boolean):[];
   const progHist=progEx?getPrevHist(progEx,logs,20):[];
   const _metricVal=(sets)=>{ if(!sets||!sets.length) return 0; if(progMetric==='weight') return Math.max(...sets.map(s=>s.weight||0)); if(progMetric==='volume') return sets.reduce((a,s)=>a+(s.weight||0)*(s.reps||0),0); return Math.max(...sets.map(s=>epley(s.weight||0,s.reps||0))); };
@@ -2357,7 +2386,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     });
   }, [nutrition, whoopHistory]);
   const recFuelReady=recFuelRows.filter(r=>r.recovery!=null&&r.kcal!=null).length>=3;
-  const avg7=(k)=>{ const l7=nutrition.slice(0,7); if(!l7.length) return null; return Math.round(l7.reduce((a,n)=>a+(n[k]||0),0)/l7.length); };
+  // True 7-CALENDAR-DAY window: dedupe by date, reject future dates. Previously this was
+  // 'the last 7 records', which could silently span 3 weeks and was still labelled a 7-day avg.
+  const avg7=(k)=>{
+    const now=Date.now(); const by={};
+    (nutrition||[]).forEach(n=>{ const d=(n.date||'').slice(0,10); if(!d) return; const a=(now-new Date(d+'T12:00:00').getTime())/86400000; if(a>=0&&a<=7&&!(d in by)) by[d]=n; });
+    const rows=Object.values(by); if(!rows.length) return null;
+    return Math.round(rows.reduce((a,n)=>a+(n[k]||0),0)/rows.length);
+  };
   const _ebToday=new Date().toISOString().slice(0,10);
   const _ebN=nutrition.find(n=>n.date===_ebToday);
   const calIn=_ebN?_ebN.calories:null;
@@ -2370,8 +2406,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // Must compare the SAME calendar days on both sides. Averaging intake over one set of
     // days and expenditure over a different set produced a meaningless "net".
     const now=Date.now();
-    const inBy={}; nutrition.forEach(n=>{ const d=(n.date||'').slice(0,10); if(d && n.calories!=null && (now-new Date(d).getTime())/86400000<=7) inBy[d]=n.calories; });
-    const outBy={}; (whoopHistory||[]).forEach(w=>{ const d=(w.date||'').slice(0,10); if(d && w.dayCal!=null && (now-new Date(d).getTime())/86400000<=7) outBy[d]=w.dayCal; });
+    const _age = d => (now - new Date(d+'T12:00:00').getTime())/86400000;  // >=0 rejects future dates
+    const inBy={}; nutrition.forEach(n=>{ const d=(n.date||'').slice(0,10); if(!d||n.calories==null) return; const a=_age(d); if(a>=0 && a<=7) inBy[d]=n.calories; });
+    const outBy={}; (whoopHistory||[]).forEach(w=>{ const d=(w.date||'').slice(0,10); if(!d||w.dayCal==null) return; const a=_age(d); if(a>=0 && a<=7) outBy[d]=w.dayCal; });
     const matched=Object.keys(inBy).filter(d=>outBy[d]!=null);
     if(matched.length<3) return null;
     const avgIn=Math.round(matched.reduce((a,d)=>a+inBy[d],0)/matched.length);
@@ -2401,7 +2438,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     return { avg, inRange, n:l7.length };
   }, [glucoseLog]);
   const calStats = useMemo(() => {
-    const l7 = nutrition.slice(0,7); if (!l7.length) return null;
+    const _now=Date.now(); const _by={};
+    (nutrition||[]).forEach(n=>{ const d=(n.date||'').slice(0,10); if(!d) return; const a=(_now-new Date(d+'T12:00:00').getTime())/86400000; if(a>=0&&a<=7&&!(d in _by)) _by[d]=n; });
+    const l7 = Object.values(_by); if (!l7.length) return null;
     const avgCal = Math.round(l7.reduce((a,n)=>a+(n.calories||0),0)/l7.length);
     const avgP = Math.round(l7.reduce((a,n)=>a+(n.protein||0),0)/l7.length);
     // Compare the 7-day average (which blends training + rest days) against the BLENDED weekly
@@ -3531,7 +3570,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="nc">
               <div className="nc-hd"><span className="nc-ttl">Smart targets</span>{nutriCoach.ok && <span className={'nc-conf '+nutriCoach.conf}>{nutriCoach.conf} confidence</span>}</div>
               {!nutriCoach.ok && nutriCoach.reason==='stale' && <div className="nc-note">Your most recent food/weight log is {nutriCoach.ageDays} days old, so these targets have expired. Log a few days of food and a weigh-in to recalculate.</div>}
-              {!nutriCoach.ok && nutriCoach.reason && nutriCoach.reason!=='stale' && <div className="nc-note">{nutriCoach.reason}</div>}
+              {!nutriCoach.ok && nutriCoach.reason==='stale_weight' && <div className="nc-note">Your most recent weigh-in is {nutriCoach.ageDays!=null?nutriCoach.ageDays+' days old':'missing'}, so targets can't be calculated from it. Log a fresh weigh-in.</div>}
+              {!nutriCoach.ok && nutriCoach.reason && nutriCoach.reason!=='stale' && nutriCoach.reason!=='stale_weight' && <div className="nc-note">{nutriCoach.reason}</div>}
               {!nutriCoach.ok && nutriCoach.partial && <div className="nc-note">Need ~1-2 weeks of consistent logging to estimate your maintenance. So far: {nutriCoach.foodDays} food day{nutriCoach.foodDays===1?'':'s'} and {nutriCoach.weighIns} weigh-in{nutriCoach.weighIns===1?'':'s'} in the last 14 days.</div>}
               {nutriCoach.ok && (
                 <div className="nc-body">
