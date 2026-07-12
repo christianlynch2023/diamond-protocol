@@ -1594,6 +1594,7 @@ function App() {
   const [syncCode, setSyncCode]       = useState(() => LS.get('sync_code') || '');
   const [syncCodeInput, setSyncCodeInput] = useState('');
   const [cloudStatus, setCloudStatus] = useState('idle');
+  const [cloudErr, setCloudErr] = useState('');
   const syncTimer = useRef(null);
   const skipPush  = useRef(false);
   const syncMounted = useRef(false);
@@ -2189,7 +2190,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         const r = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': syncCode }, body: snapshot });
         // fetch() only rejects on network failure; a 4xx/5xx resolves normally, so an
         // unchecked call could report 'synced' when the server actually rejected the data.
-        if (!r.ok) { setCloudStatus('error'); return; }
+        if (!r.ok) { let m=''; try { const j=await r.json(); m=j&&j.error?j.error:''; } catch(_){} setCloudErr(r.status+(m?': '+m:'')); setCloudStatus('error'); return; }
+        setCloudErr('');
         setCloudStatus('synced');
       } catch (e) { setCloudStatus('error'); }
     }, 3000);
@@ -3365,7 +3367,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {syncCode ? (
               <div>
                 <div className={`sync-status ${cloudStatus}`}>
-                  {cloudStatus==='syncing'?'Syncing…':cloudStatus==='error'?'Sync error — will retry on next change':cloudStatus==='synced'?'✓ Backed up to cloud':'Connected'}
+                  {cloudStatus==='syncing'?'Syncing…':cloudStatus==='error'?('Sync error'+(cloudErr?' ('+cloudErr+')':'')+' — will retry on next change'):cloudStatus==='synced'?'✓ Backed up to cloud':'Connected'}
                 </div>
                 <div className="data-btns" style={{gridTemplateColumns:'1fr 1fr'}}>
                   <button className="data-btn" onClick={()=>syncNow()}>&#8593; Sync Now</button>
