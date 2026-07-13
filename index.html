@@ -1194,6 +1194,38 @@ function mergeLogs(a, b) {
 // so the LOCAL copy always beat the cloud copy even when the cloud held a newer edit —
 // the newer edit was discarded and then overwritten on the next push. Records now carry
 // updatedAt (stamped on save); when both sides hold the same key we keep the newer one.
+// ---- Record identity & sync schema ----
+// Records need an IMMUTABLE id. Merge keys previously embedded the mutable value
+// (date|weight, date|sys|dia ...), so editing a value produced a DIFFERENT key,
+// pickNewer() never fired, and both the old and edited record survived as duplicates.
+function newId() {
+  try { if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID(); } catch(e){}
+  return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+// Deterministic legacy id so the SAME pre-migration record gets the SAME id on every
+// device — otherwise migration itself would create cross-device duplicates.
+function legacyId(e, kind) {
+  const parts = [kind, e.date||'', e.site||'', e.compound||'', e.modality||'', e.sessionId||''];
+  const s = parts.join('|');
+  let hh = 5381;
+  for (let i = 0; i < s.length; i++) { hh = ((hh << 5) + hh + s.charCodeAt(i)) >>> 0; }
+  return 'lg_' + kind + '_' + hh.toString(36);
+}
+function ensureIds(arr, kind) {
+  if (!Array.isArray(arr)) return arr;
+  let changed = false;
+  const out = arr.map(e => {
+    if (!e || e.id) return e;
+    changed = true;
+    return { ...e, id: legacyId(e, kind), updatedAt: e.updatedAt != null ? e.updatedAt : 0 };
+  });
+  return changed ? out : arr;
+}
+function live(arr) { return (arr || []).filter(e => e && !e.deletedAt); }
+function pruneTombstones(arr, days) {
+  const cut = Date.now() - (days || 90) * 86400000;
+  return (arr || []).filter(e => !e.deletedAt || e.deletedAt > cut);
+}
 function pickNewer(x, y) {
   const tx = x && x.updatedAt != null ? x.updatedAt : 0;
   const ty = y && y.updatedAt != null ? y.updatedAt : 0;
@@ -1207,6 +1239,9 @@ function mergeByKey(a, b, keyFn) {
     if (map.has(k)) { map.set(k, pickNewer(map.get(k), e)); }
     else { map.set(k, e); order.push(k); }
   }
+  // Tombstones (deletedAt) are RETAINED here so they propagate to other devices via the
+  // synced snapshot; the UI filters them out via live(). A newer tombstone beats an older
+  // live record through pickNewer(), which is what stops a delete being resurrected.
   const out = order.map(k => map.get(k));
   out.sort((x, y) => (x.date || '') < (y.date || '') ? 1 : -1);
   return out;
@@ -1329,6 +1364,7 @@ function App() {
   // during the FIRST render, so React could not mount and the whole app failed to open.
   const [whoopData, setWhoopData]       = useState(() => { try { const c=LS.get('whoop_cache'); return c?JSON.parse(c):null; } catch(e) { LS.del('whoop_cache'); return null; } });
   const [whoopAuthFail, setWhoopAuthFail] = useState(false);
+  const [whoopStaleNote, setWhoopStaleNote] = useState(false);  // last refresh failed, showing cache
   const [whoopLoading, setWhoopLoading] = useState(false);
   const [whoopHistory, setWhoopHistory] = usePersistentState('whoop_history', []);
   const [whoopWorkouts, setWhoopWorkouts] = usePersistentState('whoop_workouts', []);
@@ -1387,13 +1423,15 @@ function App() {
   // WHOOP data itself went stale and was correctly nulled by the freshness guard.
   // WHOOP recovery reaches readiness properly via whoopData.recovery (freshness-gated).
 
-  const fetchWhoopData = async token => {
+  const fetchWhoopData = async (token, allowRefresh = true) => {
     const t = token || LS.get('whoop_access_token');
     if (!t) return;
     setWhoopLoading(true);
     try {
       const res = await fetch('/.netlify/functions/whoop-data', { headers: { Authorization: `Bearer ${t}` } });
-      if (res.status === 401) { await refreshWhoopToken(); return; }
+      // One refresh attempt only. Previously a repeatedly-rejected token caused
+      // fetch -> refresh -> fetch -> refresh ... indefinitely.
+      if (res.status === 401) { if (!allowRefresh) { throw new Error('WHOOP token rejected after refresh'); } await refreshWhoopToken(); return; }
       // Without this, a 400/403/429/500 JSON body was parsed as valid WHOOP data, produced an
       // all-null record, was stamped cachedAt: now (so it looked FRESH), and overwrote the
       // last good cache.
@@ -1401,7 +1439,7 @@ function App() {
       const raw = await res.json();
       const parsed = { ...parseWhoop(raw), cachedAt: Date.now() };
       setWhoopData(parsed);
-      LS.set('whoop_cache', JSON.stringify(parsed));
+      LS.set('whoop_cache', JSON.stringify(parsed)); setWhoopStaleNote(false);
       const newHist = parseWhoopHistory(raw.recovery);
       // localToday(), not UTC: during BST between 00:00-00:59 local, toISOString() still
       // returns YESTERDAY, so today's entry was filed under the wrong date.
@@ -1415,7 +1453,7 @@ function App() {
       if (wos.length) { setWhoopWorkouts(prev => { const m={}; [...(prev||[]), ...wos].forEach(w=>{ const k=(w.id!=null?String(w.id):(w.start||'')+'|'+(w.strain||'')); if(k) m[k]=w; }); return Object.values(m).sort((a,b)=>((a.start||'')<(b.start||'')?1:-1)).slice(0,200); }); }
     } catch(e) {
       const cached = LS.get('whoop_cache');
-      if (cached) { try { setWhoopData(JSON.parse(cached)); } catch(e) { LS.del('whoop_cache'); } }
+      if (cached) { try { setWhoopData(JSON.parse(cached)); setWhoopStaleNote(true); } catch(e) { LS.del('whoop_cache'); } }
     } finally { setWhoopLoading(false); }
   };
 
@@ -1436,7 +1474,7 @@ function App() {
       if (tokens.refresh_token) LS.set('whoop_refresh_token', tokens.refresh_token);
       LS.set('whoop_expires_at', String(Date.now() + (tokens.expires_in||3600)*1000));
       setWhoopAuthFail(false);
-      await fetchWhoopData(tokens.access_token);
+      await fetchWhoopData(tokens.access_token, false);  // no second refresh
       return true;
     } catch(e) {
       console.warn('WHOOP refresh failed:', e && e.message);
@@ -1530,9 +1568,12 @@ function App() {
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [review, setReview]           = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
-  const [bodyMetrics, setBodyMetrics] = usePersistentState('body_metrics', []);
-  const [protocolLog, setProtocolLog] = usePersistentState('protocol_log', []);
-  const [measurements, setMeasurements] = usePersistentState('body_measurements', []);
+  const [bodyMetricsRaw, setBodyMetrics] = usePersistentState('body_metrics', []);
+  const bodyMetrics = useMemo(()=>live(bodyMetricsRaw),[bodyMetricsRaw]);
+  const [protocolLogRaw, setProtocolLog] = usePersistentState('protocol_log', []);
+  const protocolLog = useMemo(()=>live(protocolLogRaw),[protocolLogRaw]);
+  const [measurementsRaw, setMeasurements] = usePersistentState('body_measurements', []);
+  const measurements = useMemo(()=>live(measurementsRaw),[measurementsRaw]);
   const [checkins, setCheckins] = useState(() => { try { return JSON.parse(LS.get('checkin_photos') || '[]'); } catch(e) { return []; } });
   const [ciPose, setCiPose] = useState('front');
   const [ciCompareA, setCiCompareA] = useState(null);
@@ -1551,21 +1592,25 @@ function App() {
   const [showCalLog, setShowCalLog] = useState(false);
   const [expandedWeek, setExpandedWeek] = useState(null);
   const [nutriDayType, setNutriDayType] = useState(() => { const d=new Date().getDay(); return [2,4,6,0].includes(d)?'train':'rest'; }); // Tue/Thu/Sat/Sun train
-  const [nutrition, setNutrition] = usePersistentState('nutrition_log', []);
+  const [nutritionRaw, setNutrition] = usePersistentState('nutrition_log', []);
+  const nutrition = useMemo(()=>live(nutritionRaw),[nutritionRaw]);
   const [nP, setNP] = useState('');
   const [nC, setNC] = useState('');
   const [nF, setNF] = useState('');
   const [showAddNutri, setShowAddNutri] = useState(false);
-  const [cardioLog, setCardioLog] = usePersistentState('cardio_log', []);
+  const [cardioLogRaw, setCardioLog] = usePersistentState('cardio_log', []);
+  const cardioLog = useMemo(()=>live(cardioLogRaw),[cardioLogRaw]);
   const [cType, setCType] = useState('Zone 2');
   const [cMin, setCMin] = useState('');
   const [cNote, setCNote] = useState('');
   const [showAddCardio, setShowAddCardio] = useState(false);
-  const [bpLog, setBpLog] = usePersistentState('bp_log', []);
+  const [bpLogRaw, setBpLog] = usePersistentState('bp_log', []);
+  const bpLog = useMemo(()=>live(bpLogRaw),[bpLogRaw]);
   const [bpSys, setBpSys] = useState('');
   const [bpDia, setBpDia] = useState('');
   const [bpPulse, setBpPulse] = useState('');
-  const [glucoseLog, setGlucoseLog] = usePersistentState('glucose_log', []);
+  const [glucoseLogRaw, setGlucoseLog] = usePersistentState('glucose_log', []);
+  const glucoseLog = useMemo(()=>live(glucoseLogRaw),[glucoseLogRaw]);
   const [glVal, setGlVal] = useState('');
   const [showAddGl, setShowAddGl] = useState(false);
   const [showAddBP, setShowAddBP] = useState(false);
@@ -1595,11 +1640,12 @@ function App() {
   const [syncCodeInput, setSyncCodeInput] = useState('');
   const [cloudStatus, setCloudStatus] = useState('idle');
   const [cloudErr, setCloudErr] = useState('');
+  const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const syncTimer = useRef(null);
   const skipPush  = useRef(false);
   const syncMounted = useRef(false);
 
-  useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery, block, highVol, phase: goalPhase})); }, [week, recovery, block, highVol, goalPhase]);
+  useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery, block, highVol, phase: goalPhase})); setCfgUpdatedAt(Date.now()); }, [week, recovery, block, highVol, goalPhase]);
   useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
   // Must persist even when checkins is empty, or deleting the last photo never writes and
   // the old array resurrects on reload. Only warn when a WRITE of actual content fails.
@@ -1665,7 +1711,7 @@ function App() {
     const dur=Math.round((Date.now()-(startRef.current||Date.now()))/60000);
     const log={date:new Date().toISOString(),sessionId:sel,sessionName:sess.name,week,block,duration:dur,
       exercises:sess.exercises.map(ex=>{const e=subMap[ex.id]?{...ex,...subMap[ex.id]}:ex; return {id:e.id,name:e.name,...(subMap[ex.id]?{origId:ex.id}:{}),sets:(newData||setData)[e.id]||[],pain:painRef.current[e.id]||0};}).filter(ex=>ex.sets.length>0)};
-    setLogs(prev => [{...log, updatedAt: Date.now()},...prev].slice(0,200));
+    setLogs(prev => [{...log, id:newId(), updatedAt: Date.now()},...prev].slice(0,200));
     clearWip(); setReview(null); setView('complete');
   };
 
@@ -1945,7 +1991,7 @@ function App() {
     const sys=parseNum(bpSys), dia=parseNum(bpDia);
     if (sys==null || dia==null || sys<=0 || dia<=0) return;   // reject NaN/blank - feeds bpCategory + readiness gate
     const entry = { date: `${bpDate}T12:00:00.000Z`, sys: Math.round(sys), dia: Math.round(dia), pulse: parseNum(bpPulse)!=null ? Math.round(parseNum(bpPulse)) : null };
-    setBpLog(prev => [{...entry, updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
+    setBpLog(prev => [{...entry, id:newId(), updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
     setBpSys(''); setBpDia(''); setBpPulse(''); setBpDate(localToday()); setShowAddBP(false);
   };
 
@@ -1953,7 +1999,7 @@ function App() {
     const g=parseNum(glVal);
     if (g==null || g<=0) return;
     const entry = { date: `${glDate}T12:00:00.000Z`, value: g };
-    setGlucoseLog(prev => [{...entry, updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
+    setGlucoseLog(prev => [{...entry, id:newId(), updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
     setGlVal(''); setGlDate(localToday()); setShowAddGl(false);
   };
 
@@ -2046,7 +2092,21 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     glucose:   { setter:setGlucoseLog, slice:400, dateOnly:false, title:'Edit glucose', fields:[['value','Glucose (mmol/L)','num']] },
     protocol:  { setter:setProtocolLog, slice:500, dateOnly:false, title:'Edit protocol', fields:[['compound','Compound','text'],['dose','Dose','num'],['unit','Unit','text'],['notes','Notes','text']] },
   };
-  const openBodyEdit = (type, index, entry) => { setEditBody({type, index}); setEditBodyDraft({...entry}); };
+  // Identify by stable id, not array index: a cloud pull / new entry / delete could shift
+  // the array while the modal was open, so the saved edit could overwrite a DIFFERENT record.
+  const openBodyEdit = (type, index, entry) => {
+    const kind = ({weight:'bm', meas:'ms', nutrition:'nu', cardio:'cd', bp:'bp', glucose:'gl', protocol:'pr'})[type] || type;
+    const id = entry && entry.id ? entry.id : legacyId(entry || {}, kind);
+    setEditBody({ type, id }); setEditBodyDraft({ ...entry, id });
+  };
+  // Deletion must write a TOMBSTONE, not just remove the row. A plain filter() was
+  // invisible to the cloud merge, so the next pull found the record still present in the
+  // cloud snapshot with no local counterpart and RESURRECTED it.
+  const tombstone = (setter, kind) => (predicate) => setter(prev => prev.map(e => {
+    if (!predicate(e)) return e;
+    const id = e.id || legacyId(e, kind);
+    return { ...e, id, deletedAt: Date.now(), updatedAt: Date.now() };
+  }));
   const saveBodyEdit = () => {
     if(!editBody) return;
     const cfg = BODY_TYPES[editBody.type];
@@ -2054,7 +2114,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     cfg.fields.forEach(([k,,kind])=>{ if(kind==='num') d[k] = (d[k]===''||d[k]==null)?null:parseFloat(d[k]); });
     if(cfg.recompute) d = cfg.recompute(d);
     // stamp updatedAt so an edit reliably beats an older copy of the same record on merge
-    cfg.setter(prev => { const arr = prev.map((e,idx)=> idx===editBody.index ? {...d, updatedAt: Date.now()} : e); arr.sort((a,b)=> (a.date<b.date?1:a.date>b.date?-1:0)); return arr.slice(0, cfg.slice); });
+    cfg.setter(prev => { const arr = prev.map(e => ((e.id||'') === editBody.id) ? {...e, ...d, id: editBody.id, updatedAt: Date.now()} : e); arr.sort((a,b)=> (a.date<b.date?1:a.date>b.date?-1:0)); return arr.slice(0, cfg.slice); });
     setEditBody(null); setEditBodyDraft(null);
   };
 
@@ -2062,14 +2122,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const w=parseNum(newWt);
     if (w==null || w<=0) return;
     const e={date:`${wtDate}T12:00:00.000Z`,weight:w,bodyFat:parseNum(newBF),muscle:parseNum(newMuscle),notes:newWtNote};
-    setBodyMetrics(prev=>[{...e, updatedAt: Date.now()},...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,200));
+    setBodyMetrics(prev=>[{...e, id:newId(), updatedAt: Date.now()},...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,200));
     setNewWt('');setNewBF('');setNewMuscle('');setNewWtNote('');setWtDate(localToday());setShowAddBody(false);
   };
 
   const addCardio = () => {
     if (!cMin) return;
     const entry = { date: `${cDate}T12:00:00.000Z`, modality: cType, minutes: parseFloat(cMin), note: cNote };
-    setCardioLog(prev => [{...entry, updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
+    setCardioLog(prev => [{...entry, id:newId(), updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
     setCMin(''); setCNote(''); setCDate(localToday()); setShowAddCardio(false);
   };
 
@@ -2077,7 +2137,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!nP && !nC && !nF) return;
     const p = parseFloat(nP) || 0, c = parseFloat(nC) || 0, f = parseFloat(nF) || 0;
     const entry = { date: nDate, protein: p, carbs: c, fat: f, calories: Math.round(p*4 + c*4 + f*9) };
-    setNutrition(prev => { const filtered = prev.filter(e => e.date !== entry.date); return [{...entry, updatedAt: Date.now()}, ...filtered].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400); });
+    setNutrition(prev => { const filtered = prev.filter(e => e.date !== entry.date); return [{...entry, id:newId(), updatedAt: Date.now()}, ...filtered].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400); });
     setNP(''); setNC(''); setNF(''); setNDate(localToday()); setShowAddNutri(false);
   };
 
@@ -2085,14 +2145,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const v=parseNum(mVal);
     if (v==null || v<=0) return;   // reject blank/NaN/Infinity/non-positive measurement
     const entry = { date: `${mDate}T12:00:00.000Z`, site: mSite, value: v };
-    setMeasurements(prev => [{...entry, updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 500));
+    setMeasurements(prev => [{...entry, id:newId(), updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 500));
     setMVal(''); setMDate(localToday()); setShowAddMeas(false);
   };
 
   const addProtocol = () => {
     if (!pDose) return;
     const e={date:`${pDate}T12:00:00.000Z`,compound:pCmp,dose:parseFloat(pDose),unit:pUnit,notes:pNote};
-    setProtocolLog(prev=>[{...e, updatedAt: Date.now()},...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,500));
+    setProtocolLog(prev=>[{...e, id:newId(), updatedAt: Date.now()},...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,500));
     setPDose('');setPNote('');setPDate(localToday());setShowAddProt(false);
   };
 
@@ -2117,13 +2177,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       if (hasSnapshot) {
         // Merge cloud with current local so offline sessions are never lost
         const mergedLogs = mergeLogs(logs, Array.isArray(data.logs) ? data.logs : []);
-        const mergedBody = mergeByKey(bodyMetrics, Array.isArray(data.bodyMetrics) ? data.bodyMetrics : [], e => e.date + '|' + e.weight);
-        const mergedProt = mergeByKey(protocolLog, Array.isArray(data.protocolLog) ? data.protocolLog : [], e => e.date + '|' + e.compound + '|' + e.dose);
-        const mergedMeas = mergeByKey(measurements, Array.isArray(data.measurements) ? data.measurements : [], e => e.date + '|' + e.site + '|' + e.value);
-        const mergedNutri = mergeByKey(nutrition, Array.isArray(data.nutrition) ? data.nutrition : [], e => e.date);
-        const mergedCardio = mergeByKey(cardioLog, Array.isArray(data.cardioLog) ? data.cardioLog : [], e => e.date + '|' + e.modality + '|' + e.minutes);
-        const mergedBP = mergeByKey(bpLog, Array.isArray(data.bpLog) ? data.bpLog : [], e => e.date + '|' + e.sys + '|' + e.dia);
-        const mergedGl = mergeByKey(glucoseLog, Array.isArray(data.glucoseLog) ? data.glucoseLog : [], e => e.date + '|' + e.value);
+        const mergedBody = mergeByKey(ensureIds(bodyMetricsRaw,'bm'), ensureIds(Array.isArray(data.bodyMetrics)?data.bodyMetrics:[], 'bm'), e => e.id);
+        const mergedProt = mergeByKey(ensureIds(protocolLogRaw,'pr'), ensureIds(Array.isArray(data.protocolLog)?data.protocolLog:[], 'pr'), e => e.id);
+        const mergedMeas = mergeByKey(ensureIds(measurementsRaw,'ms'), ensureIds(Array.isArray(data.measurements)?data.measurements:[], 'ms'), e => e.id);
+        const mergedNutri = mergeByKey(ensureIds(nutritionRaw,'nu'), ensureIds(Array.isArray(data.nutrition)?data.nutrition:[], 'nu'), e => e.id);
+        const mergedCardio = mergeByKey(ensureIds(cardioLogRaw,'cd'), ensureIds(Array.isArray(data.cardioLog)?data.cardioLog:[], 'cd'), e => e.id);
+        const mergedBP = mergeByKey(ensureIds(bpLogRaw,'bp'), ensureIds(Array.isArray(data.bpLog)?data.bpLog:[], 'bp'), e => e.id);
+        const mergedGl = mergeByKey(ensureIds(glucoseLogRaw,'gl'), ensureIds(Array.isArray(data.glucoseLog)?data.glucoseLog:[], 'gl'), e => e.id);
         const mergedWhoop = mergeHistory(whoopHistory, Array.isArray(data.whoopHistory) ? data.whoopHistory : []);
         skipPush.current = true;
         setLogs(mergedLogs);
@@ -2135,9 +2195,21 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setBpLog(mergedBP);
         setGlucoseLog(mergedGl);
         setWhoopHistory(mergedWhoop);
-        if (data.config) { if (data.config.week) setWeek(data.config.week); if (data.config.recovery) setRecovery(data.config.recovery); if (data.config.block) setBlock(data.config.block); if (data.config.highVol!=null) setHighVol(data.config.highVol); if (data.config.phase) setGoalPhase(data.config.phase); }
+        // Only adopt cloud config if it is NEWER than the local one. Previously cloud always
+        // won, so a week/block/phase changed offline was silently reverted on the next pull
+        // and then pushed back, losing the change permanently.
+        const cloudCfgAt = data.config && data.config.updatedAt != null ? data.config.updatedAt : 0;
+        const cloudCfgNewer = !!data.config && cloudCfgAt > (cfgUpdatedAt || 0);
+        if (cloudCfgNewer) {
+          if (data.config.week != null) setWeek(data.config.week);
+          if (data.config.recovery != null) setRecovery(data.config.recovery);
+          if (data.config.block != null) setBlock(data.config.block);
+          if (data.config.highVol != null) setHighVol(data.config.highVol);
+          if (data.config.phase != null) setGoalPhase(data.config.phase);
+          setCfgUpdatedAt(cloudCfgAt);
+        }
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: { week: data.config?.week || week, recovery: data.config?.recovery || recovery, block: data.config?.block || block, highVol: data.config?.highVol != null ? data.config.highVol : highVol, phase: data.config?.phase || goalPhase }, bodyMetrics: mergedBody, protocolLog: mergedProt, measurements: mergedMeas, nutrition: mergedNutri, cardioLog: mergedCardio, bpLog: mergedBP, glucoseLog: mergedGl, whoopHistory: mergedWhoop, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: cloudCfgNewer ? { week: data.config.week, recovery: data.config.recovery, block: data.config.block, highVol: data.config.highVol, phase: data.config.phase, updatedAt: cloudCfgAt } : { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt||Date.now()) }, bodyMetrics: pruneTombstones(mergedBody), protocolLog: pruneTombstones(mergedProt), measurements: pruneTombstones(mergedMeas), nutrition: pruneTombstones(mergedNutri), cardioLog: pruneTombstones(mergedCardio), bpLog: pruneTombstones(mergedBP), glucoseLog: pruneTombstones(mergedGl), whoopHistory: mergedWhoop, updatedAt: Date.now() });
         // Must await and check: an un-awaited, unchecked POST let the UI report 'synced'
         // while the merged superset was never actually written to the cloud.
         try {
@@ -2157,7 +2229,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, whoopHistory, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: Date.now() }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, updatedAt: Date.now() });
       const r = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       if (!r.ok) { setCloudStatus('error'); return; }
       setCloudStatus('synced');
@@ -2183,7 +2255,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase }, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, whoopHistory, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: Date.now() }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -2543,7 +2615,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 ))}
               </div>
               <div className="modal-btns">
-                <button className="mbt danger" onClick={()=>{ cfg.setter(prev=>prev.filter((_,idx)=>idx!==editBody.index)); setEditBody(null); setEditBodyDraft(null); }}>Delete</button>
+                <button className="mbt danger" onClick={()=>{ cfg.setter(prev=>prev.map(e => ((e.id||'')===editBody.id) ? {...e, deletedAt: Date.now(), updatedAt: Date.now()} : e)); setEditBody(null); setEditBodyDraft(null); }}>Delete</button>
                 <button className="mbt ghost" onClick={()=>{setEditBody(null);setEditBodyDraft(null);}}>Cancel</button>
                 <button className="mbt go" onClick={saveBodyEdit}>Save</button>
               </div>
@@ -3346,6 +3418,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="tool-sec">
             <div className="tool-ttl">WHOOP</div>
             <div className="tool-sub">{whoopAuthFail?'Reconnect required — your WHOOP authorisation expired':(whoopConnected?'Connected — recovery syncs automatically on app open':'Connect to pull recovery, HRV and sleep data automatically')}</div>
+            {whoopStaleNote && !whoopAuthFail && <div className="info-banner" style={{margin:'0 0 10px'}}>Showing cached WHOOP data — last refresh failed. Tap Refresh Now to retry.</div>}
             {whoopAuthFail && <div className="info-banner err" style={{margin:'0 0 10px'}}>WHOOP disconnected — tap Connect WHOOP to re-authorise. Readiness will use your manual recovery selection until then.</div>}
             {whoopConnected?(
               <div>
@@ -3486,7 +3559,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-val">{m.weight}kg{m.bodyFat!=null?` · ${m.bodyFat}% bf`:''}</span>
                   <span className="bl-note">{m.muscle!=null?`${m.muscle}kg lean`:''}{m.notes?((m.muscle!=null?' · ':'')+m.notes):''}</span>
                   <button className="bl-edit" onClick={()=>openBodyEdit('weight',i,m)}>&#9998;</button>
-                  <button className="bl-del" onClick={()=>setBodyMetrics(prev=>prev.filter((_,j)=>j!==i))}>&#215;</button>
+                  <button className="bl-del" onClick={()=>tombstone(setBodyMetrics,'bm')((_,j)=>j===i)}>&#215;</button>
                 </div>
               ))}
               {bodyMetrics.length===0&&<div className="empty-msg">No entries yet — log your first weigh-in above.</div>}
@@ -3519,7 +3592,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                               <span className="sh-date">{fmtShort(m.date)}</span>
                               <span className="sh-val">{m.value}cm</span>
                               <button className="bl-edit" onClick={()=>openBodyEdit('meas',measurements.indexOf(m),m)}>&#9998;</button>
-                              <button className="bl-del" onClick={()=>setMeasurements(prev=>prev.filter(x=>x!==m))}>&#215;</button>
+                              <button className="bl-del" onClick={()=>tombstone(setMeasurements,'ms')(x=>x===m)}>&#215;</button>
                             </div>
                           ))}
                         </div>
@@ -3727,7 +3800,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span style={{flex:1,margin:'0 8px',fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'var(--t2)'}}>P{n.protein} C{n.carbs} F{n.fat}</span>
                   <span className="bl-val">{n.calories}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>kcal</span></span>
                   <button className="bl-edit" onClick={()=>openBodyEdit('nutrition',i,n)}>&#9998;</button>
-                  <button className="bl-del" onClick={() => setNutrition(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
+                  <button className="bl-del" onClick={() => tombstone(setNutrition,'nu')((_,j)=>j===i)}>&#215;</button>
                 </div>
               ))}
               {nutrition.length === 0 && <div className="empty-msg">No macros logged yet.<br/>Log today's totals above.</div>}
@@ -3764,7 +3837,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{c.modality}{c.note ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {c.note}</span> : null}</span>
                   <span className="bl-val">{c.minutes}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>min</span></span>
                   <button className="bl-edit" onClick={()=>openBodyEdit('cardio',i,c)}>&#9998;</button>
-                  <button className="bl-del" onClick={() => setCardioLog(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
+                  <button className="bl-del" onClick={() => tombstone(setCardioLog,'cd')((_,j)=>j===i)}>&#215;</button>
                 </div>
               ))}
               {cardioLog.length === 0 && <div className="empty-msg">No cardio logged yet.<br/>Log a session above.</div>}
@@ -3811,7 +3884,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{b.sys}/{b.dia}{b.pulse ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {b.pulse}bpm</span> : null}</span>
                   <span className={`bp-dot ${c.cls}`}></span>
                   <button className="bl-edit" onClick={()=>openBodyEdit('bp',i,b)}>&#9998;</button>
-                  <button className="bl-del" onClick={() => setBpLog(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
+                  <button className="bl-del" onClick={() => tombstone(setBpLog,'bp')((_,j)=>j===i)}>&#215;</button>
                 </div>
               ); })}
               {bpLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your blood pressure above.</div>}
@@ -3856,7 +3929,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{g.value}<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> mmol/L</span></span>
                   <span className={`bp-dot ${c.cls}`}></span>
                   <button className="bl-edit" onClick={()=>openBodyEdit('glucose',i,g)}>&#9998;</button>
-                  <button className="bl-del" onClick={() => setGlucoseLog(prev => prev.filter((_,j) => j !== i))}>&#215;</button>
+                  <button className="bl-del" onClick={() => tombstone(setGlucoseLog,'gl')((_,j)=>j===i)}>&#215;</button>
                 </div>
               ); })}
               {glucoseLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your fasting glucose above.</div>}
@@ -3904,7 +3977,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     {p.notes&&<div className="p-note">{p.notes}</div>}
                   </div>
                   <button className="p-edit" onClick={()=>openBodyEdit('protocol',i,p)}>&#9998;</button>
-                  <button className="p-del" onClick={()=>setProtocolLog(prev=>prev.filter((_,j)=>j!==i))}>&#215;</button>
+                  <button className="p-del" onClick={()=>tombstone(setProtocolLog,'pr')((_,j)=>j===i)}>&#215;</button>
                 </div>
               ))}
               {protocolLog.length===0&&<div className="empty-msg">No entries yet — log your first dose above.</div>}
