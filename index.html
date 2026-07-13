@@ -1180,9 +1180,12 @@ const CORE_EX = {
 
 function mergeLogs(a, b) {
   const map = new Map(); const order = [];
+  // Key on the immutable id (falling back to a deterministic legacy id). Keying on
+  // date|sessionId meant an edit that changed either field created a phantom second
+  // workout instead of being recognised as the same record.
   for (const l of [...(a || []), ...(b || [])]) {
     if (!l || !l.date) continue;
-    const key = l.date + '|' + (l.sessionId || '');
+    const key = l.id || legacyId(l, 'wk');
     if (map.has(key)) { map.set(key, pickNewer(map.get(key), l)); }
     else { map.set(key, l); order.push(key); }
   }
@@ -1204,8 +1207,12 @@ function newId() {
 }
 // Deterministic legacy id so the SAME pre-migration record gets the SAME id on every
 // device — otherwise migration itself would create cross-device duplicates.
-function legacyId(e, kind) {
-  const parts = [kind, e.date||'', e.site||'', e.compound||'', e.modality||'', e.sessionId||''];
+function legacyId(e, kind, index) {
+  // Must distinguish MULTIPLE same-day records (two BP readings on one date previously
+  // hashed identically and mergeByKey then discarded one as a duplicate version).
+  const parts = [kind, e.date||'', e.site||'', e.compound||'', e.modality||'', e.sessionId||'',
+                 e.sys ?? '', e.dia ?? '', e.pulse ?? '', e.value ?? '', e.weight ?? '',
+                 e.dose ?? '', e.minutes ?? '', e.calories ?? '', index != null ? index : ''];
   const s = parts.join('|');
   let hh = 5381;
   for (let i = 0; i < s.length; i++) { hh = ((hh << 5) + hh + s.charCodeAt(i)) >>> 0; }
@@ -1214,10 +1221,10 @@ function legacyId(e, kind) {
 function ensureIds(arr, kind) {
   if (!Array.isArray(arr)) return arr;
   let changed = false;
-  const out = arr.map(e => {
+  const out = arr.map((e, i) => {
     if (!e || e.id) return e;
     changed = true;
-    return { ...e, id: legacyId(e, kind), updatedAt: e.updatedAt != null ? e.updatedAt : 0 };
+    return { ...e, id: legacyId(e, kind, i), updatedAt: e.updatedAt != null ? e.updatedAt : 0 };
   });
   return changed ? out : arr;
 }
@@ -1641,11 +1648,38 @@ function App() {
   const [cloudStatus, setCloudStatus] = useState('idle');
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
+  const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
+  // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
+  // Deriving legacy ids on every merge is fragile; doing it once and saving means every
+  // later merge compares real, stable ids.
+  useEffect(() => {
+    if (schemaV >= 1) return;
+    setLogs(prev => ensureIds(prev, 'wk'));
+    setBodyMetrics(prev => ensureIds(prev, 'bm'));
+    setMeasurements(prev => ensureIds(prev, 'ms'));
+    setNutrition(prev => ensureIds(prev, 'nu'));
+    setCardioLog(prev => ensureIds(prev, 'cd'));
+    setBpLog(prev => ensureIds(prev, 'bp'));
+    setGlucoseLog(prev => ensureIds(prev, 'gl'));
+    setProtocolLog(prev => ensureIds(prev, 'pr'));
+    setSchemaV(1);
+  }, [schemaV]);
   const syncTimer = useRef(null);
   const skipPush  = useRef(false);
   const syncMounted = useRef(false);
 
-  useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery, block, highVol, phase: goalPhase})); setCfgUpdatedAt(Date.now()); }, [week, recovery, block, highVol, goalPhase]);
+  // NOTE: this effect PERSISTS config but must NOT stamp cfgUpdatedAt. A useEffect fires on
+  // MOUNT as well as on change, so merely opening the app was marking the local config as
+  // "just edited" — which then beat a genuinely newer cloud config on the next pull.
+  // cfgUpdatedAt is stamped only by the explicit user-facing setters below.
+  useEffect(() => { LS.set('dp_cfg', JSON.stringify({week, rec:recovery, block, highVol, phase: goalPhase})); }, [week, recovery, block, highVol, goalPhase]);
+  // User-facing config mutators: these (and only these) represent a genuine config edit.
+  const touchCfg = () => setCfgUpdatedAt(Date.now());
+  const userSetWeek     = v => { setWeek(v);      touchCfg(); };
+  const userSetRecovery = v => { setRecovery(v);  touchCfg(); };
+  const userSetBlock    = v => { setBlock(v);     touchCfg(); };
+  const userSetHighVol  = v => { setHighVol(v);   touchCfg(); };
+  const userSetPhase    = v => { setGoalPhase(v); touchCfg(); };
   useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
   // Must persist even when checkins is empty, or deleting the last photo never writes and
   // the old array resurrects on reload. Only warn when a WRITE of actual content fails.
@@ -1704,7 +1738,7 @@ function App() {
     setWeek(wipData.week||week); setView('workout'); setWipData(null);
   };
 
-  const startNewBlock = () => { setBlock(b=>b+1); setWeek(1); setNewBlockConfirm(false); setView('home'); };
+  const startNewBlock = () => { setBlock(b=>b+1); setWeek(1); touchCfg(); setNewBlockConfirm(false); setView('home'); };
 
   const saveAndFinish = newData => {
     const sess=SESSIONS[sel];
@@ -1807,7 +1841,7 @@ function App() {
           if (Array.isArray(data.bpLog)) setBpLog(desc(data.bpLog));
           if (Array.isArray(data.glucoseLog)) setGlucoseLog(desc(data.glucoseLog));
           if (Array.isArray(data.protocolLog)) setProtocolLog(desc(data.protocolLog));
-          if (data.config) { if(data.config.week)setWeek(data.config.week); if(data.config.recovery)setRecovery(data.config.recovery); if(data.config.block)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase)setGoalPhase(data.config.phase); }
+          if (data.config) { if(data.config.week!=null)setWeek(data.config.week); if(data.config.recovery!=null)setRecovery(data.config.recovery); if(data.config.block!=null)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase!=null)setGoalPhase(data.config.phase); touchCfg(); }  // explicit user restore = a config edit
           alert(`Restored ${data.logs?.length||0} sessions plus body, nutrition, BP, cardio and protocol history.`);
         } catch(err) { alert('Could not read file. Make sure it is a valid Diamond Protocol backup.'); }
       };
@@ -2137,7 +2171,26 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!nP && !nC && !nF) return;
     const p = parseFloat(nP) || 0, c = parseFloat(nC) || 0, f = parseFloat(nF) || 0;
     const entry = { date: nDate, protein: p, carbs: c, fat: f, calories: Math.round(p*4 + c*4 + f*9) };
-    setNutrition(prev => { const filtered = prev.filter(e => e.date !== entry.date); return [{...entry, id:newId(), updatedAt: Date.now()}, ...filtered].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400); });
+    // Re-entering a date must UPDATE the existing record (keeping its id), not drop it and
+    // mint a new one. The dropped record left no tombstone, so the cloud copy had no matching
+    // local id, survived the merge, and the old entry reappeared next to the new one.
+    setNutrition(prev => {
+      const now = Date.now();
+      const existing = prev.find(e => !e.deletedAt && e.date === entry.date);
+      let arr;
+      if (existing) {
+        let first = true;
+        arr = prev.map(e => {
+          if (e.date !== entry.date || e.deletedAt) return e;
+          if (e.id === existing.id && first) { first = false; return { ...e, ...entry, id: e.id, deletedAt: undefined, updatedAt: now }; }
+          return { ...e, deletedAt: now, updatedAt: now };   // tombstone any same-date duplicates
+        });
+      } else {
+        arr = [{ ...entry, id: newId(), updatedAt: now }, ...prev];
+      }
+      arr.sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0));
+      return arr.slice(0, 400);
+    });
     setNP(''); setNC(''); setNF(''); setNDate(localToday()); setShowAddNutri(false);
   };
 
@@ -2229,7 +2282,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: Date.now() }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, updatedAt: Date.now() });
       const r = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       if (!r.ok) { setCloudStatus('error'); return; }
       setCloudStatus('synced');
@@ -2255,7 +2308,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: Date.now() }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -2706,22 +2759,22 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="rir-val">{wr.rir}</div>
           </div>
           <div className="wksel">
-            <button className="wkb" disabled={week===1} onClick={() => setWeek(w=>Math.max(1,w-1))}>&#8249;</button>
+            <button className="wkb" disabled={week===1} onClick={() => userSetWeek(w=>Math.max(1,w-1))}>&#8249;</button>
             <div><div className="wknum">{week}</div><div className="wksub">Block {block} · of 12</div></div>
-            <button className="wkb" disabled={week===12} onClick={() => setWeek(w=>Math.min(12,w+1))}>&#8250;</button>
+            <button className="wkb" disabled={week===12} onClick={() => userSetWeek(w=>Math.min(12,w+1))}>&#8250;</button>
           </div>
           <div className="grid12">
             {Array.from({length:12},(_,i) => {
               const w2=i+1;
               const ws=new Set(logs.filter(l=>l.week===w2 && (l.block||1)===block).map(l=>l.sessionId));
               const cls=w2===week?'cur':ws.size>=4?'all':ws.size>0?'part':DLW.has(w2)?'dl':'';
-              return <div key={w2} className={`wc ${cls}`} onClick={() => setWeek(w2)}><span className="wc-n">{w2}</span></div>;
+              return <div key={w2} className={`wc ${cls}`} onClick={() => userSetWeek(w2)}><span className="wc-n">{w2}</span></div>;
             })}
           </div>
           {allDone && week < 12 && (
             <div className="adv-banner">
               <span className="adv-txt">All 4 sessions done — Week {week} complete</span>
-              <button className="adv-btn" onClick={() => setWeek(w=>Math.min(12,w+1))}>Week {week+1} &#8250;</button>
+              <button className="adv-btn" onClick={() => userSetWeek(w=>Math.min(12,w+1))}>Week {week+1} &#8250;</button>
             </div>
           )}
           {allDone && week === 12 && (
@@ -2737,15 +2790,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="sec-lbl">Goal Phase</div>
             <div className="rec-row">
               {[['bulk','Bulk'],['maintain','Maintain'],['cut','Cut']].map(([p,lbl])=>(
-                <button key={p} className={`rc${goalPhase===p?' nm':''}`} onClick={()=>setGoalPhase(p)}>{lbl}</button>
+                <button key={p} className={`rc${goalPhase===p?' nm':''}`} onClick={()=>userSetPhase(p)}>{lbl}</button>
               ))}
             </div>
           </div>
           <div className="rec-sec">
             <div className="sec-lbl">High-Volume Track</div>
             <div className="rec-row">
-              <button className={`rc${!highVol?' nm':''}`} onClick={()=>setHighVol(false)}>Off</button>
-              <button className={`rc${highVol?' nm':''}`} onClick={()=>setHighVol(true)}>On</button>
+              <button className={`rc${!highVol?' nm':''}`} onClick={()=>userSetHighVol(false)}>Off</button>
+              <button className={`rc${highVol?' nm':''}`} onClick={()=>userSetHighVol(true)}>On</button>
             </div>
             <div className="hv-sub">{!highVol ? 'Standard volume' : DLW.has(week) ? 'Paused \u00b7 deload week' : goalPhase==='cut' ? 'Paused \u00b7 cut phase' : (readiness.cls==='green'||pushOverride) ? 'Active today \u00b7 +1 set on priority muscles' : 'Paused \u00b7 readiness not green'}</div>
           </div>
@@ -2763,7 +2816,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="sec-lbl">Recovery Status</div>
             <div className="rec-row">
               {[['excellent','ok','Excellent'],['normal','nm','Normal'],['beat','bt','Beat Up']].map(([k,cls,label]) => (
-                <button key={k} className={`rc${recovery===k?' '+cls:''}`} onClick={() => setRecovery(k)}>{label}</button>
+                <button key={k} className={`rc${recovery===k?' '+cls:''}`} onClick={() => userSetRecovery(k)}>{label}</button>
               ))}
             </div>
           </div>
