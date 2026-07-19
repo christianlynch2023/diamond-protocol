@@ -2453,12 +2453,33 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     let tdee=null, conf='low', spanDays=0, avgIntake=null, ratePerWk=null;
     if(nutWin.length>=7&&wWin.length>=2){
       avgIntake=Math.round(nutWin.reduce((s,e)=>s+e.calories,0)/nutWin.length);
+      // Endpoint-to-endpoint weight change is spike-sensitive: a single water-inflated reading
+      // at the START of the window (very common on tren) fabricates a huge apparent deficit and
+      // inflates TDEE. Use least-squares regression across ALL weigh-ins in the window, which is
+      // robust to individual spikes; fall back to averaged endpoints when data is sparse.
+      const pts = wWin.map(e => ({ t: parse(e.date)/dayMs, w: e.weight }));
       const wA=wWin[0], wB=wWin[wWin.length-1];
       spanDays=(parse(wB.date)-parse(wA.date))/dayMs;
       if(spanDays>=10){
-        const wChange=wB.weight-wA.weight;
-        tdee=Math.round(avgIntake-(wChange*7700/spanDays));
-        ratePerWk=wChange/spanDays*7;
+        let slopePerDay=null;
+        if (pts.length >= 4) {
+          const n=pts.length;
+          const mt=pts.reduce((s,p)=>s+p.t,0)/n, mw=pts.reduce((s,p)=>s+p.w,0)/n;
+          let num=0, den=0;
+          for(const p of pts){ num+=(p.t-mt)*(p.w-mw); den+=(p.t-mt)*(p.t-mt); }
+          if(den>0) slopePerDay=num/den;
+        }
+        if (slopePerDay === null) {
+          // averaged endpoints (up to 3 readings each end) instead of single points
+          const k=Math.min(3, Math.floor(pts.length/2)) || 1;
+          const headW=pts.slice(0,k).reduce((s,p)=>s+p.w,0)/k;
+          const tailW=pts.slice(-k).reduce((s,p)=>s+p.w,0)/k;
+          const headT=pts.slice(0,k).reduce((s,p)=>s+p.t,0)/k;
+          const tailT=pts.slice(-k).reduce((s,p)=>s+p.t,0)/k;
+          slopePerDay=(tailT-headT)>0 ? (tailW-headW)/(tailT-headT) : 0;
+        }
+        tdee=Math.round(avgIntake-(slopePerDay*7700));
+        ratePerWk=slopePerDay*7;
         conf=(nutWin.length>=12&&spanDays>=14)?'high':(nutWin.length>=9&&spanDays>=12)?'medium':'low';
       }
     }
@@ -2492,6 +2513,22 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         train:{cals:Math.round(baseKcal+cycle.highCarb*4),carb:cycle.highCarb,protein:proteinG,fat:fatG},
         rest:{cals:Math.round(baseKcal+cycle.lowCarb*4),carb:cycle.lowCarb,protein:proteinG,fat:fatG}
       };
+    }
+    // SANITY GUARD. If the computed target wildly contradicts what the user is actually eating
+    // while their weight is already moving the intended way, the underlying rate estimate is
+    // almost certainly corrupted by water noise. Showing "eat 3867" to someone eating 2100 and
+    // losing weight is worse than showing nothing.
+    const implausible = (() => {
+      if (avgIntake == null || !targetCals) return false;
+      const gap = targetCals - avgIntake;
+      if (goalPhase === 'cut'  && gap >  600) return true;   // cut telling you to eat far MORE
+      if (goalPhase === 'bulk' && gap < -600) return true;   // bulk telling you to eat far LESS
+      return Math.abs(gap) > 1000;                            // absurd in any phase
+    })();
+    if (implausible) {
+      return { ok:false, reason:'implausible', tdee, avgIntake,
+               ratePerWk: ratePerWk!=null?+ratePerWk.toFixed(2):null,
+               suggested: Math.round(avgIntake + (goalPhase==='cut' ? -100 : goalPhase==='bulk' ? 100 : 0)) };
     }
     return { ok:true, tdee, conf, avgIntake, ratePerWk, spanDays:Math.round(spanDays), targetCals, proteinG, fatG, carbG, targetRatePct, adjust, cycle, dayTargets, phase:goalPhase };
   }, [logs, nutrition, bodyMetrics, goalPhase]);
@@ -3753,7 +3790,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               <div className="nc-hd"><span className="nc-ttl">Smart targets</span>{nutriCoach.ok && <span className={'nc-conf '+nutriCoach.conf}>{nutriCoach.conf} confidence</span>}</div>
               {!nutriCoach.ok && nutriCoach.reason==='stale' && <div className="nc-note">Your most recent food/weight log is {nutriCoach.ageDays} days old, so these targets have expired. Log a few days of food and a weigh-in to recalculate.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='stale_weight' && <div className="nc-note">Your most recent weigh-in is {nutriCoach.ageDays!=null?nutriCoach.ageDays+' days old':'missing'}, so targets can't be calculated from it. Log a fresh weigh-in.</div>}
-              {!nutriCoach.ok && nutriCoach.reason && nutriCoach.reason!=='stale' && nutriCoach.reason!=='stale_weight' && <div className="nc-note">{nutriCoach.reason}</div>}
+              {!nutriCoach.ok && nutriCoach.reason==='implausible' && <div className="nc-note">Not enough clean weight data to set a target yet. The trend ({nutriCoach.ratePerWk!=null?(nutriCoach.ratePerWk>0?'+':'')+nutriCoach.ratePerWk+' kg/wk':'unclear'}) is being distorted by day-to-day water swings, which would produce a misleading number. You are logging ~{nutriCoach.avgIntake} kcal/day &#8212; stay around <b>{nutriCoach.suggested} kcal</b> and keep weighing in daily; this will settle within a week.</div>}
+              {!nutriCoach.ok && nutriCoach.reason && nutriCoach.reason!=='stale' && nutriCoach.reason!=='stale_weight' && nutriCoach.reason!=='implausible' && <div className="nc-note">{nutriCoach.reason}</div>}
               {!nutriCoach.ok && nutriCoach.partial && <div className="nc-note">Need ~1-2 weeks of consistent logging to estimate your maintenance. So far: {nutriCoach.foodDays} food day{nutriCoach.foodDays===1?'':'s'} and {nutriCoach.weighIns} weigh-in{nutriCoach.weighIns===1?'':'s'} in the last 14 days.</div>}
               {nutriCoach.ok && (
                 <div className="nc-body">
