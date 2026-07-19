@@ -1,4 +1,4 @@
-const CACHE = 'diamond-v1';
+const CACHE = 'diamond-v2';
 const CORE = [
   './',
   './index.html',
