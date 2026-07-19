@@ -3863,7 +3863,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           <div className="nc-eat">Eat today</div>
                           <div className="nc-tgt-cal nc-tgt-hero">{dt.cals} <span>kcal</span></div>
                           <div className="nc-macros"><span className="nc-mac p">P {dt.protein}g</span><span className="nc-mac c">C {dt.carb}g</span><span className="nc-mac f">F {dt.fat}g</span></div>
-                          <div className="nc-tgt-avg">Weekly avg {nutriCoach.targetCals} kcal &#183; C {nutriCoach.carbG}g/day ({nutriCoach.cycle.trainDays} train / {nutriCoach.cycle.restDays} rest) &#183; cut −{nutriCoach.targetRatePct}%/wk</div>
+                          <div className="nc-tgt-avg">Weekly avg {nutriCoach.targetCals} kcal &#183; C {nutriCoach.carbG}g/day ({nutriCoach.cycle.trainDays} train / {nutriCoach.cycle.restDays} rest) &#183; {nutriCoach.phase==="cut"?("cut \u2212"+nutriCoach.targetRatePct+"%/wk"):nutriCoach.phase==="bulk"?("lean gain +"+nutriCoach.targetRatePct+"%/wk"):"maintenance"}</div>
                         </>
                       );
                     })() : (
