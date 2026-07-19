@@ -631,6 +631,28 @@ document.getElementById('apple-icon').href=iurl;
 const mf={name:"Diamond Protocol",short_name:"Diamond",description:"12-Week Hypertrophy Tracker",start_url:".",display:"standalone",background_color:"#07090c",theme_color:"#07090c",orientation:"portrait-primary",icons:[{src:iurl,sizes:"512x512",type:"image/png"},{src:iurl,sizes:"192x192",type:"image/png"}]};
 const mb=new Blob([JSON.stringify(mf)],{type:'application/json'});
 const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createObjectURL(mb); document.head.appendChild(ml);
+// HARD CACHE-BUST: if the stored build id differs from this bundle's, delete every cache and
+// unregister the old service worker, then reload once. This is the only reliable way to escape
+// a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
+(function(){
+  var BUILD='2026-07-19T2155';
+  try {
+    var prev = localStorage.getItem('dp_build');
+    if (prev !== BUILD) {
+      localStorage.setItem('dp_build', BUILD);
+      if (prev !== null && 'caches' in window) {
+        caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); })
+          .then(function(){
+            if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+              return navigator.serviceWorker.getRegistrations().then(function(rs){ return Promise.all(rs.map(function(r){ return r.unregister(); })); });
+            }
+          })
+          .then(function(){ if(!sessionStorage.getItem('dp_busted')){ sessionStorage.setItem('dp_busted','1'); location.reload(true); } })
+          .catch(function(){});
+      }
+    }
+  } catch(e) {}
+})();
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').then(reg => {
@@ -1675,6 +1697,7 @@ function App() {
   const [cloudStatus, setCloudStatus] = useState('idle');
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
+  const BUILD_ID = '2026-07-19T2155';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3582,6 +3605,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="tool-sec">
             <div className="tool-ttl">AI Coaching</div>
             <div className="tool-sub">Enter your Anthropic API key to enable the pre-session briefing feature</div>
+            <div style={{fontSize:9,color:'var(--t3)',fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>build {BUILD_ID}</div>
             <div className="api-row">
               <div className="bf-lbl">Anthropic API Key</div>
               <input className="api-in" type="password" placeholder="sk-ant-..." value={apiKey}
