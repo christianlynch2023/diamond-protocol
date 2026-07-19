@@ -234,6 +234,12 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .h-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);margin-bottom:3px}
 .h-nm{font-size:15px;font-weight:700;margin-bottom:2px}
 .h-det{font-size:11px;color:var(--t2)}
+.setplan{margin-top:5px;border-left:2px solid var(--bdr);padding-left:8px}
+.sp-row{display:flex;align-items:baseline;gap:7px;font-size:10.5px;padding:1.5px 0;font-family:'JetBrains Mono',monospace}
+.sp-set{color:var(--t3);min-width:52px}
+.sp-lbl{color:var(--t);font-weight:700;min-width:58px}
+.sp-reps{color:var(--acc);min-width:38px}
+.sp-load{color:var(--t2)}
 .hl-avg{font-size:11px;color:var(--t2);margin:-4px 0 10px;font-variant-numeric:tabular-nums}
 .dash-cards{display:flex;gap:8px;margin-bottom:10px}
 .dash-card{flex:1;background:var(--sur);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px}
@@ -758,8 +764,8 @@ const WR = {
 const DLW = new Set([4,8,12]);
 const SESSIONS = {
   upperA:{id:"upperA",name:"Upper 1",focus:"Horizontal Push & Back Thickness",day:"Saturday",time:"80-90 min",maxInt:2,exercises:[
-    {id:"ua1",name:"RO-T8 Flat Press",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Flat bench, handles at mid-chest","Neutral/semi-pronated grip","Elbows 30-45 not flared","Deep stretch, press to just short of lockout"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR only if form stays locked"},orm:true},
-    {id:"ua2",name:"Kaz Chest-Supported Row",sets:4,tempo:"3-1-1",struct:"1 top set 8-10, then back-offs 10-12",rMin:8,rMax:12,rirMin:1,rirMax:2,rest:150,handle:"Small KAZ",cues:["Chest firmly on pad","Drive elbows back and slightly out","Pull to lower ribs, squeeze","Stop 1 RIR - no jerking"],avoidFail:true,avoidReason:"Stop at 1 RIR - no form breakdown",int:null,orm:false},
+    {id:"ua1",name:"RO-T8 Flat Press",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",setPlan:[{label:"Top set",sets:1,rMin:6,rMax:8,pct:1.0},{label:"Back-off",sets:3,rMin:8,rMax:10,pct:0.90}],rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Flat bench, handles at mid-chest","Neutral/semi-pronated grip","Elbows 30-45 not flared","Deep stretch, press to just short of lockout"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR only if form stays locked"},orm:true},
+    {id:"ua2",name:"Kaz Chest-Supported Row",sets:4,tempo:"3-1-1",struct:"1 top set 8-10, then back-offs 10-12",setPlan:[{label:"Top set",sets:1,rMin:8,rMax:10,pct:1.0},{label:"Back-off",sets:3,rMin:10,rMax:12,pct:0.90}],rMin:8,rMax:12,rirMin:1,rirMax:2,rest:150,handle:"Small KAZ",cues:["Chest firmly on pad","Drive elbows back and slightly out","Pull to lower ribs, squeeze","Stop 1 RIR - no jerking"],avoidFail:true,avoidReason:"Stop at 1 RIR - no form breakdown",int:null,orm:false},
     {id:"ua3",name:"RO-T8 Incline Press",sets:2,tempo:"3-1-1",rMin:8,rMax:12,rirMin:1,rirMax:1,rest:150,handle:"RO-T8",cues:["Bench 30 deg","Elbows 30-45","Controlled, second chest angle"],avoidFail:false,int:null,orm:true},
     {id:"ua4",name:"Short Bar Row (wide)",sets:3,tempo:"3-0-1",rMin:10,rMax:12,rirMin:1,rirMax:1,rest:120,handle:"RO-T8 short bar",cues:["Wide grip short bar","Elbows flared 60-70","Pull to sternum","Chest-supported if possible"],avoidFail:false,int:null,orm:false},
     {id:"ua5",name:"Cable Lateral Raise",sets:4,tempo:"2-1-2",rMin:12,rMax:20,rirMin:0,rirMax:2,rest:90,handle:"Small KAZ",cues:["Cable behind body, lean away","Lead with elbow, hand below elbow","Scapular plane, no shrug"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 lengthened partials on final set"},orm:false},
@@ -768,7 +774,7 @@ const SESSIONS = {
     {id:"ua7",name:"Standing Calf Raise",sets:3,tempo:"3-1-1",rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Machine",cues:["Full stretch, heel below platform","Hard 1-sec pause","Full contraction, no bounce"],avoidFail:false,int:null,orm:false}
   ]},
   lowerA:{id:"lowerA",name:"Lower",focus:"Complete Legs",day:"Sunday",time:"80-90 min",maxInt:2,exercises:[
-    {id:"la1",name:"Leg Press",sets:4,tempo:"3-0-1",struct:"1 top set 6-8, back-offs 8-10, final 10-15",rMin:6,rMax:10,rirMin:1,rirMax:1,rest:180,handle:"Machine",cues:["Feet mid-platform, shoulder-width, toes out 20","Knees track over toes","Descend to just before pelvic tuck","No true failure - knees complain -> feet higher"],avoidFail:true,avoidReason:"No true failure - stable but heavy",int:null,orm:true},
+    {id:"la1",name:"Leg Press",sets:4,tempo:"3-0-1",struct:"1 top set 6-8, back-offs 8-10, final 10-15",setPlan:[{label:"Top set",sets:1,rMin:6,rMax:8,pct:1.0},{label:"Back-off",sets:2,rMin:8,rMax:10,pct:0.90},{label:"Final",sets:1,rMin:10,rMax:15,pct:0.80}],rMin:6,rMax:10,rirMin:1,rirMax:1,rest:180,handle:"Machine",cues:["Feet mid-platform, shoulder-width, toes out 20","Knees track over toes","Descend to just before pelvic tuck","No true failure - knees complain -> feet higher"],avoidFail:true,avoidReason:"No true failure - stable but heavy",int:null,orm:true},
     {id:"la2",name:"Leg Press Back-Off",sets:1,tempo:"3-0-1",rMin:10,rMax:15,rirMin:0,rirMax:1,rest:150,handle:"Machine",cues:["Same setup, -15-20% load","Can push 0 RIR - spine supported"],avoidFail:false,int:{label:"0 RIR",desc:"Final set to 0 RIR, spine supported"},orm:false},
     {id:"la3",name:"Romanian Deadlift",sets:3,tempo:"3-1-1",rMin:8,rMax:10,rirMin:1,rirMax:1,rest:180,handle:"Short bar",cues:["Soft knees, hips travel back not down","Bar drags close to legs","Spine dead neutral","Never to failure"],avoidFail:true,avoidReason:"Connective tissue - stay 1-2 RIR",int:null,orm:true},
     {id:"la5",name:"Leg Extension",sets:3,tempo:"2-1-2",rMin:12,rMax:20,rirMin:0,rirMax:1,rest:90,handle:"Machine",cues:["Back pad upright, quad at length","1-sec pause at full extension","Failure/partials OK"],avoidFail:false,int:{label:"FAILURE",desc:"Final set to failure or partials - spine safe"},orm:false},
@@ -779,8 +785,8 @@ const SESSIONS = {
     {id:"la9",name:"Cable Crunch",sets:3,tempo:"2-1-2",rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope",cues:["Kneel, rope by ears","Flex spine - ribs to pelvis","Not a hip hinge"],avoidFail:false,int:null,orm:false}
   ]},
   upperB:{id:"upperB",name:"Upper 2",focus:"Incline / Vertical & Lat Width",day:"Tuesday",time:"80-90 min",maxInt:2,exercises:[
-    {id:"ub2",name:"RO-T8 Incline Press",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Bench 30-45","Handles at lower-chest line","Elbows tucked 30-45","Drive up and slightly back"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR only if shoulders perfect"},orm:true},
-    {id:"ub1",name:"Weighted Pull-Up",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"Belt/bodyweight",cues:["Grip just outside shoulder-width","Dead hang, depress scapula first","Lead with chest to bar","Full stretch bottom"],avoidFail:true,avoidReason:"Elbow/biceps tendon fatigue",int:null,orm:true},
+    {id:"ub2",name:"RO-T8 Incline Press",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",setPlan:[{label:"Top set",sets:1,rMin:6,rMax:8,pct:1.0},{label:"Back-off",sets:3,rMin:8,rMax:10,pct:0.90}],rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Bench 30-45","Handles at lower-chest line","Elbows tucked 30-45","Drive up and slightly back"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR only if shoulders perfect"},orm:true},
+    {id:"ub1",name:"Weighted Pull-Up",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",setPlan:[{label:"Top set",sets:1,rMin:6,rMax:8,pct:1.0},{label:"Back-off",sets:3,rMin:8,rMax:10,pct:0.90}],rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"Belt/bodyweight",cues:["Grip just outside shoulder-width","Dead hang, depress scapula first","Lead with chest to bar","Full stretch bottom"],avoidFail:true,avoidReason:"Elbow/biceps tendon fatigue",int:null,orm:true},
     {id:"ub3",name:"Seated Cable Press",sets:3,tempo:"3-1-1",rMin:8,rMax:12,rirMin:0,rirMax:1,rest:150,handle:"RO-T8",cues:["Bench upright 70-80","Press forward and converge at top","Controlled stretch, no rest-pause"],avoidFail:false,int:null,orm:false},
     {id:"ub9",name:"Single-Arm Lat Pulldown",sets:4,tempo:"3-0-1",rMin:8,rMax:12,rirMin:1,rirMax:2,rest:120,handle:"Small KAZ",cues:["Half-kneel, slight lean back","Reach tall at top","Drive elbow down and into hip","Feel lat not biceps"],avoidFail:false,int:{label:"PARTIALS",desc:"+8-10 lengthened partials final set"},orm:false},
     {id:"ub8",name:"Chest-Supported Row",sets:3,tempo:"3-1-1",rMin:8,rMax:12,rirMin:1,rirMax:2,rest:150,handle:"RO-T8",cues:["Chest on pad whole set","Elbows back at 45","Pull to lower ribs, no heaving"],avoidFail:true,avoidReason:"Stop at 1 RIR",int:null,orm:false},
@@ -3015,13 +3021,40 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <div className={`ex-nm${ex.opt?' opt':''}`}>{ex.name}{ex.opt?' (opt)':''}{condensed && CORE_EX[sess.id]?.has(ex.id) ? <span className="core-tag">core</span> : null}</div>
                     <div className="chips">
                       {adj>ex.sets ? <span className="chip" style={{color:'var(--acc)',borderColor:'rgba(196,255,0,.3)',background:'var(--ag2)'}}>{adj}x (+{adj-ex.sets})</span> : adj<ex.sets ? <span className="chip dl">{adj}x (deload)</span> : <span className="chip">{ex.sets}x</span>}
-                      <span className="chip">{ex.rMin}-{ex.rMax} reps</span>
+                      <span className="chip">{ex.setPlan ? `${ex.setPlan[0].rMin}-${ex.setPlan[0].rMax} reps (top set)` : `${ex.rMin}-${ex.rMax} reps`}</span>
                       {ex.tempo && <span className="chip">{ex.tempo} tempo</span>}
                       <span className="chip rir">{ex.rirMin===ex.rirMax?ex.rirMin:`${ex.rirMin}-${ex.rirMax}`} RIR</span>
                       <span className="chip">{fmt(ex.rest)} rest</span>
                       {ex.handle && <span className="chip">{ex.handle}</span>}
                     </div>
-                    {ex.struct && <div style={{fontSize:10,color:'var(--mut)',marginTop:3}}>{ex.struct}</div>}
+                    {ex.setPlan ? (() => {
+                      // Explicit set-by-set plan. The old free-text 'struct' line disagreed with
+                      // the rep chip (chip showed the whole 6-10 envelope while the note said
+                      // "top set 6-8, back-offs 8-10"), forcing the user to reconcile it mid-set.
+                      const topW = (() => {
+                        const ph = getPrevHist(ex.id, logs, 1)[0];
+                        if (!ph || !ph.sets || !ph.sets.length) return null;
+                        return Math.max(...ph.sets.map(s => s.weight || 0)) || null;
+                      })();
+                      let n = 0;
+                      return (
+                        <div className="setplan">
+                          {ex.setPlan.map((sp, si) => {
+                            const from = n + 1; n += sp.sets; const to = n;
+                            const lbl = sp.sets > 1 ? `Sets ${from}-${to}` : `Set ${from}`;
+                            const load = topW ? Math.round(topW * sp.pct / 2.5) * 2.5 : null;
+                            return (
+                              <div key={si} className="sp-row">
+                                <span className="sp-set">{lbl}</span>
+                                <span className="sp-lbl">{sp.label}</span>
+                                <span className="sp-reps">{sp.rMin}-{sp.rMax}</span>
+                                <span className="sp-load">{sp.pct===1 ? 'top load' : `-${Math.round((1-sp.pct)*100)}%`}{load ? ` \u00b7 ~${load}kg` : ''}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })() : ex.struct ? <div style={{fontSize:10,color:'var(--mut)',marginTop:3}}>{ex.struct}</div> : null}
                     {ex.avoidFail && <div><span className="chip avd">{ex.avoidReason}</span></div>}
                     {rec.type==='inc' && <div style={{fontSize:10,color:'var(--ok)',marginTop:4}}>&#9650; Increase weight — all sets hit top range</div>}
                     {rec.type==='beat' && <div style={{fontSize:10,color:'var(--acc)',marginTop:4}}>&#8594; Beat reps on weaker sets</div>}
