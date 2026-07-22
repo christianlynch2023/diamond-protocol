@@ -234,6 +234,7 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .h-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);margin-bottom:3px}
 .h-nm{font-size:15px;font-weight:700;margin-bottom:2px}
 .h-det{font-size:11px;color:var(--t2)}
+.target-phase{display:block;font-size:11px;color:var(--acc);font-weight:700;margin-top:2px}
 .setplan{margin-top:5px;border-left:2px solid var(--bdr);padding-left:8px}
 .sp-row{display:flex;align-items:baseline;gap:7px;font-size:10.5px;padding:1.5px 0;font-family:'JetBrains Mono',monospace}
 .sp-set{color:var(--t3);min-width:52px}
@@ -2602,6 +2603,23 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const prevHist=curEx?getPrevHist(_curHistId,logs,3):[];
   const progRec=curEx?getProgRec(_curHistId,curEx.rMax,logs,effPhase):null;
   const curTarget=curEx?getTarget(curEx,logs,week,effPhase,_curHistId):null;
+  // Resolve which phase of the set plan the CURRENT set belongs to, so the live screen shows
+  // "Set 2 of 4 - Back-off, 8-10 reps, ~180kg" instead of a generic 6-10 envelope and one load.
+  const curSetPhase = (() => {
+    if (!curEx || !curEx.setPlan) return null;
+    const idx = (loggedSetsArr ? loggedSetsArr.length : 0);   // 0-based index of the set about to be done
+    let n = 0;
+    for (const sp of curEx.setPlan) {
+      if (idx < n + sp.sets) return { ...sp, from: n + 1, to: n + sp.sets };
+      n += sp.sets;
+    }
+    const last = curEx.setPlan[curEx.setPlan.length - 1];
+    return { ...last, from: n - last.sets + 1, to: n };
+  })();
+  const curSetWeight = (() => {
+    if (!curSetPhase || !curTarget || !curTarget.weight) return null;
+    return Math.round(curTarget.weight * curSetPhase.pct / 2.5) * 2.5;
+  })();
   const R=88, CIRC=2*Math.PI*R;
   const dashOff=CIRC*(1-(timerTotal>0?timerSecs/timerTotal:0));
   const totalSets=Object.values(setData).reduce((a,s)=>a+s.length,0);
@@ -3103,7 +3121,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {curTarget && !curTarget.first && (
               <div className="target-line">
                 <span className="target-lbl">Today's target</span>
-                <span className="target-val">{curTarget.weight}kg &#215; {curEx.rMin}-{curEx.rMax} reps</span>
+                <span className="target-val">{curSetPhase ? `${curSetWeight}kg \u00d7 ${curSetPhase.rMin}-${curSetPhase.rMax} reps` : `${curTarget.weight}kg \u00d7 ${curEx.rMin}-${curEx.rMax} reps`}</span>
+                {curSetPhase && <span className="target-phase">{curSetPhase.label}{curSetPhase.pct!==1?` \u00b7 -${Math.round((1-curSetPhase.pct)*100)}% off top set`:' \u00b7 heaviest set of the day'}</span>}
                 <span className="target-note">{curTarget.note}</span>
               </div>
             )}
@@ -3112,7 +3131,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div className="ec-nm">{curEx.name}{curEx.opt?' (opt)':''}</div>
                 <div className="ec-meta">
                   <span className="chip">{effSets} sets</span>
-                  <span className="chip">{curEx.rMin}-{curEx.rMax} reps</span>
+                  <span className="chip">{curSetPhase ? `${curSetPhase.rMin}-${curSetPhase.rMax} reps` : `${curEx.rMin}-${curEx.rMax} reps`}</span>
                   <span className="chip rir">{curEx.rirMin===curEx.rirMax?curEx.rirMin:`${curEx.rirMin}-${curEx.rirMax}`} RIR</span>
                   <span className="chip">{fmt(curEx.rest)} rest</span>
                   {curEx.handle && <span className="chip">{curEx.handle}</span>}
