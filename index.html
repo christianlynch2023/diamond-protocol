@@ -783,7 +783,8 @@ const SESSIONS = {
     {id:"la8",name:"Bulgarian Split Squat",sets:2,tempo:"3-0-1",rMin:8,rMax:12,rirMin:1,rirMax:2,rest:120,handle:"DB/bodyweight",cues:["Rear foot elevated, long stride","Slight forward torso lean","No failure - balance degrades"],avoidFail:true,avoidReason:"Balance under fatigue",int:null,orm:false},
     {id:"la10",name:"Hip Thrust",sets:2,tempo:"3-1-1",rMin:8,rMax:12,rirMin:1,rirMax:2,rest:120,handle:"Barbell/machine",cues:["Full hip extension","Squeeze at top","Chin tucked"],avoidFail:false,int:null,orm:false},
     {id:"la7",name:"Standing Calf Raise",sets:5,tempo:"3-1-1",rMin:8,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Machine",cues:["Full stretch, hard pause","Full plantarflexion top"],avoidFail:false,int:null,orm:false},
-    {id:"la9",name:"Cable Crunch",sets:3,tempo:"2-1-2",rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope",cues:["Kneel, rope by ears","Flex spine - ribs to pelvis","Not a hip hinge"],avoidFail:false,int:null,orm:false}
+    {id:"la9",name:"Cable Crunch",sets:3,tempo:"2-1-2",rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope",cues:["Kneel, rope by ears","Flex spine - ribs to pelvis","Not a hip hinge"],avoidFail:false,int:null,orm:false},
+    {id:"laob",name:"Cable Oblique Crunch",sets:3,tempo:"2-1-2",rMin:12,rMax:20,rirMin:0,rirMax:1,rest:60,handle:"Rope",cues:["Kneel side-on to the stack, rope in both hands","Crunch DOWN and ACROSS toward the opposite hip","Lateral flexion - drive the rib toward the pelvis, no twisting through the spine","Full set one side, then switch"],avoidFail:false,int:null,orm:false}
   ]},
   upperB:{id:"upperB",name:"Upper 2",focus:"Incline / Vertical & Lat Width",day:"Tuesday",time:"80-90 min",maxInt:2,exercises:[
     {id:"ub2",name:"RO-T8 Incline Press",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",setPlan:[{label:"Top set",sets:1,rMin:6,rMax:8,pct:1.0},{label:"Back-off",sets:3,rMin:8,rMax:10,pct:0.90}],rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Bench 30-45","Handles at lower-chest line","Elbows tucked 30-45","Drive up and slightly back"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR only if shoulders perfect"},orm:true},
@@ -793,7 +794,8 @@ const SESSIONS = {
     {id:"ub8",name:"Chest-Supported Row",sets:3,tempo:"3-1-1",rMin:8,rMax:12,rirMin:1,rirMax:2,rest:150,handle:"RO-T8",cues:["Chest on pad whole set","Elbows back at 45","Pull to lower ribs, no heaving"],avoidFail:true,avoidReason:"Stop at 1 RIR",int:null,orm:false},
     {id:"ub4",name:"Cable Lateral Raise",sets:5,tempo:"2-1-2",rMin:12,rMax:20,rirMin:0,rirMax:2,rest:90,handle:"Small KAZ",cues:["Cable behind, lean away","Lead with elbow","Scapular plane, no shrug"],avoidFail:false,int:{label:"MYO-REPS",desc:"Wk7+: activation set then 3-5 mini-sets"},orm:false},
     {id:"ub5",name:"Rear Delt Cable Flye",sets:3,tempo:"2-0-1",rMin:15,rMax:20,rirMin:0,rirMax:1,rest:90,handle:"Small KAZ",cues:["Sweep out and slightly back","Lead with pinky, no traps"],avoidFail:false,int:null,orm:false},
-    {id:"ub7",name:"Incline DB Curl",sets:3,tempo:"3-1-1",rMin:10,rMax:12,rirMin:1,rirMax:2,rest:90,handle:"DB",cues:["Bench 60, arms hang behind torso","Elbow stays back","Slow eccentric, lengthened stretch"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR"},orm:false}
+    {id:"ub7",name:"Incline DB Curl",sets:3,tempo:"3-1-1",rMin:10,rMax:12,rirMin:1,rirMax:2,rest:90,handle:"DB",cues:["Bench 60, arms hang behind torso","Elbow stays back","Slow eccentric, lengthened stretch"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR"},orm:false},
+    {id:"ubpal",name:"Pallof Press",sets:3,tempo:"2-1-2",rMin:10,rMax:15,rirMin:1,rirMax:2,rest:60,handle:"D-handle",cues:["Stand side-on to the cable at mid-chest height","Press the handle straight out from the sternum and RESIST the pull toward the stack","This is anti-rotation - the core stops you twisting, no reps through the spine","Hold 1-2s at full extension; full set each side"],avoidFail:false,int:null,orm:false}
   ]},
   lowerB:{id:"lowerB",name:"Upper 3",focus:"Delt-Led, Lengthened Chest & Arms",day:"Thursday",time:"75-85 min",maxInt:2,exercises:[
     {id:"lb2",name:"Cable Lateral Raise",sets:5,tempo:"2-1-2",rMin:12,rMax:20,rirMin:0,rirMax:2,rest:90,handle:"Small KAZ",cues:["Done first fresh - priority set","Cable behind, lean away","Lead with elbow, scapular plane","Strict, full range"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 lengthened partials final set"},orm:false},
@@ -802,7 +804,8 @@ const SESSIONS = {
     {id:"lb4",name:"Rear Delt Cable Flye",sets:4,tempo:"2-0-1",rMin:15,rMax:20,rirMin:0,rirMax:1,rest:90,handle:"Small KAZ",cues:["Fast turnaround at stretch","No pause bleeding tension","Lead with pinky, no traps"],avoidFail:false,int:null,orm:false},
     {id:"lb6",name:"Overhead Cable Triceps Ext",sets:3,tempo:"3-1-1",rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Rope/single",cues:["Face away, rope overhead","Elbows forward and pinned","Full stretch behind head, long-head bias"],avoidFail:false,int:null,orm:false},
     {id:"lb7",name:"Cable Curl",sets:3,tempo:"3-1-1",rMin:10,rMax:14,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Cable low, elbows pinned","Full stretch bottom, no swing","3-sec eccentric"],avoidFail:false,int:null,orm:false},
-    {id:"lb8",name:"Cable Crunch",sets:3,tempo:"2-1-2",rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope",cues:["Kneel, rope by ears","Flex spine deliberately","Ribs to pelvis, not hip hinge"],avoidFail:false,int:null,orm:false}
+    {id:"lb8",name:"Cable Crunch",sets:3,tempo:"2-1-2",rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope",cues:["Kneel, rope by ears","Flex spine deliberately","Ribs to pelvis, not hip hinge"],avoidFail:false,int:null,orm:false},
+    {id:"lbleg",name:"Hanging Leg Raise",sets:3,tempo:"2-1-2",rMin:8,rMax:15,rirMin:1,rirMax:2,rest:75,handle:"Bar/straps",cues:["Dead hang, shoulders active (depress scapula)","Raise knees/legs by CURLING the pelvis up - not just hip flexion","Control the descent, no swinging","Knees bent = easier, straight legs = harder"],avoidFail:false,int:null,orm:false}
   ]}
 };;
 const ALL_EX = Object.values(SESSIONS).flatMap(s => s.exercises.map(e => ({id:e.id,name:e.name,session:s.name})));
@@ -826,6 +829,7 @@ const MUSCLES = {
   glutes:   {name:'Glutes',     min:6,  max:14},
   calves:   {name:'Calves',     min:8,  max:16},
   abs:      {name:'Abs / Core', min:6,  max:16, optional:true},
+  obliques: {name:'Obliques', min:4,  max:12, optional:true},
   adductors:{name:'Adductors',  min:4,  max:12, optional:true},
 };
 const EX_MUSCLE = {
@@ -840,7 +844,7 @@ const EX_MUSCLE = {
   lb4:{p:'rearDelt'}, lb5:{p:'chest'}, lb6:{p:'triceps'}, lb7:{p:'biceps'},
 
   ua9:{p:'biceps'}, ub9:{p:'lats',s:'biceps'},
-  ub8:{p:'midBack',s:'biceps'}, la8:{p:'quads',s:['glutes']}, la9:{p:'abs'}, lb8:{p:'abs'}, lb9:{p:'rearDelt'},
+  ub8:{p:'midBack',s:'biceps'}, la8:{p:'quads',s:['glutes']}, la9:{p:'abs'}, laob:{p:'obliques',s:'abs'}, ubpal:{p:'obliques',s:'abs'}, lb8:{p:'abs'}, lbleg:{p:'abs'}, lb9:{p:'rearDelt'},
 };
 
 const getPhase = w => PHASES.find(p => p.weeks.includes(w)) || PHASES[0];
@@ -2428,7 +2432,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     for(const m in volParts.carry) v[m]=(v[m]||0)+volParts.carry[m];
     return v;
   }, [volParts]);
-  const CHEAP_MUS = new Set(['sideDelt','rearDelt','biceps','triceps','calves','abs']);
+  const CHEAP_MUS = new Set(['sideDelt','rearDelt','biceps','triceps','calves','abs','obliques']);
   const bpGate = (() => { const b=bpLog && bpLog[0]; if(!b) return false; const fresh=(Date.now()-new Date(b.date).getTime())/86400000 <= 1.0; return fresh && bpCategory(b.sys, b.dia).cls === 'red'; })();
   const autoReg = useMemo(() => {
     const muscleEx = {};
