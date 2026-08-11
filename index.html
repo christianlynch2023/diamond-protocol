@@ -2505,9 +2505,16 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // Each REQUIRED input must be fresh independently. A fresh food log paired with a
     // two-month-old bodyweight previously produced confident targets built on a stale weight.
     const _lw = (bodyMetrics||[])[0];
-    const _lwTs = _lw ? parse(_lw.date) : NaN;
-    const weightAgeDays = !isNaN(_lwTs) ? (Date.now()-_lwTs)/dayMs : Infinity;
-    if (weightAgeDays < 0 || weightAgeDays > 10) return { ok:false, reason:'stale_weight', ageDays:isFinite(weightAgeDays)?Math.round(weightAgeDays):null };
+    // Compare on LOCAL CALENDAR DATES, not raw timestamps. Weigh-ins are stored at noon UTC
+    // (`...T12:00:00Z`), so a weigh-in logged this morning in BST is timestamped a few hours
+    // in the FUTURE relative to now — which made (now - ts) negative and tripped the
+    // "weightAgeDays < 0" guard, falsely rejecting today's fresh weight as unusable.
+    const _lwDateStr = _lw && _lw.date ? String(_lw.date).slice(0,10) : null;
+    const _todayStr = localToday();
+    const weightAgeDays = _lwDateStr
+      ? Math.max(0, Math.round((new Date(_todayStr+'T12:00:00') - new Date(_lwDateStr+'T12:00:00')) / dayMs))
+      : Infinity;
+    if (weightAgeDays > 10) return { ok:false, reason:'stale_weight', ageDays:isFinite(weightAgeDays)?weightAgeDays:null };
     const winStart=anchor-14*dayMs;
     const nutWin=(nutrition||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&t<=nowTs&&e.calories>0;});
     const wWin=(bodyMetrics||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&t<=nowTs&&e.weight>0;}).sort((a,b)=>parse(a.date)-parse(b.date));
