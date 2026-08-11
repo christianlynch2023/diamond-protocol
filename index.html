@@ -1157,11 +1157,16 @@ function computeDeloadReadiness(history, week) {
   if (rHrv != null && bHrv != null && ((rHrv - bHrv) / bHrv * 100) <= -10) { signals++; reasons.push('HRV down ' + Math.round((bHrv - rHrv) / bHrv * 100) + '%'); }
   if (rRec != null && rRec < 40) { signals++; reasons.push('recovery sitting low'); }
   const endOfBlock = [3, 7, 11].includes(week);
+  // Today's recovery is the strongest single signal. If the most recent recovery is solidly
+  // green (>=67), don't raise a deload/fatigue flag off trend deltas alone - on tren, HRV/RHR
+  // run chronically suppressed so the baseline comparison produces false fatigue signals.
+  const latestRec = sorted.length ? sorted[sorted.length-1].recovery : null;
+  const greenNow = latestRec != null && latestRec >= 67;
   let level, msg;
-  if (signals >= 2) { level = 'deload'; msg = 'Fatigue is accumulating (' + reasons.join(', ') + '). Consider a deload or cut volume 30-40% this week.'; }
-  else if (signals === 1) { level = 'moderate'; msg = 'Early fatigue signal (' + reasons.join(', ') + '). Hold volume, prioritise sleep, and watch your performance.'; }
+  if (signals >= 2 && !greenNow) { level = 'deload'; msg = 'Fatigue is accumulating (' + reasons.join(', ') + '). Consider a deload or cut volume 30-40% this week.'; }
+  else if (signals === 1 && !greenNow) { level = 'moderate'; msg = 'Early fatigue signal (' + reasons.join(', ') + '). Hold volume, prioritise sleep, and watch your performance.'; }
   else { level = 'fresh'; msg = endOfBlock ? 'Recovery is holding well — you could push one more hard week before deloading.' : 'Recovery is holding well — keep progressing as planned.'; }
-  if (endOfBlock && level === 'moderate') { level = 'deload'; msg = 'End of an accumulation block and ' + reasons.join(', ') + ' — a deload is well timed now.'; }
+  if (endOfBlock && level === 'moderate' && !greenNow) { level = 'deload'; msg = 'End of an accumulation block and ' + reasons.join(', ') + ' — a deload is well timed now.'; }
   return { level, msg, rRec: rRec != null ? Math.round(rRec) : null, bRec: bRec != null ? Math.round(bRec) : null, rHrv: rHrv != null ? Math.round(rHrv) : null, bHrv: bHrv != null ? Math.round(bHrv) : null };
 }
 
@@ -2556,7 +2561,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         conf=(nutWin.length>=14&&spanDays>=18)?'high':(nutWin.length>=10&&spanDays>=14)?'medium':'low';
       }
     }
-    if(tdee===null) return { ok:false, partial:true, foodDays:nutWin.length, weighIns:wWin.length };
+    if(tdee===null) {
+      // Two different reasons TDEE can be null: genuinely too little data, OR we DID have data
+      // but the weight trend was too noisy to trust (rate rejected above). Tell them which.
+      if (nutWin.length>=7 && wWin.length>=2 && ratePerWk!=null) {
+        return { ok:false, reason:'noisy', ratePerWk:+ratePerWk.toFixed(2), avgIntake, foodDays:nutWin.length };
+      }
+      return { ok:false, partial:true, foodDays:nutWin.length, weighIns:wWin.length };
+    }
     tdee=Math.max(1400,Math.min(5500,tdee));
     const W=latestW, proteinG=Math.round(2.2*W), fatG=Math.round(0.7*W);
     let targetRatePct, targetCals;
@@ -3928,6 +3940,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               {!nutriCoach.ok && nutriCoach.reason==='implausible' && <div className="nc-note">Not enough clean weight data to set a target yet. The trend ({nutriCoach.ratePerWk!=null?(nutriCoach.ratePerWk>0?'+':'')+nutriCoach.ratePerWk+' kg/wk':'unclear'}) is being distorted by day-to-day water swings, which would produce a misleading number. You are logging ~{nutriCoach.avgIntake} kcal/day &#8212; stay around <b>{nutriCoach.suggested} kcal</b> and keep weighing in daily; this will settle within a week.</div>}
               {!nutriCoach.ok && nutriCoach.reason && nutriCoach.reason!=='stale' && nutriCoach.reason!=='stale_weight' && nutriCoach.reason!=='implausible' && <div className="nc-note">{nutriCoach.reason}</div>}
               {!nutriCoach.ok && nutriCoach.partial && <div className="nc-note">Need ~1-2 weeks of consistent logging to estimate your maintenance. So far: {nutriCoach.foodDays} food day{nutriCoach.foodDays===1?'':'s'} and {nutriCoach.weighIns} weigh-in{nutriCoach.weighIns===1?'':'s'} in the last 14 days.</div>}
+              {!nutriCoach.ok && nutriCoach.reason==='noisy' && <div className="nc-note">Your weight trend is too noisy right now to set a reliable target (reading {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk} kg/wk, which is water not tissue). You are logging ~{nutriCoach.avgIntake} kcal/day &#8212; hold there and keep weighing in daily; the trend will settle within a few days.</div>}
               {nutriCoach.ok && (
                 <div className="nc-body">
                   <div className="nc-tgt nc-hero">
