@@ -2515,7 +2515,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       ? Math.max(0, Math.round((new Date(_todayStr+'T12:00:00') - new Date(_lwDateStr+'T12:00:00')) / dayMs))
       : Infinity;
     if (weightAgeDays > 10) return { ok:false, reason:'stale_weight', ageDays:isFinite(weightAgeDays)?weightAgeDays:null };
-    const winStart=anchor-14*dayMs;
+    const winStart=anchor-21*dayMs;   // 21d not 14d: more weigh-ins dilute day-to-day water swings
     const nutWin=(nutrition||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&t<=nowTs&&e.calories>0;});
     const wWin=(bodyMetrics||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&t<=nowTs&&e.weight>0;}).sort((a,b)=>parse(a.date)-parse(b.date));
     let tdee=null, conf='low', spanDays=0, avgIntake=null, ratePerWk=null;
@@ -2546,9 +2546,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           const tailT=pts.slice(-k).reduce((s,p)=>s+p.t,0)/k;
           slopePerDay=(tailT-headT)>0 ? (tailW-headW)/(tailT-headT) : 0;
         }
-        tdee=Math.round(avgIntake-(slopePerDay*7700));
         ratePerWk=slopePerDay*7;
-        conf=(nutWin.length>=12&&spanDays>=14)?'high':(nutWin.length>=9&&spanDays>=12)?'medium':'low';
+        // Sanity-bound the rate. |rate| > 1.2% of bodyweight per week is not real tissue change
+        // over this timescale - it's a water swing landing at a window edge. Treat TDEE as
+        // unreliable rather than manufacturing a 1400 or 3800 maintenance from it.
+        const rateFrac = latestW>0 ? Math.abs(ratePerWk)/latestW : 0;
+        if (rateFrac > 0.012) { tdee=null; }
+        else { tdee=Math.round(avgIntake-(slopePerDay*7700)); }
+        conf=(nutWin.length>=14&&spanDays>=18)?'high':(nutWin.length>=10&&spanDays>=14)?'medium':'low';
       }
     }
     if(tdee===null) return { ok:false, partial:true, foodDays:nutWin.length, weighIns:wWin.length };
@@ -2596,7 +2601,18 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       const gap = targetCals - avgIntake;
       if (goalPhase === 'cut'  && gap >  600) return true;   // cut telling you to eat far MORE
       if (goalPhase === 'bulk' && gap < -600) return true;   // bulk telling you to eat far LESS
-      return Math.abs(gap) > 1000;                            // absurd in any phase
+      if (Math.abs(gap) > 1000) return true;                 // absurd in any phase
+      // Maintenance sanity: a real maintenance sits within a plausible band of actual intake.
+      // A 1400 or 3800 estimate while eating ~2050 means the rate is water-corrupted.
+      if (tdee != null && avgIntake > 0) {
+        const r = tdee / avgIntake;
+        if (r < 0.7 || r > 1.4) return true;
+      }
+      // Rate direction must match the phase: a CUT should not be reporting weight GAIN
+      // (and vice-versa) - that only happens when noise dominates the trend.
+      if (goalPhase === 'cut'  && ratePerWk != null && ratePerWk >  0.15) return true;
+      if (goalPhase === 'bulk' && ratePerWk != null && ratePerWk < -0.15) return true;
+      return false;
     })();
     if (implausible) {
       return { ok:false, reason:'implausible', tdee, avgIntake,
