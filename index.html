@@ -642,7 +642,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-07-19T2155';
+  var BUILD='2026-08-12T1600';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1222,6 +1222,38 @@ function detectPlateaus(logs) {
   return stalled.sort((a, b) => b.sessions - a.sessions);
 }
 
+// ---- Strength-retention index (the cut KPI) ----
+// For each `orm` compound: compare best e1RM in the trailing 21 days vs the 21 days before
+// that. Average the %Δ across lifts with data in BOTH windows. Read alongside the weight
+// trend: weight down + e1RM held/up = fat loss; both down = losing muscle, deficit too steep.
+function computeStrengthRetention(logs) {
+  const dayMs=86400000, nowTs=Date.now();
+  const recentStart=nowTs-21*dayMs, priorStart=nowTs-42*dayMs;
+  const byEx={};
+  for (const l of logs) {
+    const t=new Date(l.date).getTime();
+    if (isNaN(t) || t<priorStart || t>nowTs) continue;
+    const win = t>=recentStart ? 'recent' : 'prior';
+    for (const ex of (l.exercises||[])) {
+      if (!ex.sets || !ex.sets.length) continue;
+      const pid=ex.origId||ex.id;
+      if (!ORM_IDS.has(pid)) continue;
+      const best=Math.max(...ex.sets.map(s=>epley(s.weight||0,s.reps||0)));
+      if (!best || !isFinite(best)) continue;
+      const rec=(byEx[pid]=byEx[pid]||{name:ex.name,recent:0,prior:0});
+      if (best>rec[win]) rec[win]=best;
+    }
+  }
+  const lifts=[];
+  for (const id in byEx) {
+    const r=byEx[id];
+    if (r.recent>0 && r.prior>0) lifts.push({name:r.name, pct:+(((r.recent-r.prior)/r.prior)*100).toFixed(1), recent:Math.round(r.recent), prior:Math.round(r.prior)});
+  }
+  if (!lifts.length) return null;
+  const avgPct=+(lifts.reduce((a,l)=>a+l.pct,0)/lifts.length).toFixed(1);
+  return { avgPct, lifts: lifts.sort((a,b)=>a.pct-b.pct) };
+}
+
 const ALT_BY_MUSCLE = {
   chest:[{name:'Machine Chest Press'},{name:'Pec Deck'},{name:'Dumbbell Press'},{name:'Cable Press'}],
   lats:[{name:'Lat Pulldown'},{name:'Pull-Up'},{name:'Straight-Arm Pulldown'}],
@@ -1715,7 +1747,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-07-19T2155';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-12T1600';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -2223,7 +2255,11 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const addBodyMetric = () => {
     const w=parseNum(newWt);
     if (w==null || w<=0) return;
-    const e={date:`${wtDate}T12:00:00.000Z`,weight:w,bodyFat:parseNum(newBF),muscle:parseNum(newMuscle),notes:newWtNote};
+    let mus=parseNum(newMuscle);
+    // Typo guard: lean mass below 40% of bodyweight (e.g. 7.5 for 71.5) is physically
+    // impossible for this user and one bad point wrecks the lean trend. Reject with a prompt.
+    if (mus!=null && w>0 && mus < w*0.4) { alert('Muscle/lean of '+mus+'kg looks like a typo against '+w+'kg bodyweight \u2014 not saved. Re-enter it.'); return; }
+    const e={date:`${wtDate}T12:00:00.000Z`,weight:w,bodyFat:parseNum(newBF),muscle:mus,notes:newWtNote};
     setBodyMetrics(prev=>[{...e, id:newId(), updatedAt: Date.now()},...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,200));
     setNewWt('');setNewBF('');setNewMuscle('');setNewWtNote('');setWtDate(localToday());setShowAddBody(false);
   };
@@ -2419,6 +2455,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const deloadActive=scheduledDeload && !deloadSkips[block+'-'+week];
   _deloadNow=deloadActive;
   const showInt=wr.i, isDeload=deloadActive;
+  const bannerName=(scheduledDeload && !deloadActive) ? 'Training Through' : phase.name;
+  const bannerColor=(scheduledDeload && !deloadActive) ? 'normal' : phase.color;
   const today=new Date().toDateString();
   const doneToday=new Set(logs.filter(l=>new Date(l.date).toDateString()===today).map(l=>l.sessionId));
   const weekDone=new Set(logs.filter(l=>l.week===week && (l.block||1)===block).map(l=>l.sessionId));
@@ -2487,14 +2525,31 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   }, [logs, volParts, bpGate, readiness]);
   const bwRate = (() => {
     if (!bodyMetrics || bodyMetrics.length < 2) return null;
-    const newest = bodyMetrics[0];
-    let ref = null;
-    for (const m of bodyMetrics) { const days=(new Date(newest.date)-new Date(m.date))/86400000; if (days>=7){ ref=m; break; } }
-    if (!ref) ref = bodyMetrics[bodyMetrics.length-1];
-    const days=(new Date(newest.date)-new Date(ref.date))/86400000;
-    if (days<=0 || !newest.weight || !ref.weight) return null;
-    const perWeek=(newest.weight-ref.weight)/days*7;
-    return { perWeek, pctWeek: perWeek/newest.weight*100 };
+    // Least-squares regression over the trailing 21 days — the SAME method Smart Targets
+    // uses. The old endpoint-to-endpoint calc was spike-sensitive and could contradict the
+    // regression-based rate shown two cards below on the same screen.
+    const dayMs=86400000, nowTs=Date.now();
+    const pts = bodyMetrics
+      .filter(m => { const t=new Date(m.date).getTime(); const age=(nowTs-t)/dayMs; return m.weight>0 && age>=0 && age<=21; })
+      .map(m => ({ t: new Date(m.date).getTime()/dayMs, w: m.weight }));
+    if (pts.length < 2) return null;
+    const newestW = bodyMetrics[0].weight;
+    let perWeek;
+    if (pts.length >= 4) {
+      const n=pts.length;
+      const mt=pts.reduce((s,p)=>s+p.t,0)/n, mw=pts.reduce((s,p)=>s+p.w,0)/n;
+      let num=0, den=0;
+      for(const p of pts){ num+=(p.t-mt)*(p.w-mw); den+=(p.t-mt)*(p.t-mt); }
+      if(den<=0) return null;
+      perWeek=(num/den)*7;
+    } else {
+      const a=pts[pts.length-1], b=pts[0];
+      const span=Math.abs(a.t-b.t);
+      if(span<=0) return null;
+      perWeek=(b.w-a.w)/ (b.t-a.t) *7;
+      if(!isFinite(perWeek)) return null;
+    }
+    return { perWeek, pctWeek: perWeek/newestW*100 };
   })();
   const nutriCoach = useMemo(() => {
     const dayMs=86400000, parse=d=>new Date(d).getTime();
@@ -2526,7 +2581,18 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       : Infinity;
     if (weightAgeDays > 10) return { ok:false, reason:'stale_weight', ageDays:isFinite(weightAgeDays)?weightAgeDays:null };
     const winStart=anchor-21*dayMs;   // 21d not 14d: more weigh-ins dilute day-to-day water swings
-    const nutWin=(nutrition||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&t<=nowTs&&e.calories>0;});
+    const nutWinRaw=(nutrition||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&t<=nowTs&&e.calories>0;});
+    // Partial-day guard: days logged well below the window median (e.g. 1335 vs ~2150) are
+    // almost always incomplete logging, not genuine low-intake days. They deflate avgIntake,
+    // which deflates the empirical TDEE — the one number everything else trusts. Exclude days
+    // under 65% of the median. Needs >=5 days to compute a stable median; below that keep all.
+    const nutWin=(()=>{ 
+      if(nutWinRaw.length<5) return nutWinRaw;
+      const sorted=nutWinRaw.map(e=>e.calories).sort((a,b)=>a-b);
+      const med=sorted[Math.floor(sorted.length/2)];
+      const kept=nutWinRaw.filter(e=>e.calories>=med*0.65);
+      return kept.length>=5?kept:nutWinRaw;   // never guard ourselves below the data floor
+    })();
     const wWin=(bodyMetrics||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&t<=nowTs&&e.weight>0;}).sort((a,b)=>parse(a.date)-parse(b.date));
     let tdee=null, conf='low', spanDays=0, avgIntake=null, ratePerWk=null;
     if(nutWin.length>=7&&wWin.length>=2){
@@ -2687,6 +2753,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const curVol=weekMuscleVolume(logs,week,block);
   const volSeries=weeklyVolumeSeries(logs,volMuscle,block);
   const plateaus=detectPlateaus(logs);
+  const strengthRet=useMemo(()=>computeStrengthRetention(logs),[logs]);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
   // --- Body dashboard derived data ---
   const bodyDash = useMemo(() => {
@@ -2698,7 +2765,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const avg7 = last7.length ? last7.reduce((a,m)=>a+m.weight,0)/last7.length : null;
     const curW = bodyMetrics[0]?.weight ?? null;
     // lean mass: prefer logged muscle, else weight*(1-bf/100)
-    const leanOf = (m) => m.muscle!=null ? m.muscle : (m.bodyFat!=null && m.weight!=null ? +(m.weight*(1-m.bodyFat/100)).toFixed(1) : null);
+    const leanOf = (m) => (m.muscle!=null && (!m.weight || m.muscle >= m.weight*0.4)) ? m.muscle : (m.bodyFat!=null && m.weight!=null ? +(m.weight*(1-m.bodyFat/100)).toFixed(1) : null);
     const leanSeries = bodyMetrics.filter(m=>leanOf(m)!=null).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:leanOf(m)}));
     const curLean = bodyMetrics.length ? leanOf(bodyMetrics[0]) : null;
     const leanChange = leanSeries.length>=2 ? +(leanSeries[leanSeries.length-1].y - leanSeries[0].y).toFixed(1) : null;
@@ -2742,19 +2809,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const calOut=_whoopFresh ? (whoopData?.dayCal??null) : null;
   const calNet=(calIn!=null&&calOut!=null)?calIn-calOut:null;
   // 7-day rolling energy balance: avg intake vs avg WHOOP burn (far less noisy than a single day)
-  const eb7 = useMemo(() => {
-    // Must compare the SAME calendar days on both sides. Averaging intake over one set of
-    // days and expenditure over a different set produced a meaningless "net".
-    const now=Date.now();
-    const _age = d => (now - new Date(d+'T12:00:00').getTime())/86400000;  // >=0 rejects future dates
-    const inBy={}; nutrition.forEach(n=>{ const d=(n.date||'').slice(0,10); if(!d||n.calories==null) return; const a=_age(d); if(a>=0 && a<=7) inBy[d]=n.calories; });
-    const outBy={}; (whoopHistory||[]).forEach(w=>{ const d=(w.date||'').slice(0,10); if(!d||w.dayCal==null) return; const a=_age(d); if(a>=0 && a<=7) outBy[d]=w.dayCal; });
-    const matched=Object.keys(inBy).filter(d=>outBy[d]!=null);
-    if(matched.length<3) return null;
-    const avgIn=Math.round(matched.reduce((a,d)=>a+inBy[d],0)/matched.length);
-    const avgOut=Math.round(matched.reduce((a,d)=>a+outBy[d],0)/matched.length);
-    return {avgIn,avgOut,net:avgIn-avgOut,days:matched.length};
-  }, [nutrition, whoopHistory]);
+  // eb7 (WHOOP dayCal energy balance) removed: whoopHistory.dayCal stores whatever the
+  // in-progress burn was at last sync (usually a morning snapshot ~1,500), not final daily
+  // expenditure, so the "avg out" it produced was systematically wrong. The energy-balance
+  // card now uses the empirical maintenance from nutriCoach — the single source of truth.
   const cardioWeekStart=(()=>{ const d=new Date(); const day=(d.getDay()+6)%7; d.setHours(0,0,0,0); d.setDate(d.getDate()-day); return d.getTime(); })();
   const cardioThisWeek=cardioLog.filter(c=>new Date(c.date).getTime()>=cardioWeekStart);
   const cardioMins=cardioThisWeek.reduce((a,c)=>a+(c.minutes||0),0);
@@ -2914,8 +2972,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       {view === 'home' && (
         <div className="screen">
           <div className="topbar"><span className="logo">Diamond Protocol</span><span className="top-badge">B{block} · W{week}/12</span></div>
-          <div className={`phase-bar ${phase.color}`}>
-            <div><div className="ph-name">{phase.name}</div><div className="ph-sub">{isDeload?"Half volume · 85% load · 3-4 RIR":showInt?"Intensifiers active, selective failure":"Straight sets only, no failure"}</div></div>
+          <div className={`phase-bar ${bannerColor}`}>
+            <div><div className="ph-name">{bannerName}</div><div className="ph-sub">{isDeload?"Half volume · 85% load · 3-4 RIR":showInt?"Intensifiers active, selective failure":"Straight sets only, no failure"}</div></div>
             <div className="rir-val">{wr.rir}</div>
           </div>
           <div className="wksel">
@@ -3358,6 +3416,39 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
             <div className="hm-legend"><span><i style={{background:'#5aa9ff'}}/>below floor</span><span><i style={{background:'#00e87a'}}/>in range</span><span><i style={{background:'#e0b020'}}/>overreach</span></div>
           </div>
+          {strengthRet && (() => {
+            const wrate = bwRate ? bwRate.perWeek : null;
+            const losing = wrate != null && wrate < -0.1;
+            const gaining = wrate != null && wrate > 0.1;
+            const sHeld = strengthRet.avgPct >= -1.5;
+            const sUp = strengthRet.avgPct > 1.5;
+            let verdict, vCls;
+            if (losing && sHeld) { verdict = sUp ? 'Losing weight, gaining strength — recomp territory. Ideal.' : 'Weight down, strength held — the loss is fat. Stay the course.'; vCls='var(--ok)'; }
+            else if (losing && !sHeld) { verdict = 'Weight AND strength dropping — you may be losing muscle. Check protein, sleep, and consider easing the deficit.'; vCls='var(--err)'; }
+            else if (gaining && sUp) { verdict = 'Weight and strength both up — productive gain phase.'; vCls='var(--ok)'; }
+            else if (!losing && !gaining && sUp) { verdict = 'Weight flat, strength up — clean recomp.'; vCls='var(--ok)'; }
+            else if (!losing && !gaining && !sHeld) { verdict = 'Weight flat but strength slipping — look at recovery and fuel around sessions.'; vCls='var(--warn)'; }
+            else { verdict = 'Strength holding. Keep watching the trend.'; vCls='var(--t2)'; }
+            return (
+              <div className="ar-card">
+                <div className="hm-head"><span className="hm-ttl">Strength retention</span><span className="hm-wk">21d vs prior 21d · e1RM</span></div>
+                <div style={{display:'flex',alignItems:'baseline',gap:10,marginBottom:6}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:strengthRet.avgPct>=-1.5?'var(--ok)':'var(--err)'}}>{strengthRet.avgPct>0?'+':''}{strengthRet.avgPct}%</span>
+                  {wrate!=null && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'var(--t2)'}}>weight {wrate>0?'+':''}{wrate.toFixed(2)} kg/wk</span>}
+                </div>
+                <div style={{fontSize:12,lineHeight:1.5,color:vCls,marginBottom:8}}>{verdict}</div>
+                <div className="ar-list">
+                  {strengthRet.lifts.map((l,i)=>(
+                    <div key={i} className="ar-row">
+                      <span className="ar-mus" style={{textTransform:'none'}}>{l.name}</span>
+                      <span className={`ar-chip ${l.pct>=1?'add':l.pct<=-2?'back':'hold'}`}>{l.pct>0?'+':''}{l.pct}% · {l.prior}→{l.recent}kg</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="ar-note">On a cut, holding e1RM while weight falls means the loss is fat. A drop bigger than ~2-3% across several lifts over 3 weeks is the earliest reliable sign the deficit is costing muscle.</div>
+              </div>
+            );
+          })()}
           <div className="ar-card">
             <div className="hm-head"><span className="hm-ttl">Autoregulation</span><span className="hm-wk">push when earned</span></div>
             <div className="ar-list">
@@ -3988,23 +4079,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 </div>
               )}
             </div>
-            {eb7 ? (
+            {(nutriCoach.ok && nutriCoach.avgIntake!=null) ? (
               <div className="energy-bal">
-                <div className="eb-item"><div className="eb-v">{eb7.avgIn}</div><div className="eb-l">avg in</div></div>
+                <div className="eb-item"><div className="eb-v">{nutriCoach.avgIntake}</div><div className="eb-l">avg in</div></div>
                 <div className="eb-op">&#8722;</div>
-                <div className="eb-item"><div className="eb-v">{eb7.avgOut}</div><div className="eb-l">avg out</div></div>
+                <div className="eb-item"><div className="eb-v">{nutriCoach.tdee}</div><div className="eb-l">maintenance</div></div>
                 <div className="eb-op">=</div>
-                <div className="eb-item"><div className="eb-v" style={{color: eb7.net>=0?'var(--acc)':'var(--warn)'}}>{eb7.net>=0?'+':''}{eb7.net}</div><div className="eb-l">{eb7.days}-day net</div></div>
+                <div className="eb-item"><div className="eb-v" style={{color: (nutriCoach.avgIntake-nutriCoach.tdee)>=0?'var(--acc)':'var(--warn)'}}>{(nutriCoach.avgIntake-nutriCoach.tdee)>=0?'+':''}{nutriCoach.avgIntake-nutriCoach.tdee}</div><div className="eb-l">daily net</div></div>
               </div>
-            ) : calNet != null && (
-              <div className="energy-bal">
-                <div className="eb-item"><div className="eb-v">{calIn}</div><div className="eb-l">in</div></div>
-                <div className="eb-op">&#8722;</div>
-                <div className="eb-item"><div className="eb-v">{calOut}</div><div className="eb-l">out</div></div>
-                <div className="eb-op">=</div>
-                <div className="eb-item"><div className="eb-v" style={{color: calNet>=0?'var(--acc)':'var(--warn)'}}>{calNet>=0?'+':''}{calNet}</div><div className="eb-l">today net</div></div>
-              </div>
-            )}
+            ) : null}
             {calStats && (
               <div className="dash-cards">
                 <div className="dash-card">
