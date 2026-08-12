@@ -763,6 +763,7 @@ const WR = {
   10:{rir:"0-1 RIR",rirN:0,i:true},11:{rir:"0-1 RIR",rirN:0,i:true},12:{rir:"3-4 RIR",rirN:4,i:false},
 };
 const DLW = new Set([4,8,12]);
+let _deloadNow = null; // resolved deload state for the current week; App writes it each render
 const SESSIONS = {
   upperA:{id:"upperA",name:"Upper 1",focus:"Horizontal Push & Back Thickness",day:"Saturday",time:"80-90 min",maxInt:2,exercises:[
     {id:"ua1",name:"RO-T8 Flat Press",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",setPlan:[{label:"Top set",sets:1,rMin:6,rMax:8,pct:1.0},{label:"Back-off",sets:3,rMin:8,rMax:10,pct:0.90}],rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Flat bench, handles at mid-chest","Neutral/semi-pronated grip","Elbows 30-45 not flared","Deep stretch, press to just short of lockout"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR only if form stays locked"},orm:true},
@@ -876,9 +877,9 @@ const RAMP_EX = new Set(['ua3','ua4','ua5','ub3','ub1','ub4','ub5']);
 const RAMP_P1 = new Set([2,6]);
 const RAMP_P2 = new Set([3,7]);
 const HIGHVOL_EX = new Set(['ua5','ub4','ua8','ub5','ub7','ua6','ub8','la6','lb5','la7','lb7','ua7','lb6']);
-const getEffSets = (ex, week, hv) => {
+const getEffSets = (ex, week, hv, dl = (_deloadNow == null ? DLW.has(week) : _deloadNow)) => {
   let s = ex.sets;
-  if (DLW.has(week)) return Math.max(1, Math.round(s * 0.5));
+  if (dl) return Math.max(1, Math.round(s * 0.5));
   if (hv && HIGHVOL_EX.has(ex.id)) s += 1;
   if (RAMP_EX.has(ex.id)) { if (RAMP_P2.has(week)) s += 2; else if (RAMP_P1.has(week)) s += 1; }
   return s;
@@ -966,7 +967,7 @@ function getIncrement(ex) {
   if (/(lateral|fly|crunch|curl|ext|raise|face pull|adductor|pulldown|cross)/.test(n)) return 1;
   return 2.5;
 }
-function getTarget(ex, logs, week, phase, histId) {
+function getTarget(ex, logs, week, phase, histId, dl = (_deloadNow == null ? DLW.has(week) : _deloadNow)) {
   // histId lets a substituted exercise read its own logged history. Without it, a swap
   // inherited the base exercise's loads (e.g. machine press targeted at RO-T8 weights).
   const _hid = histId || ex.id;
@@ -975,7 +976,7 @@ function getTarget(ex, logs, week, phase, histId) {
   const topWeight = Math.max(...prev.sets.map(s => s.weight));
   const rec = getProgRec(_hid, ex.rMax, logs, phase);
   const incr = getIncrement(ex);
-  if (DLW.has(week)) {
+  if (dl) {
     return { weight: Math.round((topWeight * 0.85) / 2.5) * 2.5, reps: Math.round((ex.rMin + ex.rMax) / 2), note: 'Deload — keep several reps in reserve' };
   }
   if (phase === 'cut' && rec.type !== 'inc') {
@@ -1321,7 +1322,7 @@ function mergeByKey(a, b, keyFn) {
 
 const MEAS_SITES = ['Waist','Chest','Shoulders','Neck','Hips','Left Arm','Right Arm','Left Forearm','Right Forearm','Left Thigh','Right Thigh','Left Calf','Right Calf'];
 
-function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, latestBP) {
+function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, latestBP, deloadActive) {
   const lastLog = logs && logs[0];
   // Pain only counts if it is recent. Previously a sharp-pain flag from the last logged
   // workout capped readiness indefinitely, even after months away.
@@ -1345,7 +1346,7 @@ function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHist
   const subjBeat = recovery === 'beat';
   const subjExcellent = recovery === 'excellent';
   const trend = deloadInfo?.level;
-  const deloadWk = [4, 8, 12].includes(week);
+  const deloadWk = deloadActive != null ? deloadActive : [4, 8, 12].includes(week);
   const peakWk = [9, 10, 11].includes(week);
 
   const factors = [];
@@ -1713,6 +1714,7 @@ function App() {
   const [cloudStatus, setCloudStatus] = useState('idle');
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
+  const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
   const BUILD_ID = '2026-07-19T2155';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
@@ -2413,13 +2415,16 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   };
 
   const phase=getPhase(week), wr=WR[week];
-  const showInt=wr.i, isDeload=DLW.has(week);
+  const scheduledDeload=DLW.has(week);
+  const deloadActive=scheduledDeload && !deloadSkips[block+'-'+week];
+  _deloadNow=deloadActive;
+  const showInt=wr.i, isDeload=deloadActive;
   const today=new Date().toDateString();
   const doneToday=new Set(logs.filter(l=>new Date(l.date).toDateString()===today).map(l=>l.sessionId));
   const weekDone=new Set(logs.filter(l=>l.week===week && (l.block||1)===block).map(l=>l.sessionId));
   const allDone=weekDone.size>=4;
   const deloadInfo=computeDeloadReadiness(whoopHistory,week);
-  const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, bpLog[0]||null);
+  const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, bpLog[0]||null, deloadActive);
   const hvActive = highVol && (readiness.cls === 'green' || pushOverride) && goalPhase !== 'cut';
   const effPhase = (goalPhase==='cut' && (readiness.cls==='green' || pushOverride)) ? 'maintain' : goalPhase;
   const volParts = useMemo(() => {
@@ -2431,7 +2436,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       if(m.s){ (Array.isArray(m.s)?m.s:[m.s]).forEach(sm=>carry[sm]=(carry[sm]||0)+s*0.5); }
     }
     return {dir, carry};
-  }, [week, hvActive]);
+  }, [week, hvActive, deloadActive]);
   const plannedVol = useMemo(() => {
     const v={...volParts.dir};
     for(const m in volParts.carry) v[m]=(v[m]||0)+volParts.carry[m];
@@ -2975,6 +2980,16 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
             </div>
           </div>
+          {scheduledDeload && (
+            <div className="rec-sec">
+              <div className="sec-lbl">Scheduled Deload</div>
+              <div className="rec-row">
+                <button className={`rc${deloadActive?' bt':''}`} onClick={()=>setDeloadSkips(m=>{const n={...m};delete n[block+'-'+week];return n;})}>Take deload</button>
+                <button className={`rc${!deloadActive?' nm':''}`} onClick={()=>setDeloadSkips(m=>({...m,[block+'-'+week]:true}))}>Train through</button>
+              </div>
+              <div className="hv-sub">{deloadActive?'Half volume · 85% load · 3-4 RIR':'Training through · full volume & progression'}</div>
+            </div>
+          )}
           {isDeload && <div className="info-banner warn">Deload week — sets auto-reduced to 50%</div>}
           {recovery==='beat' && <div className="info-banner err">Beat up — drop volume 25-40%, skip intensifiers</div>}
           {whoopConnected && deloadInfo.level==='deload' && <div className="info-banner err">Fatigue rising across your WHOOP data — a deload is recommended. See Progress.</div>}
