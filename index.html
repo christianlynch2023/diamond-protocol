@@ -642,7 +642,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-12T1720';
+  var BUILD='2026-08-13T0900';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -764,6 +764,16 @@ const WR = {
 };
 const DLW = new Set([4,8,12]);
 let _deloadNow = null; // resolved deload state for the current week; App writes it each render
+// Single resolver for the week's RIR prescription. WR is keyed by week number alone, so a
+// scheduled deload week trained through would still hand back "3-4 RIR" and default every
+// logged set to an easy value. When a deload week is trained through, mirror the block's own
+// logic (week 2 / week 6) at 1-2 RIR rather than inventing a new intensity peak at 1 RIR —
+// four escalating weeks with no let-up is a fatigue trap, especially in a deficit.
+const TRAINED_THROUGH_WR = { rir: "1-2 RIR", rirN: 2, i: false };
+const effWR = (week, dl = (_deloadNow == null ? DLW.has(week) : _deloadNow)) => {
+  const base = WR[week] || WR[1];
+  return (DLW.has(week) && !dl) ? TRAINED_THROUGH_WR : base;
+};
 const SESSIONS = {
   upperA:{id:"upperA",name:"Upper 1",focus:"Horizontal Push & Back Thickness",day:"Saturday",time:"80-90 min",maxInt:2,exercises:[
     {id:"ua1",name:"RO-T8 Flat Press",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",setPlan:[{label:"Top set",sets:1,rMin:6,rMax:8,pct:1.0},{label:"Back-off",sets:3,rMin:8,rMax:10,pct:0.90}],rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Flat bench, handles at mid-chest","Neutral/semi-pronated grip","Elbows 30-45 not flared","Deep stretch, press to just short of lockout"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR only if form stays locked"},orm:true},
@@ -1751,7 +1761,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-12T1720';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-13T0900';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -1822,7 +1832,7 @@ function App() {
     const ex0 = SESSIONS[sid].exercises[0];
     setSel(sid); setExIdx(0); setCurSet(0); setSetData({});
     const _t0 = getTarget(ex0, logs, week, effPhase);
-    setWt(_t0.weight||60); setRp(_t0.reps||ex0.rMin); setRir(WR[week].rirN);
+    setWt(_t0.weight||60); setRp(_t0.reps||ex0.rMin); setRir(effWR(week).rirN);
     setEditIdx(null); startRef.current=Date.now();
     setPainData({}); painRef.current={}; setSubMap({}); setReviseMode(false); setFinishModal(false);
     clearWip(); setView('workout');
@@ -1836,7 +1846,8 @@ function App() {
     const _rsub=(wipData.subMap||{})[ex.id]; const _reff=_rsub?_rsub.id:ex.id;
     const last=(wipData.setData?.[_reff]||[]);
     setWt(last.length?last[last.length-1].weight:getLastWt(_reff)||60);
-    setRp(ex.rMin); setRir(WR[wipData.week||week].rirN);
+    const _rwk=wipData.week||week;
+    setRp(ex.rMin); setRir(effWR(_rwk, DLW.has(_rwk) && !deloadSkips[block+'-'+_rwk]).rirN);
     startRef.current=wipData.startTime||Date.now();
     setPainData(wipData.painData||{}); painRef.current=wipData.painData||{}; setSubMap(wipData.subMap||{}); setReviseMode(false); setFinishModal(false);
     setWeek(wipData.week||week); setView('workout'); setWipData(null);
@@ -1860,7 +1871,7 @@ function App() {
     if (editIdx !== null) {
       const arr=[...(setData[ex.id]||[])]; arr[editIdx]=newSet;
       const nd={...setData,[ex.id]:arr}; setSetData(nd); setEditIdx(null);
-      setWt(arr[arr.length-1].weight); setRp(ex.rMin); setRir(WR[week].rirN);
+      setWt(arr[arr.length-1].weight); setRp(ex.rMin); setRir(effWR(week).rirN);
       saveWip(sel,nd,exIdx,curSet); return;
     }
     const prev=setData[ex.id]||[];
@@ -1874,7 +1885,7 @@ function App() {
           const nx=sess.exercises[nextExIdx];
           setExIdx(nextExIdx); setCurSet(0); setEditIdx(null);
           const _tn = getTarget(nx, logs, week, effPhase);
-          setWt(_tn.weight||60); setRp(_tn.reps||nx.rMin); setRir(WR[week].rirN);
+          setWt(_tn.weight||60); setRp(_tn.reps||nx.rMin); setRir(effWR(week).rirN);
           saveWip(sel,nd,nextExIdx,0);
         }
       };
@@ -1893,7 +1904,7 @@ function App() {
     setExIdx(idx); setCurSet(logged.length); setEditIdx(null); setReviseMode(true); setFinishModal(false);
     const t=getTarget(baseEx,logs,week,effPhase,eid);
     setWt(logged.length?logged[logged.length-1].weight:(t.weight||60));
-    setRp(t.reps||baseEx.rMin); setRir(WR[week].rirN);
+    setRp(t.reps||baseEx.rMin); setRir(effWR(week).rirN);
     saveWip(sel,setData,idx,logged.length);
   };
 
@@ -1911,7 +1922,7 @@ function App() {
       const nextEx=sess.exercises[nx];
       setExIdx(nx); setCurSet(0); setEditIdx(null);
       const _ts = getTarget(nextEx, logs, week, effPhase);
-      setWt(_ts.weight||60); setRp(_ts.reps||nextEx.rMin); setRir(WR[week].rirN);
+      setWt(_ts.weight||60); setRp(_ts.reps||nextEx.rMin); setRir(effWR(week).rirN);
       saveWip(sel,setData,nx,0);
     }
   };
@@ -1976,7 +1987,7 @@ function App() {
   const getBriefing = async sessionId => {
     const key = LS.get('anthropic_key');
     if (!key) { alert('Add your Anthropic API key in Tools first'); return; }
-    const sess = SESSIONS[sessionId]; const wr = WR[week]; const ph = getPhase(week);
+    const sess = SESSIONS[sessionId]; const wr = effWR(week); const ph = getPhase(week);
     setBriefingLoading(true); setBriefing(null);
     const progLines = sess.exercises.map(ex=>{
       const rec=getProgRec(ex.id,ex.rMax,logs,effPhase);
@@ -2025,7 +2036,7 @@ function App() {
       const painTag = ex.pain ? ` [${ex.pain===2?'SHARP PAIN':'niggle'} flagged]` : '';
       return `- ${ex.name}: today ${cur} | last time ${prevStr}${painTag}`;
     }).join('\n');
-    const wr2 = WR[last.week]; const ph = getPhase(last.week);
+    const wr2 = effWR(last.week, last.deload != null ? last.deload : DLW.has(last.week)); const ph = getPhase(last.week);
     const whStr = whoopData?.recovery != null ? `Recovery ${whoopData.recovery}%, HRV ${whoopData.hrv}ms` : 'no Whoop data';
     const prompt = `You are a personal strength coach reviewing a just-completed session for a 48-year-old male on an optimised hormonal protocol with enhanced recovery capacity, following the Diamond Protocol 12-week hypertrophy programme. ${phaseLine}\n\nSESSION JUST COMPLETED: ${last.sessionName} - Week ${last.week} (${ph.name}, target ${wr2.rir})\nDuration: ${last.duration} min | Recovery context: ${whStr}\n\nEXERCISE RESULTS (today vs last time):\n${lines}\n\nWrite a concise post-session review in 2-3 short paragraphs. Cover: (1) what clearly progressed today (specific lifts that added weight or reps), (2) anything that stalled or regressed and the likely reason, (3) 2-3 specific, actionable adjustments for next time this session comes around - exact weights or rep targets where possible. If any lift has sharp pain flagged, recommend swapping it for a joint-friendly alternative next time. Be direct and encouraging but honest. Talk like a coach who tracks every set.`;
     try {
@@ -2453,15 +2464,18 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!existing.length) {
       setWt(st.weight || 0);
       setRp(st.reps || substituted.rMin);
-      setRir(WR[week].rirN);
+      setRir(effWR(week).rirN);
     }
     setShowSwap(false);
   };
 
-  const phase=getPhase(week), wr=WR[week];
+  const phase=getPhase(week);
   const scheduledDeload=DLW.has(week);
   const deloadActive=scheduledDeload && !deloadSkips[block+'-'+week];
   _deloadNow=deloadActive;
+  // wr MUST be resolved after _deloadNow is written: effWR falls back to the module flag,
+  // and reading it before assignment would return the deload prescription on first render.
+  const wr=effWR(week, deloadActive);
   const showInt=wr.i, isDeload=deloadActive;
   const bannerName=(scheduledDeload && !deloadActive) ? 'Training Through' : phase.name;
   const bannerColor=(scheduledDeload && !deloadActive) ? 'normal' : phase.color;
@@ -3272,7 +3286,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div className="logged-sets">
                   {loggedSetsArr.map((s,i) => (
                     <div key={i} className={`ls-chip${editIdx===i?' ed':''}`}
-                      onClick={() => {if(editIdx===i){setEditIdx(null);}else{setEditIdx(i);setWt(s.weight);setRp(s.reps);setRir(s.rir??WR[week].rirN);}}}>
+                      onClick={() => {if(editIdx===i){setEditIdx(null);}else{setEditIdx(i);setWt(s.weight);setRp(s.reps);setRir(s.rir??effWR(week).rirN);}}}>
                       <span>{s.weight}kg&#215;{s.reps}</span>
                       <span className="ls-rir">{s.rir}RIR</span>
                     </div>
