@@ -642,7 +642,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-12T1600';
+  var BUILD='2026-08-12T1720';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1233,6 +1233,10 @@ function computeStrengthRetention(logs) {
   for (const l of logs) {
     const t=new Date(l.date).getTime();
     if (isNaN(t) || t<priorStart || t>nowTs) continue;
+    // Skip deload sessions: an 85%-load week would read as strength loss that isn't real.
+    // Tagged logs carry l.deload; legacy logs fall back to the scheduled-deload weeks.
+    if (l.deload === true) continue;
+    if (l.deload == null && DLW.has(l.week)) continue;
     const win = t>=recentStart ? 'recent' : 'prior';
     for (const ex of (l.exercises||[])) {
       if (!ex.sets || !ex.sets.length) continue;
@@ -1747,7 +1751,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-12T1600';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-12T1720';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -1843,7 +1847,7 @@ function App() {
   const saveAndFinish = newData => {
     const sess=SESSIONS[sel];
     const dur=Math.round((Date.now()-(startRef.current||Date.now()))/60000);
-    const log={date:new Date().toISOString(),sessionId:sel,sessionName:sess.name,week,block,duration:dur,
+    const log={date:new Date().toISOString(),sessionId:sel,sessionName:sess.name,week,block,duration:dur,deload:deloadActive||false,hv:hvActive||false,
       exercises:sess.exercises.map(ex=>{const e=subMap[ex.id]?{...ex,...subMap[ex.id]}:ex; return {id:e.id,name:e.name,...(subMap[ex.id]?{origId:ex.id}:{}),sets:(newData||setData)[e.id]||[],pain:painRef.current[e.id]||0};}).filter(ex=>ex.sets.length>0)};
     setLogs(prev => [{...log, id:newId(), updatedAt: Date.now()},...prev].slice(0,200));
     clearWip(); setReview(null); setView('complete');
@@ -1988,7 +1992,7 @@ function App() {
       :'No Whoop data available';
     const bodyStr=bodyMetrics.length?`Latest weight: ${bodyMetrics[0].weight}kg (${fmtShort(bodyMetrics[0].date)})`:'No body metrics logged';
     const briefProt=avg7('protein'); const briefCal=avg7('calories');
-    const fuelStr=briefProt!=null?`~${briefProt}g protein, ~${briefCal} kcal/day (7-day avg)${calIn!=null&&calOut!=null?`; yesterday ${calIn} in / ${calOut} out (${calIn-calOut>=0?'+':''}${calIn-calOut} net)`:''}`:'not logged';
+    const fuelStr=briefProt!=null?`~${briefProt}g protein, ~${briefCal} kcal/day (7-day avg)${(nutriCoach.ok&&nutriCoach.avgIntake!=null)?`; vs est. maintenance ~${nutriCoach.tdee} kcal (empirical) = ${nutriCoach.avgIntake-nutriCoach.tdee>=0?'+':''}${nutriCoach.avgIntake-nutriCoach.tdee}/day net`:''}`:'not logged';
     const bpStr=latestBP?`${latestBP.sys}/${latestBP.dia} (${bpCategory(latestBP.sys,latestBP.dia).label}, ${fmtShort(latestBP.date)})`:'not logged';
     const glStr=latestGl?`${latestGl.value} mmol/L (${glucoseCategory(latestGl.value).label}, ${fmtShort(latestGl.date)})`:'not logged';
     const painFlags=[]; logs.slice(0,3).forEach(l=>(l.exercises||[]).forEach(ex=>{ if(ex.pain) painFlags.push(`${ex.name} (${ex.pain===2?'sharp':'mild'}, ${fmtShort(l.date)})`); }));
@@ -2149,7 +2153,7 @@ function App() {
     const nutLine = protAvg!=null ? `~${protAvg}g protein, ~${calAvg} kcal per day (7-day avg)` : 'not logged';
     const platLine = plateaus.length ? plateaus.map(p=>p.name).join(', ') : 'none';
     const bpLine = latestBP ? `${latestBP.sys}/${latestBP.dia} (${bpCategory(latestBP.sys,latestBP.dia).label})` : 'not logged';
-    const ebLine = (calIn!=null&&calOut!=null) ? `${calIn} kcal in / ${calOut} out / ${calIn-calOut>=0?'+':''}${calIn-calOut} net` : 'not available';
+    const ebLine = (nutriCoach.ok && nutriCoach.avgIntake!=null) ? `intake ~${nutriCoach.avgIntake} kcal/day vs est. maintenance ~${nutriCoach.tdee} (empirical) = ${nutriCoach.avgIntake-nutriCoach.tdee>=0?'+':''}${nutriCoach.avgIntake-nutriCoach.tdee} kcal/day net` : 'not available';
     const coachLine = nutriCoach.ok
       ? `est. maintenance ~${nutriCoach.tdee} kcal/day (${nutriCoach.conf} confidence, derived from logged intake vs weight trend); recent intake ~${nutriCoach.avgIntake} kcal/day; weight trend ${nutriCoach.ratePerWk>0?'+':''}${nutriCoach.ratePerWk.toFixed(2)} kg/wk; current ${goalPhase} target ${nutriCoach.targetCals} kcal/day (P ${nutriCoach.proteinG} / C ${nutriCoach.carbG} / F ${nutriCoach.fatG} g)${nutriCoach.adjust&&nutriCoach.adjust.dir==='down'?'; app flags loss stalled vs target, suggests trimming ~'+nutriCoach.adjust.kcal+' kcal/day':nutriCoach.adjust&&nutriCoach.adjust.dir==='up'?'; app flags loss faster than 1%/wk, suggests adding ~'+nutriCoach.adjust.kcal+' kcal/day to protect muscle':nutriCoach.adjust?'; loss rate on target':''}`
       : 'not enough recent food + weigh-in data to estimate maintenance yet';
@@ -2169,7 +2173,7 @@ Nutrition: ${nutLine}
 Adaptive nutrition: ${coachLine}
 Cardio: ${cardioLine}
 Stalled lifts: ${platLine}
-Bodyweight: ${bw}\nBlood pressure: ${bpLine}\nEnergy balance today: ${ebLine}
+Bodyweight: ${bw}\nBlood pressure: ${bpLine}\nEnergy balance (empirical, 7-21d): ${ebLine}
 
 Write a concise weekly check-in in 2-3 short paragraphs. Cover: (1) how the week went - volume hit, whether recovery is holding, (2) anything to watch (stalls, under-trained muscles, fatigue, low protein), (3) 2-3 specific things to focus on next week. Where the data allows, connect the dots - e.g. flag if low protein lines up with stalls, if sleep debt or low recovery tracks with how sessions felt, or if blood pressure is drifting up with training load. Reference the adaptive nutrition numbers above: say whether current intake and the suggested target line up with the ${goalPhase} goal and whether the weight trend supports it. Direct and practical, like a coach reviewing the week.`;
     } else {
@@ -2186,7 +2190,7 @@ Recovery/fatigue trend: ${recTrend}
 Nutrition: ${nutLine}
 Adaptive nutrition: ${coachLine}
 Stalled lifts: ${platLine}
-Bodyweight change: ${bw}\nBlood pressure (latest): ${bpLine}\nEnergy balance (today): ${ebLine}
+Bodyweight change: ${bw}\nBlood pressure (latest): ${bpLine}\nEnergy balance (empirical, 7-21d): ${ebLine}
 
 Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the block achieved overall, (2) which muscles and lifts progressed well and which lagged or stalled, (3) what to change for the next block - exercise selection, volume distribution, recovery or nutrition. Explicitly connect the data where you can - protein vs progression, recovery and sleep debt vs performance, BP vs training load. Use the adaptive nutrition numbers above when discussing nutrition: connect the maintenance estimate, intake and weight trend to whether the ${goalPhase} goal is being met. Direct and honest, like a coach planning the next mesocycle.`;
     }
@@ -2342,7 +2346,11 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         const mergedBP = mergeByKey(ensureIds(bpLogRaw,'bp'), ensureIds(Array.isArray(data.bpLog)?data.bpLog:[], 'bp'), e => e.id);
         const mergedGl = mergeByKey(ensureIds(glucoseLogRaw,'gl'), ensureIds(Array.isArray(data.glucoseLog)?data.glucoseLog:[], 'gl'), e => e.id);
         const mergedWhoop = mergeHistory(whoopHistory, Array.isArray(data.whoopHistory) ? data.whoopHistory : []);
+        // Union merge for deload skips: local choices win over cloud on collision. Limitation:
+        // reverting a skip (deleting the key) on one device won't propagate a deletion.
+        const mergedSkips = { ...(data.deloadSkips || {}), ...deloadSkips };
         skipPush.current = true;
+        setDeloadSkips(mergedSkips);
         setLogs(mergedLogs);
         setBodyMetrics(mergedBody);
         setProtocolLog(mergedProt);
@@ -2366,7 +2374,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           setCfgUpdatedAt(cloudCfgAt);
         }
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: cloudCfgNewer ? { week: data.config.week, recovery: data.config.recovery, block: data.config.block, highVol: data.config.highVol, phase: data.config.phase, updatedAt: cloudCfgAt } : { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt||Date.now()) }, bodyMetrics: pruneTombstones(mergedBody), protocolLog: pruneTombstones(mergedProt), measurements: pruneTombstones(mergedMeas), nutrition: pruneTombstones(mergedNutri), cardioLog: pruneTombstones(mergedCardio), bpLog: pruneTombstones(mergedBP), glucoseLog: pruneTombstones(mergedGl), whoopHistory: mergedWhoop, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: cloudCfgNewer ? { week: data.config.week, recovery: data.config.recovery, block: data.config.block, highVol: data.config.highVol, phase: data.config.phase, updatedAt: cloudCfgAt } : { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt||Date.now()) }, bodyMetrics: pruneTombstones(mergedBody), protocolLog: pruneTombstones(mergedProt), measurements: pruneTombstones(mergedMeas), nutrition: pruneTombstones(mergedNutri), cardioLog: pruneTombstones(mergedCardio), bpLog: pruneTombstones(mergedBP), glucoseLog: pruneTombstones(mergedGl), whoopHistory: mergedWhoop, deloadSkips: mergedSkips, updatedAt: Date.now() });
         // Must await and check: an un-awaited, unchecked POST let the UI report 'synced'
         // while the merged superset was never actually written to the cloud.
         try {
@@ -2386,7 +2394,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
       const r = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       if (!r.ok) { setCloudStatus('error'); return; }
       setCloudStatus('synced');
@@ -2412,7 +2420,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -2424,7 +2432,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setCloudStatus('synced');
       } catch (e) { setCloudStatus('error'); }
     }, 3000);
-  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, whoopHistory, week, recovery, block, highVol, goalPhase, syncCode]);
+  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, whoopHistory, week, recovery, block, highVol, goalPhase, syncCode, deloadSkips]);
 
   const applySwap = o => {
     const base = SESSIONS[sel]?.exercises[exIdx];
@@ -2800,14 +2808,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const rows=Object.values(by); if(!rows.length) return null;
     return Math.round(rows.reduce((a,n)=>a+(n[k]||0),0)/rows.length);
   };
-  const _ebToday=localToday();
-  const _ebN=nutrition.find(n=>n.date===_ebToday);
-  const calIn=_ebN?_ebN.calories:null;
-  // Only treat WHOOP burn as "today's" if the cache is actually from today.
-  const _localDateOf = ts => { const d=new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
-  const _whoopFresh = whoopData?.cachedAt ? (_localDateOf(whoopData.cachedAt) === _ebToday) : false;
-  const calOut=_whoopFresh ? (whoopData?.dayCal??null) : null;
-  const calNet=(calIn!=null&&calOut!=null)?calIn-calOut:null;
+  // calIn/calOut/calNet removed: they compared today's logged intake against the WHOOP
+  // in-progress cycle burn (a morning snapshot, systematically ~700 kcal low). Every
+  // consumer now uses the empirical maintenance from nutriCoach instead.
   // 7-day rolling energy balance: avg intake vs avg WHOOP burn (far less noisy than a single day)
   // eb7 (WHOOP dayCal energy balance) removed: whoopHistory.dayCal stores whatever the
   // in-progress burn was at last sync (usually a morning snapshot ~1,500), not final daily
