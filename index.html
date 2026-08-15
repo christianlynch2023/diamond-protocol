@@ -642,7 +642,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-13T0900';
+  var BUILD='2026-08-13T1430';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1268,6 +1268,93 @@ function computeStrengthRetention(logs) {
   return { avgPct, lifts: lifts.sort((a,b)=>a.pct-b.pct) };
 }
 
+// ---- Context flags: attribution, not just logging ----
+// A recovery dip that follows alcohol, illness or a bad night is TRANSIENT and must not be
+// read as accumulated training fatigue. Returns the flag relevant to today's readiness.
+const CTX_TAGS = [
+  {id:'illness', label:'Illness'},
+  {id:'poorsleep', label:'Bad night'},
+  {id:'travel', label:'Travel'},
+  {id:'stress', label:'High stress'},
+];
+function ctxForDate(contextLog, dateStr) {
+  return (contextLog||[]).find(c => (c.date||'').slice(0,10) === dateStr) || null;
+}
+// Alcohol suppresses REM and drops HRV for 24-48h, so yesterday counts as well as today.
+function recentCtx(contextLog) {
+  const d = new Date();
+  const day = n => { const x=new Date(d); x.setDate(x.getDate()-n); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
+  const today = ctxForDate(contextLog, day(0)), yest = ctxForDate(contextLog, day(1));
+  const reasons = [];
+  const pick = (c, when) => {
+    if (!c) return;
+    if (c.units > 0) reasons.push(`alcohol ${c.units}u ${when}`);
+    (c.tags||[]).forEach(t => { const m=CTX_TAGS.find(x=>x.id===t); if(m) reasons.push(m.label.toLowerCase()+' '+when); });
+  };
+  pick(today, 'today'); pick(yest, 'yesterday');
+  return reasons.length ? reasons : null;
+}
+
+// ---- Deload rebound: does a deload actually pay off for THIS athlete? ----
+// Compares best e1RM on tracked compounds in the 7 days AFTER a deload week against the 7
+// days BEFORE it. Positive = the deload bought you strength. Repeatedly negative/flat means
+// deloads are costing you a week — real evidence for the take-vs-train-through decision.
+function computeDeloadRebound(logs) {
+  const isDeloadLog = l => l.deload === true || (l.deload == null && DLW.has(l.week));
+  const deloadWeeks = {};
+  for (const l of logs) { if (isDeloadLog(l)) { const k=(l.block||1)+'-'+l.week; deloadWeeks[k]={block:l.block||1, week:l.week}; } }
+  const best = (arr) => {
+    let b = 0;
+    for (const l of arr) for (const ex of (l.exercises||[])) {
+      if (!ex.sets || !ex.sets.length) continue;
+      if (!ORM_IDS.has(ex.origId||ex.id)) continue;
+      const e=Math.max(...ex.sets.map(s=>epley(s.weight||0,s.reps||0)));
+      if (e>b) b=e;
+    }
+    return b;
+  };
+  const out = [];
+  for (const k in deloadWeeks) {
+    const { block, week } = deloadWeeks[k];
+    const before = logs.filter(l => (l.block||1)===block && l.week===week-1 && !isDeloadLog(l));
+    const after  = logs.filter(l => (l.block||1)===block && l.week===week+1 && !isDeloadLog(l));
+    if (!before.length || !after.length) continue;
+    const b=best(before), a=best(after);
+    if (!b || !a) continue;
+    out.push({ block, week, pct:+(((a-b)/b)*100).toFixed(1), before:Math.round(b), after:Math.round(a) });
+  }
+  if (!out.length) return null;
+  const avg=+(out.reduce((s,o)=>s+o.pct,0)/out.length).toFixed(1);
+  return { avg, events: out.sort((x,y)=> (y.block-x.block)||(y.week-x.week)) };
+}
+
+// ---- RIR drift: are logged reps-in-reserve matching the prescription? ----
+// Positive drift = logging easier than prescribed (sandbagging, or accepting a wrong
+// default). Negative = training harder than programmed, a creeping-overreach signal.
+function computeRirDrift(logs, block) {
+  const byWeek = {};
+  for (const l of logs) {
+    if ((l.block||1) !== block) continue;
+    const dl = l.deload === true || (l.deload == null && DLW.has(l.week));
+    const target = effWR(l.week, dl).rirN;
+    if (target == null) continue;
+    for (const ex of (l.exercises||[])) {
+      for (const s of (ex.sets||[])) {
+        const r = (s.rir === '4+') ? 4 : (s.rir == null ? null : Number(s.rir));
+        if (r == null || !isFinite(r)) continue;
+        const w=(byWeek[l.week]=byWeek[l.week]||{sum:0,n:0,target});
+        w.sum += (r - target); w.n++;
+      }
+    }
+  }
+  const weeks = Object.keys(byWeek).map(Number).sort((a,b)=>a-b);
+  if (!weeks.length) return null;
+  const rows = weeks.map(w => ({ week:w, drift:+(byWeek[w].sum/byWeek[w].n).toFixed(2), n:byWeek[w].n, target:byWeek[w].target }));
+  const recent = rows.slice(-4);
+  const avg = +(recent.reduce((s,r)=>s+r.drift,0)/recent.length).toFixed(2);
+  return { rows, avg };
+}
+
 const ALT_BY_MUSCLE = {
   chest:[{name:'Machine Chest Press'},{name:'Pec Deck'},{name:'Dumbbell Press'},{name:'Cable Press'}],
   lats:[{name:'Lat Pulldown'},{name:'Pull-Up'},{name:'Straight-Arm Pulldown'}],
@@ -1368,7 +1455,7 @@ function mergeByKey(a, b, keyFn) {
 
 const MEAS_SITES = ['Waist','Chest','Shoulders','Neck','Hips','Left Arm','Right Arm','Left Forearm','Right Forearm','Left Thigh','Right Thigh','Left Calf','Right Calf'];
 
-function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, latestBP, deloadActive) {
+function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, latestBP, deloadActive, ctxReasons) {
   const lastLog = logs && logs[0];
   // Pain only counts if it is recent. Previously a sharp-pain flag from the last logged
   // workout capped readiness indefinitely, even after months away.
@@ -1398,10 +1485,16 @@ function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHist
   const factors = [];
   let major = 0, minor = 0, pos = 0;
   if (subjBeat) { major++; factors.push('you flagged feeling beat up'); }
+  // Attribution: a dip that follows alcohol, illness or a bad night is transient and is NOT
+  // accumulated training fatigue. Name the cause and don't let the TREND signal escalate on
+  // it. Today's raw low recovery still counts — you still train easier today, you just don't
+  // get told to deload for it.
+  const ctxAttributed = !!(ctxReasons && ctxReasons.length);
+  if (ctxAttributed) factors.push('recent ' + ctxReasons.join(', ') + ' — likely transient, not training fatigue');
   if (recLow) { major++; factors.push('WHOOP recovery red (' + rec + '%)'); }
-  if (trend === 'deload') { major++; factors.push('fatigue trend building'); }
-  if (sleepPoor) { minor++; factors.push('poor sleep (' + sleep + '%)'); }
-  if (trend === 'moderate') { minor++; factors.push('early fatigue signal'); }
+  if (trend === 'deload' && !ctxAttributed) { major++; factors.push('fatigue trend building'); }
+  if (sleepPoor && !ctxAttributed) { minor++; factors.push('poor sleep (' + sleep + '%)'); }
+  if (trend === 'moderate' && !ctxAttributed) { minor++; factors.push('early fatigue signal'); }
   if (nigglePain) { minor++; factors.push('joint niggle flagged last session'); }
   if (recMidLow) { minor++; factors.push('WHOOP recovery low-yellow (' + rec + '%)'); }
   if (subjExcellent) { pos++; factors.push('you feel fresh'); }
@@ -1730,6 +1823,14 @@ function App() {
   const [bpPulse, setBpPulse] = useState('');
   const [glucoseLogRaw, setGlucoseLog] = usePersistentState('glucose_log', []);
   const glucoseLog = useMemo(()=>live(glucoseLogRaw),[glucoseLogRaw]);
+  const [contextLogRaw, setContextLog] = usePersistentState('context_log', []);
+  const contextLog = useMemo(()=>live(contextLogRaw),[contextLogRaw]);
+  const [ctxUnits, setCtxUnits] = useState('');
+  const [ctxTags, setCtxTags] = useState([]);
+  const [ctxNote, setCtxNote] = useState('');
+  const [ctxDate, setCtxDate] = useState(localToday());
+  const [showAddCtx, setShowAddCtx] = useState(false);
+  const [showCtxLog, setShowCtxLog] = useState(false);
   const [glVal, setGlVal] = useState('');
   const [showAddGl, setShowAddGl] = useState(false);
   const [showAddBP, setShowAddBP] = useState(false);
@@ -1761,7 +1862,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-13T0900';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-13T1430';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -1776,6 +1877,7 @@ function App() {
     setBpLog(prev => ensureIds(prev, 'bp'));
     setGlucoseLog(prev => ensureIds(prev, 'gl'));
     setProtocolLog(prev => ensureIds(prev, 'pr'));
+    setContextLog(prev => ensureIds(prev, 'cx'));
     setSchemaV(1);
   }, [schemaV]);
   const syncTimer = useRef(null);
@@ -1928,7 +2030,7 @@ function App() {
   };
 
   const exportData = () => {
-    const data={version:'2.2',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,glucoseLog,protocolLog};
+    const data={version:'2.2',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,glucoseLog,protocolLog,contextLog};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`diamond-${new Date().toISOString().split('T')[0]}.json`;
@@ -1956,6 +2058,7 @@ function App() {
           if (Array.isArray(data.bpLog)) setBpLog(desc(data.bpLog));
           if (Array.isArray(data.glucoseLog)) setGlucoseLog(desc(data.glucoseLog));
           if (Array.isArray(data.protocolLog)) setProtocolLog(desc(data.protocolLog));
+          if (Array.isArray(data.contextLog)) setContextLog(desc(data.contextLog));
           if (data.config) { if(data.config.week!=null)setWeek(data.config.week); if(data.config.recovery!=null)setRecovery(data.config.recovery); if(data.config.block!=null)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase!=null)setGoalPhase(data.config.phase); touchCfg(); }  // explicit user restore = a config edit
           alert(`Restored ${data.logs?.length||0} sessions plus body, nutrition, BP, cardio and protocol history.`);
         } catch(err) { alert('Could not read file. Make sure it is a valid Diamond Protocol backup.'); }
@@ -1969,7 +2072,7 @@ function App() {
     setClearConfirm(false);
     setLogs([]); setWeek(1); setBlock(1); setRecovery('normal'); setHighVol(false); setGoalPhase('bulk');
     setWipData(null);
-    setBodyMetrics([]); setMeasurements([]); setNutrition([]); setCardioLog([]); setBpLog([]); setGlucoseLog([]); setProtocolLog([]);
+    setBodyMetrics([]); setMeasurements([]); setNutrition([]); setCardioLog([]); setBpLog([]); setGlucoseLog([]); setProtocolLog([]); setContextLog([]);
     // Previously left photos, WHOOP history/cache/tokens and the sync code behind,
     // so "Clear All Data" did not actually clear all data.
     // NOTE: whoopConnected is a DERIVED constant (from the stored token), not state.
@@ -1979,7 +2082,7 @@ function App() {
     // sync_code MUST be cleared: otherwise the mount effect calls pullFromCloud() on next
     // load and resurrects everything the user just deleted.
     setSyncCode(''); setCloudStatus('idle');
-    ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','glucose_log','protocol_log',
+    ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','glucose_log','protocol_log','context_log',
      'checkin_photos','whoop_history','whoop_workouts','whoop_cache','whoop_access_token','whoop_refresh_token','whoop_expires_at','sync_code'].forEach(k=>LS.del(k));
   };
 
@@ -2142,6 +2245,30 @@ function App() {
     const entry = { date: `${bpDate}T12:00:00.000Z`, sys: Math.round(sys), dia: Math.round(dia), pulse: parseNum(bpPulse)!=null ? Math.round(parseNum(bpPulse)) : null };
     setBpLog(prev => [{...entry, id:newId(), updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
     setBpSys(''); setBpDia(''); setBpPulse(''); setBpDate(localToday()); setShowAddBP(false);
+  };
+
+  const addContext = () => {
+    const u = parseNum(ctxUnits);
+    if ((u == null || u <= 0) && !ctxTags.length && !ctxNote.trim()) return;
+    const entry = { date: `${ctxDate}T12:00:00.000Z`, units: u != null && u > 0 ? u : 0, tags: [...ctxTags], note: ctxNote.trim() };
+    setContextLog(prev => {
+      const now = Date.now();
+      const existing = prev.find(e => !e.deletedAt && (e.date||'').slice(0,10) === ctxDate);
+      let arr;
+      if (existing) {
+        let first = true;
+        arr = prev.map(e => {
+          if ((e.date||'').slice(0,10) !== ctxDate || e.deletedAt) return e;
+          if (e.id === existing.id && first) { first = false; return { ...e, ...entry, id: e.id, deletedAt: undefined, updatedAt: now }; }
+          return { ...e, deletedAt: now, updatedAt: now };
+        });
+      } else {
+        arr = [{ ...entry, id: newId(), updatedAt: now }, ...prev];
+      }
+      arr.sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0));
+      return arr.slice(0, 400);
+    });
+    setCtxUnits(''); setCtxTags([]); setCtxNote(''); setCtxDate(localToday()); setShowAddCtx(false);
   };
 
   const addGlucose = () => {
@@ -2356,6 +2483,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         const mergedCardio = mergeByKey(ensureIds(cardioLogRaw,'cd'), ensureIds(Array.isArray(data.cardioLog)?data.cardioLog:[], 'cd'), e => e.id);
         const mergedBP = mergeByKey(ensureIds(bpLogRaw,'bp'), ensureIds(Array.isArray(data.bpLog)?data.bpLog:[], 'bp'), e => e.id);
         const mergedGl = mergeByKey(ensureIds(glucoseLogRaw,'gl'), ensureIds(Array.isArray(data.glucoseLog)?data.glucoseLog:[], 'gl'), e => e.id);
+        const mergedCtx = mergeByKey(ensureIds(contextLogRaw,'cx'), ensureIds(Array.isArray(data.contextLog)?data.contextLog:[], 'cx'), e => e.id);
         const mergedWhoop = mergeHistory(whoopHistory, Array.isArray(data.whoopHistory) ? data.whoopHistory : []);
         // Union merge for deload skips: local choices win over cloud on collision. Limitation:
         // reverting a skip (deleting the key) on one device won't propagate a deletion.
@@ -2370,6 +2498,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setCardioLog(mergedCardio);
         setBpLog(mergedBP);
         setGlucoseLog(mergedGl);
+        setContextLog(mergedCtx);
         setWhoopHistory(mergedWhoop);
         // Only adopt cloud config if it is NEWER than the local one. Previously cloud always
         // won, so a week/block/phase changed offline was silently reverted on the next pull
@@ -2385,7 +2514,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           setCfgUpdatedAt(cloudCfgAt);
         }
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: cloudCfgNewer ? { week: data.config.week, recovery: data.config.recovery, block: data.config.block, highVol: data.config.highVol, phase: data.config.phase, updatedAt: cloudCfgAt } : { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt||Date.now()) }, bodyMetrics: pruneTombstones(mergedBody), protocolLog: pruneTombstones(mergedProt), measurements: pruneTombstones(mergedMeas), nutrition: pruneTombstones(mergedNutri), cardioLog: pruneTombstones(mergedCardio), bpLog: pruneTombstones(mergedBP), glucoseLog: pruneTombstones(mergedGl), whoopHistory: mergedWhoop, deloadSkips: mergedSkips, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: cloudCfgNewer ? { week: data.config.week, recovery: data.config.recovery, block: data.config.block, highVol: data.config.highVol, phase: data.config.phase, updatedAt: cloudCfgAt } : { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt||Date.now()) }, bodyMetrics: pruneTombstones(mergedBody), protocolLog: pruneTombstones(mergedProt), measurements: pruneTombstones(mergedMeas), nutrition: pruneTombstones(mergedNutri), cardioLog: pruneTombstones(mergedCardio), bpLog: pruneTombstones(mergedBP), glucoseLog: pruneTombstones(mergedGl), contextLog: pruneTombstones(mergedCtx), whoopHistory: mergedWhoop, deloadSkips: mergedSkips, updatedAt: Date.now() });
         // Must await and check: an un-awaited, unchecked POST let the UI report 'synced'
         // while the merged superset was never actually written to the cloud.
         try {
@@ -2405,7 +2534,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
       const r = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       if (!r.ok) { setCloudStatus('error'); return; }
       setCloudStatus('synced');
@@ -2431,7 +2560,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -2443,7 +2572,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setCloudStatus('synced');
       } catch (e) { setCloudStatus('error'); }
     }, 3000);
-  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, whoopHistory, week, recovery, block, highVol, goalPhase, syncCode, deloadSkips]);
+  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, contextLog, whoopHistory, week, recovery, block, highVol, goalPhase, syncCode, deloadSkips]);
 
   const applySwap = o => {
     const base = SESSIONS[sel]?.exercises[exIdx];
@@ -2484,7 +2613,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const weekDone=new Set(logs.filter(l=>l.week===week && (l.block||1)===block).map(l=>l.sessionId));
   const allDone=weekDone.size>=4;
   const deloadInfo=computeDeloadReadiness(whoopHistory,week);
-  const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, bpLog[0]||null, deloadActive);
+  const ctxReasons=useMemo(()=>recentCtx(contextLog),[contextLog]);
+  const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, bpLog[0]||null, deloadActive, ctxReasons);
   const hvActive = highVol && (readiness.cls === 'green' || pushOverride) && goalPhase !== 'cut';
   const effPhase = (goalPhase==='cut' && (readiness.cls==='green' || pushOverride)) ? 'maintain' : goalPhase;
   const volParts = useMemo(() => {
@@ -2776,6 +2906,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const volSeries=weeklyVolumeSeries(logs,volMuscle,block);
   const plateaus=detectPlateaus(logs);
   const strengthRet=useMemo(()=>computeStrengthRetention(logs),[logs]);
+  const deloadRebound=useMemo(()=>computeDeloadRebound(logs),[logs]);
+  const rirDrift=useMemo(()=>computeRirDrift(logs,block),[logs,block]);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
   // --- Body dashboard derived data ---
   const bodyDash = useMemo(() => {
@@ -3433,6 +3565,50 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
             <div className="hm-legend"><span><i style={{background:'#5aa9ff'}}/>below floor</span><span><i style={{background:'#00e87a'}}/>in range</span><span><i style={{background:'#e0b020'}}/>overreach</span></div>
           </div>
+          {deloadRebound && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Deload rebound</span><span className="hm-wk">week after vs week before</span></div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:deloadRebound.avg>=1?'var(--ok)':deloadRebound.avg<=-1?'var(--err)':'var(--t2)',marginBottom:6}}>
+                {deloadRebound.avg>0?'+':''}{deloadRebound.avg}%
+              </div>
+              <div style={{fontSize:12,lineHeight:1.5,color:'var(--t2)',marginBottom:8}}>
+                {deloadRebound.avg>=1?'Your deloads are paying off — strength comes back higher than it went in. Keep taking them.'
+                 :deloadRebound.avg<=-1?'Strength is coming back LOWER after deloads. Either the deload is too deep, or you were not fatigued enough to need it. Consider training through the next one.'
+                 :'Flat. Deloads are neither helping nor hurting measurably yet — more events needed before this is decisive.'}
+              </div>
+              <div className="ar-list">
+                {deloadRebound.events.map((e,i)=>(
+                  <div key={i} className="ar-row">
+                    <span className="ar-mus" style={{textTransform:'none'}}>Block {e.block} · wk {e.week}</span>
+                    <span className={`ar-chip ${e.pct>=1?'add':e.pct<=-1?'back':'hold'}`}>{e.pct>0?'+':''}{e.pct}% · {e.before}→{e.after}kg</span>
+                  </div>
+                ))}
+              </div>
+              <div className="ar-note">Compares best e1RM on tracked compounds the week after each deload against the week before it. Needs logged sessions either side, so it fills in as blocks complete. Deload weeks themselves are excluded.</div>
+            </div>
+          )}
+          {rirDrift && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">RIR drift</span><span className="hm-wk">logged vs prescribed</span></div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:Math.abs(rirDrift.avg)<=0.5?'var(--ok)':rirDrift.avg>0.5?'var(--warn)':'var(--inf)',marginBottom:6}}>
+                {rirDrift.avg>0?'+':''}{rirDrift.avg}
+              </div>
+              <div style={{fontSize:12,lineHeight:1.5,color:'var(--t2)',marginBottom:8}}>
+                {Math.abs(rirDrift.avg)<=0.5?'Logged effort matches the prescription. Your RIR targets are being hit honestly.'
+                 :rirDrift.avg>0.5?'You are logging EASIER than prescribed — leaving roughly '+rirDrift.avg.toFixed(1)+' extra reps in reserve. Either push closer to target or check you are not accepting a wrong default RIR.'
+                 :'You are training HARDER than prescribed by about '+Math.abs(rirDrift.avg).toFixed(1)+' reps. Fine occasionally; sustained, it accumulates fatigue faster than the block plans for.'}
+              </div>
+              <div className="ar-list">
+                {rirDrift.rows.slice(-6).map((r,i)=>(
+                  <div key={i} className="ar-row">
+                    <span className="ar-mus" style={{textTransform:'none'}}>Week {r.week} <span style={{color:'var(--t3)'}}>(target {r.target}, {r.n} sets)</span></span>
+                    <span className={`ar-chip ${Math.abs(r.drift)<=0.5?'hold':r.drift>0.5?'back':'load'}`}>{r.drift>0?'+':''}{r.drift}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="ar-note">Positive = logging more reps in reserve than programmed. Negative = training closer to failure than programmed. Deload weeks are compared against their own target, and trained-through weeks against 1-2 RIR.</div>
+            </div>
+          )}
           {strengthRet && (() => {
             const wrate = bwRate ? bwRate.perWeek : null;
             const losing = wrate != null && wrate < -0.1;
@@ -4242,6 +4418,51 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 </div>
               ); })}
               {bpLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your blood pressure above.</div>}
+            </div>}
+          </div>
+
+          <div className="body-sec">
+            <div className="body-ttl">Context Flags</div>
+            <div className="body-sub">Alcohol, illness, bad nights and travel all suppress HRV and REM for 24&#8211;48h. Flag them and the readiness engine attributes the dip to the cause instead of reading it as training fatigue and pushing you toward an unnecessary deload.</div>
+            {ctxReasons && <div className="info-banner warn" style={{margin:'0 0 10px'}}>Active: {ctxReasons.join(' · ')}</div>}
+            <button className="add-toggle" onClick={() => setShowAddCtx(v => !v)}>
+              <span>Log a flag</span><span className="plus">{showAddCtx ? '\u2212' : '+'}</span>
+            </button>
+            {showAddCtx && (
+              <div className="body-form">
+                <div className="bf-grp">
+                  <div className="bf-lbl">Alcohol (units, 0 if none)</div>
+                  <input className="bf-in" type="number" inputMode="decimal" placeholder="0" value={ctxUnits} onChange={e => setCtxUnits(e.target.value)}/>
+                </div>
+                <div className="bf-grp">
+                  <div className="bf-lbl">Flags</div>
+                  <div className="rec-row">
+                    {CTX_TAGS.map(t => (
+                      <button key={t.id} className={`rc${ctxTags.includes(t.id)?' bt':''}`} onClick={()=>setCtxTags(p=>p.includes(t.id)?p.filter(x=>x!==t.id):[...p,t.id])}>{t.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <input className="bf-in" type="text" placeholder="Note (optional)" value={ctxNote} onChange={e => setCtxNote(e.target.value)}/>
+                <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={ctxDate} onChange={e=>setCtxDate(e.target.value)}/></div>
+                <button className="bf-save" onClick={addContext}>Save</button>
+              </div>
+            )}
+            <button className="add-toggle" onClick={()=>setShowCtxLog(v=>!v)} style={{marginTop:8}}>
+              <span>Full log ({contextLog.length})</span><span className="plus">{showCtxLog?'−':'+'}</span>
+            </button>
+            {showCtxLog && <div className="body-list">
+              {contextLog.slice(0,21).map((c,i)=>(
+                <div key={i} className="bl-row">
+                  <span className="bl-date">{fmtShort(c.date)}</span>
+                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>
+                    {c.units>0?`${c.units}u`:''}{c.units>0&&(c.tags||[]).length?' · ':''}
+                    {(c.tags||[]).map(t=>(CTX_TAGS.find(x=>x.id===t)||{}).label).filter(Boolean).join(', ')}
+                    {c.note?<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> · {c.note}</span>:null}
+                  </span>
+                  <button className="bl-del" onClick={()=>tombstone(setContextLog,'cx')(x=>x===c)}>&#215;</button>
+                </div>
+              ))}
+              {contextLog.length===0&&<div className="empty-msg">No flags logged.<br/>Log alcohol or an off day above.</div>}
             </div>}
           </div>
 
