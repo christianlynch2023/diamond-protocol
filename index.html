@@ -642,7 +642,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-13T1430';
+  var BUILD='2026-08-13T1610';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1128,6 +1128,25 @@ function SVGChart({ data, color='#c4ff00', height=130 }) {
   );
 }
 
+// Parse ALL cycle records, keeping only COMPLETED cycles (those with an end timestamp).
+// The in-progress cycle's kilojoule field is a running total — reading it mid-morning and
+// storing it as the day's expenditure is what produced the systematically-low ~1,500 kcal
+// "avg out". A completed cycle carries the true full-day burn.
+function parseWhoopCycles(raw) {
+  const records = raw?.records || raw?.data || [];
+  const localDay = ts => { const d = new Date(ts); return isNaN(d) ? null : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+  return records.map(c => {
+    const s = c.score || c;
+    const end = c.end || c.during?.upper || null;
+    if (!end) return null;                    // in-progress cycle — never trust its total
+    const date = localDay(c.start || c.during?.lower || end);
+    if (!date) return null;
+    const kcal = s.kilojoule != null ? Math.round(s.kilojoule / 4.184) : null;
+    if (kcal == null || kcal <= 0) return null;
+    return { date, dayCal: kcal, dayCalFinal: true, strain: s.strain != null ? Math.round(s.strain*10)/10 : null };
+  }).filter(Boolean);
+}
+
 function parseWhoopHistory(rec) {
   const records = rec?.records || rec?.data || [];
   return records.map(r => {
@@ -1353,6 +1372,57 @@ function computeRirDrift(logs, block) {
   const recent = rows.slice(-4);
   const avg = +(recent.reduce((s,r)=>s+r.drift,0)/recent.length).toFixed(2);
   return { rows, avg };
+}
+
+// ---- BP vs training load ----
+// Assigns each BP reading to a training week by date range, then pairs weekly mean systolic
+// against weekly volume-load. On an enhanced protocol BP is the health marker most likely to
+// drift with training load, and nothing else in the app connects the two.
+function computeBpLoad(logs, bpLog, block) {
+  const wk = {};
+  for (const l of logs) {
+    if ((l.block||1) !== block) continue;
+    const t = new Date(l.date).getTime();
+    if (isNaN(t)) continue;
+    const w = (wk[l.week] = wk[l.week] || { week:l.week, vol:0, min:t, max:t, sys:[], n:0 });
+    w.vol += sessionVol(l);
+    if (t < w.min) w.min = t;
+    if (t > w.max) w.max = t;
+  }
+  const weeks = Object.values(wk);
+  if (weeks.length < 3) return null;
+  const DAY = 86400000;
+  for (const b of (bpLog||[])) {
+    const t = new Date(b.date).getTime();
+    if (isNaN(t) || b.sys == null) continue;
+    // pad the window by a day either side so a rest-day reading still lands in its week
+    const hit = weeks.find(w => t >= w.min - DAY && t <= w.max + DAY);
+    if (hit) { hit.sys.push(b.sys); hit.n++; }
+  }
+  const rows = weeks.filter(w => w.n > 0)
+    .map(w => ({ week:w.week, vol:Math.round(w.vol), sys:Math.round(w.sys.reduce((a,b)=>a+b,0)/w.sys.length), n:w.n }))
+    .sort((a,b)=>a.week-b.week);
+  if (rows.length < 3) return null;
+  // Pearson r between weekly volume-load and weekly mean systolic
+  const n = rows.length;
+  const mx = rows.reduce((s,r)=>s+r.vol,0)/n, my = rows.reduce((s,r)=>s+r.sys,0)/n;
+  let num=0, dx=0, dy=0;
+  for (const r of rows) { const a=r.vol-mx, b=r.sys-my; num+=a*b; dx+=a*a; dy+=b*b; }
+  const r = (dx>0 && dy>0) ? +(num/Math.sqrt(dx*dy)).toFixed(2) : null;
+  return { rows, r, weeks:n };
+}
+
+// ---- WHOOP burn cross-check ----
+// Compares WHOOP's measured daily expenditure (COMPLETED cycles only) against the empirical
+// maintenance derived from intake vs weight trend. Agreement raises confidence in both; a
+// large gap means one of them is wrong and the empirical figure should be trusted.
+function computeBurnCheck(whoopHistory, tdee) {
+  if (!tdee) return null;
+  const finals = (whoopHistory||[]).filter(h => h.dayCalFinal && h.dayCal > 0).slice(-14);
+  if (finals.length < 5) return null;
+  const avg = Math.round(finals.reduce((s,h)=>s+h.dayCal,0)/finals.length);
+  const gap = avg - tdee;
+  return { avg, tdee, gap, days: finals.length, agree: Math.abs(gap) <= 250 };
 }
 
 const ALT_BY_MUSCLE = {
@@ -1624,6 +1694,9 @@ function App() {
       const s = cycle.score || cycle;
       if (r.strain === null) r.strain = s.strain != null ? Math.round(s.strain*10)/10 : null;
       r.dayCal = s.kilojoule != null ? Math.round(s.kilojoule/4.184) : null;
+      // Flag whether this cycle is still running. dayCal on an in-progress cycle is a
+      // PARTIAL running total, not a daily burn, and must never be written into history.
+      r.dayCalPartial = !(cycle.end || cycle.during?.upper);
     }
     return r;
   };
@@ -1655,9 +1728,12 @@ function App() {
       const newHist = parseWhoopHistory(raw.recovery);
       // localToday(), not UTC: during BST between 00:00-00:59 local, toISOString() still
       // returns YESTERDAY, so today's entry was filed under the wrong date.
-      const todayEntry = parsed.recovery != null ? [{ date: localToday(), recovery: parsed.recovery, hrv: parsed.hrv, rhr: parsed.rhr, respRate: parsed.respRate, skinTemp: parsed.skinTemp, dayCal: parsed.dayCal, sleepHrs: parsed.sleepHrs, sleepDebt: parsed.sleepDebt, strain: parsed.strain }] : [];
-      if (newHist.length || todayEntry.length) {
-        setWhoopHistory(prev => mergeHistory(prev, [...newHist, ...todayEntry]));
+      const todayEntry = parsed.recovery != null ? [{ date: localToday(), recovery: parsed.recovery, hrv: parsed.hrv, rhr: parsed.rhr, respRate: parsed.respRate, skinTemp: parsed.skinTemp, dayCal: parsed.dayCalPartial ? null : parsed.dayCal, sleepHrs: parsed.sleepHrs, sleepDebt: parsed.sleepDebt, strain: parsed.strain }] : [];
+      // Completed cycles carry TRUE full-day burns and overwrite any partial value already
+      // stored for that date (mergeHistory is field-level, and these come last so they win).
+      const cycleHist = parseWhoopCycles(raw.cycles);
+      if (newHist.length || todayEntry.length || cycleHist.length) {
+        setWhoopHistory(prev => mergeHistory(prev, [...newHist, ...todayEntry, ...cycleHist]));
       }
       const wos = parseWhoopWorkouts(raw.workouts);
       // Merge, don't replace: the endpoint returns a recent page, so a wholesale replace
@@ -1862,7 +1938,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-13T1430';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-13T1610';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -2908,6 +2984,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const strengthRet=useMemo(()=>computeStrengthRetention(logs),[logs]);
   const deloadRebound=useMemo(()=>computeDeloadRebound(logs),[logs]);
   const rirDrift=useMemo(()=>computeRirDrift(logs,block),[logs,block]);
+  const bpLoad=useMemo(()=>computeBpLoad(logs,bpLog,block),[logs,bpLog,block]);
+  const burnCheck=useMemo(()=>computeBurnCheck(whoopHistory, nutriCoach.ok?nutriCoach.tdee:null),[whoopHistory,nutriCoach]);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
   // --- Body dashboard derived data ---
   const bodyDash = useMemo(() => {
@@ -3565,6 +3643,51 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
             <div className="hm-legend"><span><i style={{background:'#5aa9ff'}}/>below floor</span><span><i style={{background:'#00e87a'}}/>in range</span><span><i style={{background:'#e0b020'}}/>overreach</span></div>
           </div>
+          {bpLoad && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">BP vs training load</span><span className="hm-wk">weekly · block {block}</span></div>
+              {bpLoad.r != null && (
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,marginBottom:6,color:bpLoad.r>=0.5?'var(--warn)':bpLoad.r<=-0.5?'var(--inf)':'var(--ok)'}}>
+                  r = {bpLoad.r>0?'+':''}{bpLoad.r}
+                </div>
+              )}
+              <div style={{fontSize:12,lineHeight:1.5,color:'var(--t2)',marginBottom:8}}>
+                {bpLoad.r == null ? 'Not enough variation to correlate yet.'
+                 : bpLoad.r >= 0.5 ? 'Systolic is tracking UP with training volume. On your protocol that is worth acting on: keep the highest-volume weeks in check, prioritise zone-2 work, and re-measure on rest days.'
+                 : bpLoad.r <= -0.5 ? 'Systolic runs lower in your higher-volume weeks — most likely the training is helping, or your high-volume weeks coincide with better sleep and lower stress.'
+                 : 'No meaningful relationship between weekly volume and blood pressure. Your BP is being driven by something other than training load.'}
+              </div>
+              <div className="ar-list">
+                {bpLoad.rows.slice(-6).map((r,i)=>{
+                  const c=bpCategory(r.sys,0);
+                  return (
+                    <div key={i} className="ar-row">
+                      <span className="ar-mus" style={{textTransform:'none'}}>Week {r.week} <span style={{color:'var(--t3)'}}>({(r.vol/1000).toFixed(1)}k kg, {r.n} reading{r.n===1?'':'s'})</span></span>
+                      <span className={`ar-chip ${c.cls==='green'?'add':c.cls==='amber'?'hold':'back'}`}>{r.sys} sys</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="ar-note">Correlation is not causation and {bpLoad.weeks} weeks is a small sample — read it as a prompt to look, not a verdict. Morning readings taken consistently make this far more reliable.</div>
+            </div>
+          )}
+          {burnCheck && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Burn cross-check</span><span className="hm-wk">WHOOP vs empirical</span></div>
+              <div style={{display:'flex',alignItems:'baseline',gap:10,marginBottom:6,fontFamily:"'JetBrains Mono',monospace"}}>
+                <span style={{fontSize:22,fontWeight:700,color:'var(--t)'}}>{burnCheck.avg}</span>
+                <span style={{fontSize:12,color:'var(--t3)'}}>WHOOP</span>
+                <span style={{fontSize:22,fontWeight:700,color:'var(--acc)'}}>{burnCheck.tdee}</span>
+                <span style={{fontSize:12,color:'var(--t3)'}}>empirical</span>
+              </div>
+              <div style={{fontSize:12,lineHeight:1.5,color:burnCheck.agree?'var(--ok)':'var(--warn)'}}>
+                {burnCheck.agree
+                  ? `Within ${Math.abs(burnCheck.gap)} kcal across ${burnCheck.days} completed days — the two independent methods agree, so treat the maintenance figure as solid.`
+                  : `${burnCheck.gap>0?'WHOOP reads '+burnCheck.gap+' kcal HIGHER':'WHOOP reads '+Math.abs(burnCheck.gap)+' kcal LOWER'} than your intake-vs-weight maintenance across ${burnCheck.days} days. Trust the empirical figure — it is derived from what actually happened to your weight. Wearable burn estimates are commonly out by 10-20%.`}
+              </div>
+              <div className="ar-note">Uses only completed WHOOP cycles (true full-day burns), never the in-progress cycle. Needs 5+ complete days, so it fills in over the next week.</div>
+            </div>
+          )}
           {deloadRebound && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Deload rebound</span><span className="hm-wk">week after vs week before</span></div>
