@@ -578,6 +578,10 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .nc-macros{display:flex;gap:6px;margin-top:8px}
 .nc-mac{flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;padding:6px 4px;border-radius:6px;background:var(--crd)}
 .nc-mac.p{color:#4a9eff}.nc-mac.c{color:var(--acc)}.nc-mac.f{color:#ff9f43}
+.nc-dayrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.nc-dayrow .nc-daylbl{font-size:11px;font-weight:700;color:var(--t1);min-width:88px}
+.nc-dayrow .nc-daykcal{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--acc)}
+.nc-dayrow .nc-macros{margin-top:0;flex:1 1 100%;gap:6px}
 .nc-adj{font-size:12px;line-height:1.5;padding:9px 11px;border-radius:8px}
 .nc-adj.down{background:rgba(255,140,0,.1);color:var(--warn);border:1px solid rgba(255,140,0,.22)}
 .nc-adj.up{background:rgba(74,158,255,.1);color:var(--inf);border:1px solid rgba(74,158,255,.22)}
@@ -642,7 +646,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T1545';
+  var BUILD='2026-08-15T1610';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1958,7 +1962,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T1545';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T1610';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -2988,9 +2992,20 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       const _adjKcal = Math.round(_adjFrac * latestW * 1100);   // 7700 kcal/kg ÷ 7 days ≈ 1100
       const _sugg = Math.round(avgIntake + _adjKcal);
       const _suggCarb = Math.max(0, Math.round((_sugg - proteinG*4 - fatG*9)/4));  // same split as the ok-path
+      // Train/rest carb cycle — identical formula to the ok-path: protein+fat fixed, carbs move,
+      // rest days at 60% of the daily carb average, remainder pushed onto training days.
+      let _cyc=null, _dayT=null;
+      if(_suggCarb>0){
+        const _tD=Math.min(6,Math.max(2,Object.keys(SESSIONS).length||4)), _rD=7-_tD, _wk=_suggCarb*7;
+        const _lo=Math.max(0,Math.round(_suggCarb*0.6)), _hi=_rD>0?Math.max(0,Math.round((_wk-_lo*_rD)/_tD)):_suggCarb;
+        const _base=proteinG*4+fatG*9;
+        _cyc={trainDays:_tD,restDays:_rD,lowCarb:_lo,highCarb:_hi};
+        _dayT={ train:{cals:Math.round(_base+_hi*4),carb:_hi,protein:proteinG,fat:fatG},
+                rest:{cals:Math.round(_base+_lo*4),carb:_lo,protein:proteinG,fat:fatG} };
+      }
       return { ok:false, reason:'implausible', tdee, avgIntake, atMaint:true,
                ratePerWk: ratePerWk!=null?+ratePerWk.toFixed(2):null,
-               suggested: _sugg, proteinG, fatG, carbG: _suggCarb };
+               suggested: _sugg, proteinG, fatG, carbG: _suggCarb, cycle:_cyc, dayTargets:_dayT };
     }
     return { ok:true, tdee, conf, avgIntake, ratePerWk, spanDays:Math.round(spanDays), targetCals, proteinG, fatG, carbG, targetRatePct, adjust, cycle, dayTargets, phase:goalPhase };
   }, [logs, nutrition, bodyMetrics, goalPhase]);
@@ -4423,7 +4438,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               {!nutriCoach.ok && nutriCoach.reason==='stale' && <div className="nc-note">Your most recent food/weight log is {nutriCoach.ageDays} days old, so these targets have expired. Log a few days of food and a weigh-in to recalculate.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='stale_weight' && <div className="nc-note">Your most recent weigh-in is {nutriCoach.ageDays!=null?nutriCoach.ageDays+' days old':'missing'}, so targets can't be calculated from it. Log a fresh weigh-in.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='implausible' && <div className="nc-note">Your weight is holding roughly steady on ~{nutriCoach.avgIntake} kcal/day, so that's close to your maintenance. The short-term trend ({nutriCoach.ratePerWk!=null?(nutriCoach.ratePerWk>0?'+':'')+nutriCoach.ratePerWk+' kg/wk':'unclear'}) is too water-noisy to auto-lock a precise target &#8212; but to {goalPhase==='cut'?'lose':goalPhase==='bulk'?'gain':'hold'}, {goalPhase==='cut'?'drop to':goalPhase==='bulk'?'push to':'stay around'} <b>{nutriCoach.suggested} kcal/day</b> and keep weighing in daily. A precise target locks in once the trend clears.</div>}
-              {!nutriCoach.ok && nutriCoach.reason==='implausible' && nutriCoach.carbG!=null && <div className="nc-macros" style={{marginTop:8}}><span className="nc-mac p">P {nutriCoach.proteinG}g</span><span className="nc-mac c">C {nutriCoach.carbG}g</span><span className="nc-mac f">F {nutriCoach.fatG}g</span></div>}
+              {!nutriCoach.ok && nutriCoach.reason==='implausible' && nutriCoach.carbG!=null && (nutriCoach.dayTargets ? (
+                <div style={{marginTop:8}}>
+                  <div className="nc-dayrow"><span className="nc-daylbl">Training day</span><span className="nc-daykcal">{nutriCoach.dayTargets.train.cals} kcal</span><span className="nc-macros"><span className="nc-mac p">P {nutriCoach.dayTargets.train.protein}g</span><span className="nc-mac c">C {nutriCoach.dayTargets.train.carb}g</span><span className="nc-mac f">F {nutriCoach.dayTargets.train.fat}g</span></span></div>
+                  <div className="nc-dayrow"><span className="nc-daylbl">Rest day</span><span className="nc-daykcal">{nutriCoach.dayTargets.rest.cals} kcal</span><span className="nc-macros"><span className="nc-mac p">P {nutriCoach.dayTargets.rest.protein}g</span><span className="nc-mac c">C {nutriCoach.dayTargets.rest.carb}g</span><span className="nc-mac f">F {nutriCoach.dayTargets.rest.fat}g</span></span></div>
+                  <div className="nc-tgt-avg">Weekly avg {nutriCoach.suggested} kcal &#183; C {nutriCoach.carbG}g/day ({nutriCoach.cycle.trainDays} train / {nutriCoach.cycle.restDays} rest) &#183; protein &amp; fat held every day, carbs cycled</div>
+                </div>
+              ) : (
+                <div className="nc-macros" style={{marginTop:8}}><span className="nc-mac p">P {nutriCoach.proteinG}g</span><span className="nc-mac c">C {nutriCoach.carbG}g</span><span className="nc-mac f">F {nutriCoach.fatG}g</span></div>
+              ))}
               {!nutriCoach.ok && nutriCoach.reason && nutriCoach.reason!=='stale' && nutriCoach.reason!=='stale_weight' && nutriCoach.reason!=='implausible' && <div className="nc-note">{nutriCoach.reason}</div>}
               {!nutriCoach.ok && nutriCoach.partial && <div className="nc-note">Need ~1-2 weeks of consistent logging to estimate your maintenance. So far: {nutriCoach.foodDays} food day{nutriCoach.foodDays===1?'':'s'} and {nutriCoach.weighIns} weigh-in{nutriCoach.weighIns===1?'':'s'} in the last 14 days.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='noisy' && <div className="nc-note">Your weight trend is too noisy right now to set a reliable target (reading {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk} kg/wk, which is water not tissue). You are logging ~{nutriCoach.avgIntake} kcal/day &#8212; hold there and keep weighing in daily; the trend will settle within a few days.</div>}
