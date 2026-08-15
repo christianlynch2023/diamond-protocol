@@ -10,7 +10,7 @@ exports.handler = async (event) => {
 
   try {
     const [cycleRes, sleepRes, recRes, workoutRes] = await Promise.all([
-      fetch('https://api.prod.whoop.com/developer/v2/cycle?limit=1', auth),
+      fetch('https://api.prod.whoop.com/developer/v2/cycle?limit=14', auth),
       fetch('https://api.prod.whoop.com/developer/v2/activity/sleep?limit=1', auth),
       fetch('https://api.prod.whoop.com/developer/v2/recovery?limit=25', auth),
       fetch('https://api.prod.whoop.com/developer/v2/activity/workout?limit=15', auth),
