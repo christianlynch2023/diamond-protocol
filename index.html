@@ -642,7 +642,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-13T1650';
+  var BUILD='2026-08-15T1520';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -863,6 +863,26 @@ const fmt = s => { const m=Math.floor(s/60), sc=s%60; return m>0 ? `${m}:${Strin
 const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' ' + new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
+
+// Theil-Sen slope: the median of every pairwise slope. Ordinary least-squares is yanked by a
+// water-high day sitting at the START or END of the window (a window that happens to open on
+// a spike tilts the whole fit — the +0.68 kg/wk artefact). Theil-Sen ignores up to ~29% of
+// points being outliers on either edge, so the trend reflects the real body of the data.
+// Direction-invariant: (wj-wi)/(tj-ti) is the same regardless of point order, so callers may
+// pass points in any order; only zero-time-gap pairs are skipped.
+function theilSenSlope(pts) {
+  const slopes = [];
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const dt = pts[j].t - pts[i].t;
+      if (dt !== 0) slopes.push((pts[j].w - pts[i].w) / dt);
+    }
+  }
+  if (!slopes.length) return null;
+  slopes.sort((a, b) => a - b);
+  const m = Math.floor(slopes.length / 2);
+  return slopes.length % 2 ? slopes[m] : (slopes[m - 1] + slopes[m]) / 2;
+}
 
 // Volume-load (tonnage) for a set array: sum of weight x reps, in kg.
 // A supporting metric only — e1RM and hitting rep targets at RIR are the primary
@@ -1938,7 +1958,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-13T1650';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T1520';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -2811,21 +2831,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       .map(m => ({ t: new Date(m.date).getTime()/dayMs, w: m.weight }));
     if (pts.length < 2) return null;
     const newestW = bodyMetrics[0].weight;
-    let perWeek;
-    if (pts.length >= 4) {
-      const n=pts.length;
-      const mt=pts.reduce((s,p)=>s+p.t,0)/n, mw=pts.reduce((s,p)=>s+p.w,0)/n;
-      let num=0, den=0;
-      for(const p of pts){ num+=(p.t-mt)*(p.w-mw); den+=(p.t-mt)*(p.t-mt); }
-      if(den<=0) return null;
-      perWeek=(num/den)*7;
-    } else {
+    let slope = pts.length >= 4 ? theilSenSlope(pts) : null;
+    if (slope == null) {
       const a=pts[pts.length-1], b=pts[0];
-      const span=Math.abs(a.t-b.t);
-      if(span<=0) return null;
-      perWeek=(b.w-a.w)/ (b.t-a.t) *7;
-      if(!isFinite(perWeek)) return null;
+      if ((b.t - a.t) === 0) return null;
+      slope = (b.w - a.w) / (b.t - a.t);
     }
+    if (!isFinite(slope)) return null;
+    const perWeek = slope * 7;
     return { perWeek, pctWeek: perWeek/newestW*100 };
   })();
   const nutriCoach = useMemo(() => {
@@ -2882,14 +2895,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       const wA=wWin[0], wB=wWin[wWin.length-1];
       spanDays=(parse(wB.date)-parse(wA.date))/dayMs;
       if(spanDays>=10){
-        let slopePerDay=null;
-        if (pts.length >= 4) {
-          const n=pts.length;
-          const mt=pts.reduce((s,p)=>s+p.t,0)/n, mw=pts.reduce((s,p)=>s+p.w,0)/n;
-          let num=0, den=0;
-          for(const p of pts){ num+=(p.t-mt)*(p.w-mw); den+=(p.t-mt)*(p.t-mt); }
-          if(den>0) slopePerDay=num/den;
-        }
+        let slopePerDay = pts.length >= 4 ? theilSenSlope(pts) : null;
         if (slopePerDay === null) {
           // averaged endpoints (up to 3 readings each end) instead of single points
           const k=Math.min(3, Math.floor(pts.length/2)) || 1;
@@ -2975,9 +2981,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       return false;
     })();
     if (implausible) {
-      return { ok:false, reason:'implausible', tdee, avgIntake,
+      // When the trend is too water-noisy to trust BUT intake has held weight roughly flat,
+      // current intake IS a sound maintenance estimate. Suggest a real cut/bulk target off it
+      // (0.4%/wk ≈ 440 kcal at 89kg) rather than a token -100 that produces no meaningful loss.
+      const _adjFrac = goalPhase==='cut' ? -0.004 : goalPhase==='bulk' ? 0.0025 : 0;
+      const _adjKcal = Math.round(_adjFrac * latestW * 1100);   // 7700 kcal/kg ÷ 7 days ≈ 1100
+      return { ok:false, reason:'implausible', tdee, avgIntake, atMaint:true,
                ratePerWk: ratePerWk!=null?+ratePerWk.toFixed(2):null,
-               suggested: Math.round(avgIntake + (goalPhase==='cut' ? -100 : goalPhase==='bulk' ? 100 : 0)) };
+               suggested: Math.round(avgIntake + _adjKcal) };
     }
     return { ok:true, tdee, conf, avgIntake, ratePerWk, spanDays:Math.round(spanDays), targetCals, proteinG, fatG, carbG, targetRatePct, adjust, cycle, dayTargets, phase:goalPhase };
   }, [logs, nutrition, bodyMetrics, goalPhase]);
@@ -4409,7 +4420,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               <div className="nc-hd"><span className="nc-ttl">Smart targets</span>{nutriCoach.ok && <span className={'nc-conf '+nutriCoach.conf}>{nutriCoach.conf} confidence</span>}</div>
               {!nutriCoach.ok && nutriCoach.reason==='stale' && <div className="nc-note">Your most recent food/weight log is {nutriCoach.ageDays} days old, so these targets have expired. Log a few days of food and a weigh-in to recalculate.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='stale_weight' && <div className="nc-note">Your most recent weigh-in is {nutriCoach.ageDays!=null?nutriCoach.ageDays+' days old':'missing'}, so targets can't be calculated from it. Log a fresh weigh-in.</div>}
-              {!nutriCoach.ok && nutriCoach.reason==='implausible' && <div className="nc-note">Not enough clean weight data to set a target yet. The trend ({nutriCoach.ratePerWk!=null?(nutriCoach.ratePerWk>0?'+':'')+nutriCoach.ratePerWk+' kg/wk':'unclear'}) is being distorted by day-to-day water swings, which would produce a misleading number. You are logging ~{nutriCoach.avgIntake} kcal/day &#8212; stay around <b>{nutriCoach.suggested} kcal</b> and keep weighing in daily; this will settle within a week.</div>}
+              {!nutriCoach.ok && nutriCoach.reason==='implausible' && <div className="nc-note">Your weight is holding roughly steady on ~{nutriCoach.avgIntake} kcal/day, so that's close to your maintenance. The short-term trend ({nutriCoach.ratePerWk!=null?(nutriCoach.ratePerWk>0?'+':'')+nutriCoach.ratePerWk+' kg/wk':'unclear'}) is too water-noisy to auto-lock a precise target &#8212; but to {goalPhase==='cut'?'lose':goalPhase==='bulk'?'gain':'hold'}, {goalPhase==='cut'?'drop to':goalPhase==='bulk'?'push to':'stay around'} <b>{nutriCoach.suggested} kcal/day</b> and keep weighing in daily. A precise target locks in once the trend clears.</div>}
               {!nutriCoach.ok && nutriCoach.reason && nutriCoach.reason!=='stale' && nutriCoach.reason!=='stale_weight' && nutriCoach.reason!=='implausible' && <div className="nc-note">{nutriCoach.reason}</div>}
               {!nutriCoach.ok && nutriCoach.partial && <div className="nc-note">Need ~1-2 weeks of consistent logging to estimate your maintenance. So far: {nutriCoach.foodDays} food day{nutriCoach.foodDays===1?'':'s'} and {nutriCoach.weighIns} weigh-in{nutriCoach.weighIns===1?'':'s'} in the last 14 days.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='noisy' && <div className="nc-note">Your weight trend is too noisy right now to set a reliable target (reading {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk} kg/wk, which is water not tissue). You are logging ~{nutriCoach.avgIntake} kcal/day &#8212; hold there and keep weighing in daily; the trend will settle within a few days.</div>}
