@@ -642,7 +642,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-13T1610';
+  var BUILD='2026-08-13T1650';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1938,7 +1938,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-13T1610';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-13T1650';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -2110,6 +2110,55 @@ function App() {
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`diamond-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  };
+
+  // Compact, human/AI-readable digest — the thing to paste into a coach chat or model.
+  // Markdown-ish plain text, not the full JSON dump. Pulls from the live analytics memos.
+  const exportSummary = () => {
+    const L = [];
+    const p = (...a) => L.push(a.join(''));
+    p('DIAMOND PROTOCOL — SUMMARY EXPORT');
+    p('Generated: ' + new Date().toLocaleString('en-GB'));
+    p('Block ' + block + ', Week ' + week + '/12 · Goal: ' + goalPhase + (highVol ? ' · high-volume' : ''));
+    p('');
+    p('== BODY ==');
+    if (bodyMetrics[0]) p('Latest weight: ' + bodyMetrics[0].weight + 'kg (' + fmtShort(bodyMetrics[0].date) + ')' + (bodyDash.avg7 != null ? ' · 7d avg ' + bodyDash.avg7.toFixed(1) + 'kg' : ''));
+    if (bwRate) p('Weight trend (21d regression): ' + (bwRate.perWeek > 0 ? '+' : '') + bwRate.perWeek.toFixed(2) + ' kg/wk (' + (bwRate.pctWeek > 0 ? '+' : '') + bwRate.pctWeek.toFixed(2) + '%/wk)');
+    if (latestBP) p('Latest BP: ' + latestBP.sys + '/' + latestBP.dia + ' (' + bpCategory(latestBP.sys, latestBP.dia).label + ')');
+    p('');
+    p('== NUTRITION ==');
+    if (nutriCoach.ok) {
+      p('Est. maintenance: ~' + nutriCoach.tdee + ' kcal/day (' + nutriCoach.conf + ' confidence, from intake vs weight over ' + nutriCoach.spanDays + 'd)');
+      p('Logging: ~' + nutriCoach.avgIntake + ' kcal/day · trend ' + (nutriCoach.ratePerWk > 0 ? '+' : '') + nutriCoach.ratePerWk.toFixed(2) + ' kg/wk');
+      p('Target (' + goalPhase + '): ' + nutriCoach.targetCals + ' kcal · P' + nutriCoach.proteinG + ' C' + nutriCoach.carbG + ' F' + nutriCoach.fatG);
+    } else p('Smart targets: not ready (' + (nutriCoach.reason || 'insufficient data') + ')');
+    if (burnCheck) p('WHOOP burn cross-check: ' + burnCheck.avg + ' vs empirical ' + burnCheck.tdee + ' (' + (burnCheck.agree ? 'agree' : 'gap ' + burnCheck.gap) + ', ' + burnCheck.days + 'd)');
+    p('');
+    p('== TRAINING ANALYTICS ==');
+    if (strengthRet) { p('Strength retention (21d vs prior): ' + (strengthRet.avgPct > 0 ? '+' : '') + strengthRet.avgPct + '% avg e1RM'); strengthRet.lifts.forEach(l => p('  ' + l.name + ': ' + (l.pct > 0 ? '+' : '') + l.pct + '% (' + l.prior + '→' + l.recent + 'kg)')); }
+    if (deloadRebound) p('Deload rebound: ' + (deloadRebound.avg > 0 ? '+' : '') + deloadRebound.avg + '% avg (week after vs before)');
+    if (rirDrift) p('RIR drift (recent): ' + (rirDrift.avg > 0 ? '+' : '') + rirDrift.avg + ' vs prescribed');
+    if (bpLoad && bpLoad.r != null) p('BP vs volume correlation: r=' + bpLoad.r + ' over ' + bpLoad.weeks + ' weeks');
+    if (plateaus.length) p('Stalled lifts: ' + plateaus.map(x => x.name + ' (' + x.sessions + ' sessions)').join(', '));
+    p('');
+    p('== RECENT SESSIONS (last 12) ==');
+    logs.slice(0, 12).forEach(l => {
+      const tag = l.deload === true ? ' [deload]' : (l.deload === false && DLW.has(l.week)) ? ' [trained through]' : '';
+      p('W' + l.week + ' ' + (l.sessionName || l.sessionId) + tag + ' — ' + fmtShort(l.date));
+      (l.exercises || []).forEach(ex => p('  ' + ex.name + ': ' + ex.sets.map(s => s.weight + 'x' + s.reps + (s.rir != null ? '@' + s.rir : '')).join(', ')));
+    });
+    p('');
+    p('== WEIGHT LOG CSV (last 30) ==');
+    p('date,weight_kg,bodyfat_pct,lean_kg,notes');
+    bodyMetrics.slice(0, 30).forEach(m => p([m.date.slice(0,10), m.weight, m.bodyFat ?? '', m.muscle ?? '', (m.notes||'').replace(/,/g,';')].join(',')));
+    p('');
+    p('== NUTRITION CSV (last 30) ==');
+    p('date,kcal,protein_g,carbs_g,fat_g');
+    nutrition.slice(0, 30).forEach(n => p([n.date.slice(0,10), n.calories, n.protein, n.carbs, n.fat].join(',')));
+    const blob = new Blob([L.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `diamond-summary-${new Date().toISOString().split('T')[0]}.txt`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   };
 
@@ -3933,7 +3982,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div key={i} className="h-item" onClick={() => { if(editingLog===i) return; setExpandLog(expandLog===i?null:i); }}>
                     <div className="h-date">{fmtDate(log.date)} — Block {log.block||1} · Week {log.week}</div>
                     <div className="h-nm">{log.sessionName}</div>
-                    <div className="h-det">{log.exercises.length} exercises · {log.duration||'?'} min · {log.exercises.reduce((a,e)=>a+e.sets.length,0)} sets</div>
+                    <div className="h-det">{log.exercises.length} exercises · {log.duration||'?'} min · {log.exercises.reduce((a,e)=>a+e.sets.length,0)} sets{log.deload===true?<span className="h-pain mild" style={{marginLeft:6}}>deload</span>:(log.deload===false && DLW.has(log.week))?<span className="core-tag" style={{marginLeft:6}}>trained through</span>:null}{log.hv?<span className="core-tag" style={{marginLeft:6}}>high-vol</span>:null}</div>
                     {(() => {
                       const vl = sessionVol(log);
                       // compare to the previous session of the SAME type (e.g. last Upper 1), not just the prior day
@@ -4131,6 +4180,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="tool-sub">Export a backup before any app update. Import restores full history.</div>
             <div className="data-btns">
               <button className="data-btn" onClick={exportData}>&#8595; Export Backup</button>
+              <button className="data-btn" onClick={exportSummary}>&#128203; Summary (coach/AI)</button>
               <button className="data-btn" onClick={importData}>&#8593; Import Backup</button>
               <button className="data-btn danger" onClick={() => setClearConfirm(true)}>&#128465; Clear All Data</button>
             </div>
