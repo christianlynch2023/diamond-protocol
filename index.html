@@ -298,10 +298,10 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .data-btn:hover{border-color:var(--acc);color:var(--acc)}
 .data-btn.danger:hover{border-color:var(--err);color:var(--err)}
 .ver{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);text-align:center;padding:10px 0 4px}
-.bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:440px;background:var(--sur);border-top:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-around;z-index:100;padding-bottom:env(safe-area-inset-bottom,0);height:calc(64px + env(safe-area-inset-bottom,0))}
-.bn{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:7px 16px;border-radius:8px;transition:all .15s}
-.bn-ic{font-size:19px}
-.bn-lb{font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--t3);text-transform:uppercase;transition:color .15s}
+.bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:440px;background:var(--sur);border-top:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;overflow:hidden;padding-left:2px;padding-right:2px;z-index:100;padding-bottom:env(safe-area-inset-bottom,0);height:calc(64px + env(safe-area-inset-bottom,0))}
+.bn{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:7px 2px;border-radius:8px;transition:all .15s;flex:1 1 0;min-width:0}
+.bn-ic{font-size:18px}
+.bn-lb{font-size:8.5px;font-weight:700;letter-spacing:.03em;color:var(--t3);text-transform:uppercase;transition:color .15s;white-space:nowrap}
 .bn.on .bn-lb{color:var(--acc)}
 ::-webkit-scrollbar{width:3px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -676,7 +676,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T1750';
+  var BUILD='2026-08-15T1805';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2070,7 +2070,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T1750';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T1805';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
