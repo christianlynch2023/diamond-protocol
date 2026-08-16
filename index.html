@@ -646,7 +646,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T1610';
+  var BUILD='2026-08-15T1625';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1962,7 +1962,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T1610';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T1625';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3148,8 +3148,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // Compare the 7-day average (which blends training + rest days) against the BLENDED weekly
     // target from Smart targets (~1990), NOT the training-day-only 2250 — otherwise it always
     // reads ~250 under even when eating exactly to plan. Fall back to 1990 if Smart isn't ready.
-    const calTgt = (nutriCoach && nutriCoach.ok && nutriCoach.targetCals) ? nutriCoach.targetCals : 1990;
-    const pTgt = (nutriCoach && nutriCoach.ok && nutriCoach.proteinG) ? nutriCoach.proteinG : 210;
+    const calTgt = (nutriCoach && nutriCoach.ok && nutriCoach.targetCals) ? nutriCoach.targetCals
+                 : (nutriCoach && nutriCoach.suggested) ? nutriCoach.suggested
+                 : 1990;
+    const pTgt = (nutriCoach && nutriCoach.proteinG) ? nutriCoach.proteinG : 210;
     return { avgCal, avgP, calTgt, pTgt, calDelta: avgCal-calTgt, pDelta: avgP-pTgt, n:l7.length };
   }, [nutrition, nutriCoach]);
   const plateRes=calcPlates(plateTgt);
