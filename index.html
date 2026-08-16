@@ -676,7 +676,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T1805';
+  var BUILD='2026-08-15T1830';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2010,9 +2010,13 @@ function App() {
   const [vitalsLogRaw, setVitalsLog] = usePersistentState('vitals_log', []);
   const vitalsLog = useMemo(()=>live(vitalsLogRaw),[vitalsLogRaw]);
   const [tempInput, setTempInput] = useState('');
+  const [tVal, setTVal] = useState('');
+  const [tDate, setTDate] = useState(localToday());
+  const [showAddTemp, setShowAddTemp] = useState(false);
+  const [showTempLog, setShowTempLog] = useState(false);
+  const [showWoodLog, setShowWoodLog] = useState(false);
   const todayVitals = useMemo(()=>{ const t=localToday(); return vitalsLog.find(v=>v&&v.date===t)||null; },[vitalsLog]);
-  const upsertVitals = (patch) => {
-    const d=localToday();
+  const upsertVitalsDated = (d, patch) => {
     setVitalsLog(prev => {
       const ex=prev.find(v=>v&&v.date===d&&!v.deletedAt);
       const base = ex ? {...ex} : { id:newId(), date:d, temp:null, wood:null };
@@ -2020,8 +2024,20 @@ function App() {
       return [merged, ...prev.filter(v=>!(v&&v.date===d))].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,400);
     });
   };
+  const upsertVitals = (patch) => upsertVitalsDated(localToday(), patch);
   const saveTemp = () => { const t=parseFloat(tempInput); if(!isFinite(t)) return; upsertVitals({temp:t}); setTempInput(''); };
+  const saveTempBody = () => { const t=parseFloat(tVal); if(!isFinite(t)) return; upsertVitalsDated(tDate, {temp:t}); setTVal(''); };
   const setWood = (val) => upsertVitals({ wood: (todayVitals && todayVitals.wood===val) ? null : val });
+  // Clear one field; tombstone the whole day only when nothing else remains on it.
+  const clearVitalField = (d, field) => setVitalsLog(prev => prev.map(v => {
+    if(!(v && v.date===d && !v.deletedAt)) return v;
+    const other = field==='temp' ? v.wood : v.temp;
+    if(other==null) return {...v, deletedAt:Date.now(), updatedAt:Date.now()};
+    return {...v, [field]:null, updatedAt:Date.now()};
+  }));
+  const tempLogList = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null), [vitalsLog]);
+  const woodLogList = useMemo(()=> vitalsLog.filter(v=>v&&v.wood!=null), [vitalsLog]);
+  const tempChartSeries = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null).slice(0,21).reverse().map(v=>({x:fmtShort(v.date),y:v.temp})), [vitalsLog]);
   const [bloodsLogRaw, setBloodsLog] = usePersistentState('bloods_log', [MAY_2026_BLOODS]);
   const bloodsLog = useMemo(()=>live(bloodsLogRaw),[bloodsLogRaw]);
   const tempSeries = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null).slice(0,7).reverse().map(v=>({x:fmtShort(v.date),y:v.temp})), [vitalsLog]);
@@ -2070,7 +2086,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T1805';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T1830';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3437,11 +3453,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="td-card">
             <div className="td-row"><span className="td-lbl">Waking temp</span>
               <span className="td-val">{todayVitals && todayVitals.temp!=null?todayVitals.temp+'°':<span className="td-muted" style={{fontSize:14}}>—</span>}</span></div>
-            <div className="td-input">
-              <input type="number" inputMode="decimal" step="0.1" placeholder="e.g. 36.4" value={tempInput} onChange={e=>setTempInput(e.target.value)}/>
-              <button onClick={saveTemp}>Log</button>
-            </div>
             {tempStat && <div className="td-sub">7-day avg {tempStat.avg}°{tempStat.delta!=null && Math.abs(tempStat.delta)>=0.05 ? ' · '+(tempStat.delta>0?'▲ +'+tempStat.delta.toFixed(1):'▼ '+tempStat.delta.toFixed(1))+'° today' : tempStat.delta!=null?' · → steady':''}{tempStat.n<7?' ('+tempStat.n+'d)':''}</div>}
+            {(!todayVitals || todayVitals.temp==null) && <div className="td-sub" style={{color:'var(--t3)'}}>Log in Body → Waking Temp</div>}
           </div>
 
           <div className="td-card">
@@ -4904,6 +4917,60 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 </div>
               ); })}
               {glucoseLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your fasting glucose above.</div>}
+            </div>}
+          </div>
+
+          <div className="body-sec">
+            <div className="body-ttl">Waking Temp</div>
+            <div className="body-sub">Morning basal temp &#8212; only the 3-week trend is meaningful, not day-to-day</div>
+            {tempChartSeries.length > 1 && (
+              <div style={{marginBottom:10}}>
+                <div className="chart-lbl">Waking temp &#8212; last {Math.min(tempLogList.length,21)} readings (&deg;)</div>
+                <SVGChart data={tempChartSeries} height={110} color="#ff9f43"/>
+              </div>
+            )}
+            <button className="add-toggle" onClick={() => setShowAddTemp(v => !v)}>
+              <span>Log a reading</span><span className="plus">{showAddTemp ? '\u2212' : '+'}</span>
+            </button>
+            {showAddTemp && (
+              <div className="body-form">
+                <div className="bf-row">
+                  <div className="bf-grp"><div className="bf-lbl">Waking temp (&deg;)</div><input className="bf-in" type="number" inputMode="decimal" step="0.1" placeholder="36.4" value={tVal} onChange={e => setTVal(e.target.value)}/></div>
+                  <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={tDate} onChange={e=>setTDate(e.target.value)}/></div>
+                </div>
+                <button className="bf-save" onClick={saveTempBody}>Save</button>
+              </div>
+            )}
+            <button className="add-toggle" onClick={()=>setShowTempLog(v=>!v)} style={{marginTop:8}}>
+              <span>Full log ({tempLogList.length})</span><span className="plus">{showTempLog?'−':'+'}</span>
+            </button>
+            {showTempLog && <div className="body-list">
+              {tempLogList.slice(0, 21).map((v, i) => (
+                <div key={i} className="bl-row">
+                  <span className="bl-date">{fmtShort(v.date)}</span>
+                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{v.temp}<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &deg;</span></span>
+                  <button className="bl-del" onClick={() => clearVitalField(v.date,'temp')}>&#215;</button>
+                </div>
+              ))}
+              {tempLogList.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your waking temp above.</div>}
+            </div>}
+          </div>
+
+          <div className="body-sec">
+            <div className="body-ttl">Morning Wood</div>
+            <div className="body-sub">Daily functional marker &#8212; tap Yes/No each morning on the Today tab</div>
+            <button className="add-toggle" onClick={()=>setShowWoodLog(v=>!v)}>
+              <span>History ({woodLogList.length})</span><span className="plus">{showWoodLog?'−':'+'}</span>
+            </button>
+            {showWoodLog && <div className="body-list">
+              {woodLogList.slice(0, 30).map((v, i) => (
+                <div key={i} className="bl-row">
+                  <span className="bl-date">{fmtShort(v.date)}</span>
+                  <span style={{flex:1,margin:'0 8px',fontWeight:700,fontSize:12,color:v.wood?'var(--ok)':'var(--t2)'}}>{v.wood?'Yes':'No'}</span>
+                  <button className="bl-del" onClick={() => clearVitalField(v.date,'wood')}>&#215;</button>
+                </div>
+              ))}
+              {woodLogList.length === 0 && <div className="empty-msg">No entries yet.<br/>Log Yes/No on the Today tab.</div>}
             </div>}
           </div>
 
