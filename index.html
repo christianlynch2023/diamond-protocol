@@ -582,6 +582,25 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .nc-dayrow .nc-daylbl{font-size:11px;font-weight:700;color:var(--t1);min-width:88px}
 .nc-dayrow .nc-daykcal{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--acc)}
 .nc-dayrow .nc-macros{margin-top:0;flex:1 1 100%;gap:6px}
+.today-date{font-size:12px;color:var(--t2);margin:-2px 0 14px;text-transform:uppercase;letter-spacing:1.5px;font-family:'JetBrains Mono',monospace}
+.td-card{background:var(--crd);border:1px solid var(--bdr);border-radius:12px;padding:13px 16px;margin-bottom:10px}
+.td-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.td-lbl{font-size:10.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--t2);white-space:nowrap}
+.td-val{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;color:var(--t);text-align:right;line-height:1.2}
+.td-sub{font-size:11px;color:var(--t3);margin-top:6px;font-family:'JetBrains Mono',monospace;line-height:1.4}
+.td-chip{font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.07);margin-left:6px}
+.td-muted{color:var(--t3);font-size:14px;font-weight:400}
+.td-arrow{font-size:13px;margin-left:8px;font-weight:700}
+.td-arrow.good{color:var(--ok)}.td-arrow.warn{color:var(--warn)}
+.wcls.gr{color:var(--ok)}.wcls.yw{color:#ffd24a}.wcls.rd{color:var(--err)}
+.bpc.green{color:var(--ok)}.bpc.amber{color:var(--warn)}.bpc.red{color:var(--err)}
+.td-input{display:flex;gap:8px;margin-top:11px;align-items:center}
+.td-input input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:9px 11px;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:15px}
+.td-input button{background:var(--acc);color:#0a0a0a;border:none;border-radius:8px;padding:9px 16px;font-weight:700;font-size:13px}
+.td-wood{display:flex;gap:8px;margin-top:11px}
+.td-wood button{flex:1;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:9px 0;color:var(--t2);font-weight:700;font-size:13px}
+.td-wood button.on{background:var(--acc);color:#0a0a0a;border-color:var(--acc)}
+.td-spark{margin-top:8px}
 .nc-adj{font-size:12px;line-height:1.5;padding:9px 11px;border-radius:8px}
 .nc-adj.down{background:rgba(255,140,0,.1);color:var(--warn);border:1px solid rgba(255,140,0,.22)}
 .nc-adj.up{background:rgba(74,158,255,.1);color:var(--inf);border:1px solid rgba(74,158,255,.22)}
@@ -646,7 +665,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T1625';
+  var BUILD='2026-08-15T1710';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1925,6 +1944,25 @@ function App() {
   const glucoseLog = useMemo(()=>live(glucoseLogRaw),[glucoseLogRaw]);
   const [contextLogRaw, setContextLog] = usePersistentState('context_log', []);
   const contextLog = useMemo(()=>live(contextLogRaw),[contextLogRaw]);
+  // Waking temp + morning-wood: one combined daily store (one entry/day, keyed by date).
+  // These are the only genuinely new inputs the dashboard adds; everything else it reads
+  // from stores that already exist and already sync.
+  const [vitalsLogRaw, setVitalsLog] = usePersistentState('vitals_log', []);
+  const vitalsLog = useMemo(()=>live(vitalsLogRaw),[vitalsLogRaw]);
+  const [tempInput, setTempInput] = useState('');
+  const todayVitals = useMemo(()=>{ const t=localToday(); return vitalsLog.find(v=>v&&v.date===t)||null; },[vitalsLog]);
+  const upsertVitals = (patch) => {
+    const d=localToday();
+    setVitalsLog(prev => {
+      const ex=prev.find(v=>v&&v.date===d&&!v.deletedAt);
+      const base = ex ? {...ex} : { id:newId(), date:d, temp:null, wood:null };
+      const merged = {...base, ...patch, updatedAt:Date.now()};
+      return [merged, ...prev.filter(v=>!(v&&v.date===d))].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,400);
+    });
+  };
+  const saveTemp = () => { const t=parseFloat(tempInput); if(!isFinite(t)) return; upsertVitals({temp:t}); setTempInput(''); };
+  const setWood = (val) => upsertVitals({ wood: (todayVitals && todayVitals.wood===val) ? null : val });
+  const tempSeries = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null).slice(0,7).reverse().map(v=>({x:fmtShort(v.date),y:v.temp})), [vitalsLog]);
   const [ctxUnits, setCtxUnits] = useState('');
   const [ctxTags, setCtxTags] = useState([]);
   const [ctxNote, setCtxNote] = useState('');
@@ -1962,7 +2000,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T1625';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T1710';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -2130,7 +2168,7 @@ function App() {
   };
 
   const exportData = () => {
-    const data={version:'2.2',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,glucoseLog,protocolLog,contextLog};
+    const data={version:'2.2',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,glucoseLog,protocolLog,contextLog,vitalsLog};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`diamond-${new Date().toISOString().split('T')[0]}.json`;
@@ -2208,6 +2246,7 @@ function App() {
           if (Array.isArray(data.glucoseLog)) setGlucoseLog(desc(data.glucoseLog));
           if (Array.isArray(data.protocolLog)) setProtocolLog(desc(data.protocolLog));
           if (Array.isArray(data.contextLog)) setContextLog(desc(data.contextLog));
+          if (Array.isArray(data.vitalsLog)) setVitalsLog(desc(data.vitalsLog));
           if (data.config) { if(data.config.week!=null)setWeek(data.config.week); if(data.config.recovery!=null)setRecovery(data.config.recovery); if(data.config.block!=null)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase!=null)setGoalPhase(data.config.phase); touchCfg(); }  // explicit user restore = a config edit
           alert(`Restored ${data.logs?.length||0} sessions plus body, nutrition, BP, cardio and protocol history.`);
         } catch(err) { alert('Could not read file. Make sure it is a valid Diamond Protocol backup.'); }
@@ -2221,7 +2260,7 @@ function App() {
     setClearConfirm(false);
     setLogs([]); setWeek(1); setBlock(1); setRecovery('normal'); setHighVol(false); setGoalPhase('bulk');
     setWipData(null);
-    setBodyMetrics([]); setMeasurements([]); setNutrition([]); setCardioLog([]); setBpLog([]); setGlucoseLog([]); setProtocolLog([]); setContextLog([]);
+    setBodyMetrics([]); setMeasurements([]); setNutrition([]); setCardioLog([]); setBpLog([]); setGlucoseLog([]); setProtocolLog([]); setContextLog([]); setVitalsLog([]);
     // Previously left photos, WHOOP history/cache/tokens and the sync code behind,
     // so "Clear All Data" did not actually clear all data.
     // NOTE: whoopConnected is a DERIVED constant (from the stored token), not state.
@@ -2231,7 +2270,7 @@ function App() {
     // sync_code MUST be cleared: otherwise the mount effect calls pullFromCloud() on next
     // load and resurrects everything the user just deleted.
     setSyncCode(''); setCloudStatus('idle');
-    ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','glucose_log','protocol_log','context_log',
+    ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','glucose_log','protocol_log','context_log','vitals_log',
      'checkin_photos','whoop_history','whoop_workouts','whoop_cache','whoop_access_token','whoop_refresh_token','whoop_expires_at','sync_code'].forEach(k=>LS.del(k));
   };
 
@@ -2618,7 +2657,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       // called syncNow() which OVERWROTE that cloud data with the local (empty) state.
       const hasSnapshot = data && typeof data === 'object' && (
         Array.isArray(data.logs) || Array.isArray(data.bodyMetrics) || Array.isArray(data.nutrition) ||
-        Array.isArray(data.bpLog) || Array.isArray(data.glucoseLog) || Array.isArray(data.protocolLog) ||
+        Array.isArray(data.bpLog) || Array.isArray(data.glucoseLog) || Array.isArray(data.protocolLog) || Array.isArray(data.vitalsLog) ||
         Array.isArray(data.measurements) || Array.isArray(data.cardioLog) || Array.isArray(data.whoopHistory) ||
         !!data.config
       );
@@ -2633,6 +2672,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         const mergedBP = mergeByKey(ensureIds(bpLogRaw,'bp'), ensureIds(Array.isArray(data.bpLog)?data.bpLog:[], 'bp'), e => e.id);
         const mergedGl = mergeByKey(ensureIds(glucoseLogRaw,'gl'), ensureIds(Array.isArray(data.glucoseLog)?data.glucoseLog:[], 'gl'), e => e.id);
         const mergedCtx = mergeByKey(ensureIds(contextLogRaw,'cx'), ensureIds(Array.isArray(data.contextLog)?data.contextLog:[], 'cx'), e => e.id);
+        const mergedVit = mergeByKey(ensureIds(vitalsLogRaw,'vt'), ensureIds(Array.isArray(data.vitalsLog)?data.vitalsLog:[], 'vt'), e => e.id);
         const mergedWhoop = mergeHistory(whoopHistory, Array.isArray(data.whoopHistory) ? data.whoopHistory : []);
         // Union merge for deload skips: local choices win over cloud on collision. Limitation:
         // reverting a skip (deleting the key) on one device won't propagate a deletion.
@@ -2648,6 +2688,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setBpLog(mergedBP);
         setGlucoseLog(mergedGl);
         setContextLog(mergedCtx);
+        setVitalsLog(mergedVit);
         setWhoopHistory(mergedWhoop);
         // Only adopt cloud config if it is NEWER than the local one. Previously cloud always
         // won, so a week/block/phase changed offline was silently reverted on the next pull
@@ -2663,7 +2704,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           setCfgUpdatedAt(cloudCfgAt);
         }
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: cloudCfgNewer ? { week: data.config.week, recovery: data.config.recovery, block: data.config.block, highVol: data.config.highVol, phase: data.config.phase, updatedAt: cloudCfgAt } : { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt||Date.now()) }, bodyMetrics: pruneTombstones(mergedBody), protocolLog: pruneTombstones(mergedProt), measurements: pruneTombstones(mergedMeas), nutrition: pruneTombstones(mergedNutri), cardioLog: pruneTombstones(mergedCardio), bpLog: pruneTombstones(mergedBP), glucoseLog: pruneTombstones(mergedGl), contextLog: pruneTombstones(mergedCtx), whoopHistory: mergedWhoop, deloadSkips: mergedSkips, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: cloudCfgNewer ? { week: data.config.week, recovery: data.config.recovery, block: data.config.block, highVol: data.config.highVol, phase: data.config.phase, updatedAt: cloudCfgAt } : { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt||Date.now()) }, bodyMetrics: pruneTombstones(mergedBody), protocolLog: pruneTombstones(mergedProt), measurements: pruneTombstones(mergedMeas), nutrition: pruneTombstones(mergedNutri), cardioLog: pruneTombstones(mergedCardio), bpLog: pruneTombstones(mergedBP), glucoseLog: pruneTombstones(mergedGl), contextLog: pruneTombstones(mergedCtx), vitalsLog: pruneTombstones(mergedVit), whoopHistory: mergedWhoop, deloadSkips: mergedSkips, updatedAt: Date.now() });
         // Must await and check: an un-awaited, unchecked POST let the UI report 'synced'
         // while the merged superset was never actually written to the cloud.
         try {
@@ -2683,7 +2724,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), vitalsLog: pruneTombstones(vitalsLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
       const r = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       if (!r.ok) { setCloudStatus('error'); return; }
       setCloudStatus('synced');
@@ -2709,7 +2750,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), vitalsLog: pruneTombstones(vitalsLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -2721,7 +2762,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setCloudStatus('synced');
       } catch (e) { setCloudStatus('error'); }
     }, 3000);
-  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, contextLog, whoopHistory, week, recovery, block, highVol, goalPhase, syncCode, deloadSkips]);
+  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, contextLog, vitalsLog, whoopHistory, week, recovery, block, highVol, goalPhase, syncCode, deloadSkips]);
 
   const applySwap = o => {
     const base = SESSIONS[sel]?.exercises[exIdx];
@@ -3272,6 +3313,76 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               <button className="mbt danger" onClick={clearAllData}>Clear Everything</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {view === 'today' && (
+        <div className="screen">
+          <div className="topbar"><span className="logo">Today</span><span className="top-badge">B{block} · W{week}/12</span></div>
+          <div className="today-date">{new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div>
+
+          <div className="td-card">
+            <div className="td-row"><span className="td-lbl">Session</span>
+              <span className="td-val" style={{fontSize:16}}>{(wipData && SESSIONS[wipData.sessionId]) ? SESSIONS[wipData.sessionId].name : (sel && SESSIONS[sel] ? SESSIONS[sel].name : '—')}{wipData && SESSIONS[wipData.sessionId] ? <span className="td-chip">in progress</span> : null}</span></div>
+            <div className="td-sub">{getPhase(week).name} · {isDeload?'Deload':showInt?'Intensifiers on':'Straight sets'}</div>
+          </div>
+
+          <div className="td-card">
+            <div className="td-row"><span className="td-lbl">Recovery</span>
+              {whoopData && whoopData.recovery!=null
+                ? <span className="td-val"><span className={'wcls '+getWhoopCls(whoopData.recovery)}>{whoopData.recovery}%</span><span className="td-chip">{whoopData.recovery>=67?'Green':whoopData.recovery>=34?'Yellow':'Red'}</span></span>
+                : <span className="td-val td-muted">no WHOOP data</span>}</div>
+            {whoopData && whoopData.recovery!=null && <div className="td-sub">RHR {whoopData.rhr}bpm · HRV {whoopData.hrv}ms{whoopData.sleepHrs!=null?' · Sleep '+whoopData.sleepHrs+'h':''} · {fmtAgo(whoopData.cachedAt)}</div>}
+          </div>
+
+          <div className="td-card">
+            <div className="td-row"><span className="td-lbl">Weight</span>
+              <span className="td-val">{bodyMetrics[0]?bodyMetrics[0].weight+'kg':'—'}{bwRate?<span className={'td-arrow '+(bwRate.perWeek<-0.02?'good':bwRate.perWeek>0.02?'warn':'')}>{bwRate.perWeek>0.02?'▲':bwRate.perWeek<-0.02?'▼':'→'} {Math.abs(bwRate.perWeek).toFixed(2)}/wk</span>:null}</span></div>
+            {bpStats||bwRate?<div className="td-sub">{bwRate?('trend '+(bwRate.pctWeek>0?'+':'')+bwRate.pctWeek.toFixed(2)+'%/wk'):''}</div>:null}
+          </div>
+
+          <div className="td-card">
+            <div className="td-row"><span className="td-lbl">Fuel target</span>
+              <span className="td-val">{(nutriCoach && nutriCoach.ok && nutriCoach.targetCals)?nutriCoach.targetCals:(nutriCoach && nutriCoach.suggested)?nutriCoach.suggested:'—'}{((nutriCoach&&nutriCoach.ok&&nutriCoach.targetCals)||(nutriCoach&&nutriCoach.suggested))?<span className="td-muted" style={{fontSize:13}}> kcal</span>:null}</span></div>
+            {nutriCoach && nutriCoach.proteinG && <div className="td-sub">P {nutriCoach.proteinG}g{nutriCoach.carbG!=null?' · C '+nutriCoach.carbG+'g':''}{nutriCoach.fatG!=null?' · F '+nutriCoach.fatG+'g':''}</div>}
+          </div>
+
+          <div className="td-card">
+            <div className="td-row"><span className="td-lbl">Blood pressure</span>
+              {latestBP
+                ? <span className="td-val"><span className={'bpc '+bpCategory(latestBP.sys,latestBP.dia).cls}>{latestBP.sys}/{latestBP.dia}</span></span>
+                : <span className="td-val td-muted">not logged</span>}</div>
+            {latestBP && bpStats && <div className="td-sub">{bpCategory(latestBP.sys,latestBP.dia).label||''} · 7-day avg {bpStats.avgSys}/{bpStats.avgDia}</div>}
+          </div>
+
+          {latestGl && <div className="td-card">
+            <div className="td-row"><span className="td-lbl">Glucose</span>
+              <span className="td-val"><span className={'bpc '+glucoseCategory(latestGl.value).cls}>{latestGl.value}</span><span className="td-muted" style={{fontSize:13}}> mmol/L</span></span></div>
+            {glStats && <div className="td-sub">7-day avg {glStats.avg} · {glStats.inRange}% in range</div>}
+          </div>}
+
+          <div className="td-card">
+            <div className="td-row"><span className="td-lbl">Waking temp</span>
+              <span className="td-val">{todayVitals && todayVitals.temp!=null?todayVitals.temp+'°':<span className="td-muted" style={{fontSize:14}}>—</span>}</span></div>
+            <div className="td-input">
+              <input type="number" inputMode="decimal" step="0.1" placeholder="e.g. 36.4" value={tempInput} onChange={e=>setTempInput(e.target.value)}/>
+              <button onClick={saveTemp}>Log</button>
+            </div>
+            {tempSeries.length>1 && <div className="td-spark"><Sparkline vals={tempSeries.map(p=>p.y)} color="#ff9f43" w={110}/></div>}
+          </div>
+
+          <div className="td-card">
+            <div className="td-row"><span className="td-lbl">Morning wood</span>
+              <span className="td-val">{todayVitals && todayVitals.wood===true?'Yes':todayVitals && todayVitals.wood===false?'No':<span className="td-muted" style={{fontSize:14}}>—</span>}</span></div>
+            <div className="td-wood">
+              <button className={todayVitals && todayVitals.wood===true?'on':''} onClick={()=>setWood(true)}>Yes</button>
+              <button className={todayVitals && todayVitals.wood===false?'on':''} onClick={()=>setWood(false)}>No</button>
+            </div>
+          </div>
+
+          {ctxReasons && ctxReasons.length>0 && <div className="td-card">
+            <div className="td-row"><span className="td-lbl">Flags today</span><span className="td-val" style={{fontSize:13}}>{ctxReasons.join(' · ')}</span></div>
+          </div>}
         </div>
       )}
 
@@ -4775,7 +4886,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
 
       {view !== 'workout' && view !== 'complete' && (
         <div className="bnav">
-          {[['home','&#127947;','Program'],['progress','&#128200;','Progress'],['history','&#128203;','History'],['body','&#9878;','Body'],['tools','&#128295;','Tools']].map(([v,icon,label]) => (
+          {[['today','&#128197;','Today'],['home','&#127947;','Program'],['progress','&#128200;','Progress'],['history','&#128203;','History'],['body','&#9878;','Body'],['tools','&#128295;','Tools']].map(([v,icon,label]) => (
             <div key={v} className={`bn${view===v?' on':''}`} onClick={() => setView(v)}>
               <span className="bn-ic" dangerouslySetInnerHTML={{__html:icon}}/>
               <span className="bn-lb">{label}</span>
