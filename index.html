@@ -612,6 +612,18 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .bld-ref{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:64px;text-align:right}
 .bld-gaps{font-size:11.5px;color:var(--warn);margin-top:10px;line-height:1.5;background:rgba(255,140,0,.08);padding:9px 11px;border-radius:8px}
 .bld-note{font-size:10.5px;color:var(--t3);margin-top:8px;line-height:1.4;font-style:italic}
+.av-note{font-size:11px;color:var(--t3);line-height:1.5;margin:2px 0 11px}
+.av-row{display:flex;align-items:center;gap:8px;padding:4px 0}
+.av-mus{flex:0 0 96px;font-size:11.5px;color:var(--t)}
+.av-bar{flex:1;height:7px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
+.av-fill{height:100%;border-radius:4px;transition:width .3s}
+.av-val{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;min-width:30px;text-align:right}
+.av-plan{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:34px}
+.st-row{display:flex;align-items:baseline;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.st-name{flex:1;font-size:12.5px;color:var(--t)}
+.st-e1{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--t2)}
+.st-u{font-size:9px;color:var(--t3);margin-left:2px}
+.st-pct{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;min-width:46px;text-align:right}
 .nc-adj{font-size:12px;line-height:1.5;padding:9px 11px;border-radius:8px}
 .nc-adj.down{background:rgba(255,140,0,.1);color:var(--warn);border:1px solid rgba(255,140,0,.22)}
 .nc-adj.up{background:rgba(74,158,255,.1);color:var(--inf);border:1px solid rgba(74,158,255,.22)}
@@ -676,7 +688,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T1905';
+  var BUILD='2026-08-15T1945';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -817,6 +829,7 @@ const SESSIONS = {
     {id:"ua5",name:"Cable Lateral Raise",sets:4,tempo:"2-1-2",rMin:12,rMax:20,rirMin:0,rirMax:2,rest:90,handle:"Small KAZ",cues:["Cable behind body, lean away","Lead with elbow, hand below elbow","Scapular plane, no shrug"],avoidFail:false,int:{label:"PARTIALS",desc:"+10-15 lengthened partials on final set"},orm:false},
     {id:"ua8",name:"Rear Delt Cable Flye",sets:3,tempo:"2-0-1",rMin:15,rMax:25,rirMin:0,rirMax:1,rest:90,handle:"Small KAZ",cues:["Cables crossed, arms near-straight","Sweep to inverted V","Lead with pinky, no traps"],avoidFail:false,int:null,orm:false},
     {id:"ua6",name:"Cable Pushdown",sets:2,tempo:"2-1-2",rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Rope/bar",cues:["Elbows pinned to sides","Full lockout, controlled return","No leaning over bar"],avoidFail:false,int:null,orm:false},
+    {id:"ua9",name:"Incline DB Curl",sets:3,tempo:"3-1-1",rMin:10,rMax:12,rirMin:1,rirMax:2,rest:90,handle:"DB",cues:["Bench 60, arms hang behind torso","Elbow stays back — lengthened biceps","Slow eccentric, no swing"],avoidFail:false,int:{label:"0-1 RIR",desc:"Final set 0-1 RIR"},orm:false},
     {id:"ua7",name:"Standing Calf Raise",sets:3,tempo:"3-1-1",rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Machine",cues:["Full stretch, heel below platform","Hard 1-sec pause","Full contraction, no bounce"],avoidFail:false,int:null,orm:false}
   ]},
   lowerA:{id:"lowerA",name:"Lower",focus:"Complete Legs",day:"Sunday",time:"80-90 min",maxInt:2,exercises:[
@@ -849,6 +862,9 @@ const SESSIONS = {
     {id:"lb4",name:"Rear Delt Cable Flye",sets:4,tempo:"2-0-1",rMin:15,rMax:20,rirMin:0,rirMax:1,rest:90,handle:"Small KAZ",cues:["Fast turnaround at stretch","No pause bleeding tension","Lead with pinky, no traps"],avoidFail:false,int:null,orm:false},
     {id:"lb6",name:"Overhead Cable Triceps Ext",sets:3,tempo:"3-1-1",rMin:10,rMax:15,rirMin:1,rirMax:1,rest:90,handle:"Rope/single",cues:["Face away, rope overhead","Elbows forward and pinned","Full stretch behind head, long-head bias"],avoidFail:false,int:null,orm:false},
     {id:"lb7",name:"Cable Curl",sets:3,tempo:"3-1-1",rMin:10,rMax:14,rirMin:1,rirMax:1,rest:90,handle:"Small KAZ",cues:["Cable low, elbows pinned","Full stretch bottom, no swing","3-sec eccentric"],avoidFail:false,int:null,orm:false},
+    {id:"lbham",name:"Seated Leg Curl",sets:3,tempo:"2-1-2",rMin:10,rMax:15,rirMin:0,rirMax:1,rest:90,handle:"Machine",cues:["Seated for lengthened hamstring bias","Full stretch at top, no bouncing out","Controlled curl, hard squeeze","Second weekly hamstring exposure — frequency, not just volume"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 stretch partials final set"},orm:false},
+    {id:"lbglt",name:"Hip Thrust",sets:3,tempo:"3-1-1",rMin:8,rMax:12,rirMin:1,rirMax:2,rest:120,handle:"Barbell/machine",cues:["Full hip extension, squeeze hard at top","Chin tucked, ribs down","Posterior pelvic tilt at lockout","Second weekly glute exposure"],avoidFail:false,int:null,orm:false},
+    {id:"lbtri",name:"Cable Pushdown",sets:2,tempo:"2-1-2",rMin:10,rMax:15,rirMin:0,rirMax:1,rest:90,handle:"Rope/bar",cues:["Elbows pinned to sides","Full lockout, controlled return","Lateral/medial head bias to pair with the overhead work"],avoidFail:false,int:{label:"PARTIALS",desc:"+8-10 short partials final set"},orm:false},
     {id:"lb8",name:"Cable Crunch",sets:3,tempo:"2-1-2",rMin:12,rMax:20,rirMin:1,rirMax:1,rest:60,handle:"Rope",cues:["Kneel, rope by ears","Flex spine deliberately","Ribs to pelvis, not hip hinge"],avoidFail:false,int:null,orm:false},
     {id:"lbleg",name:"Hanging Leg Raise",sets:3,tempo:"2-1-2",rMin:8,rMax:15,rirMin:1,rirMax:2,rest:75,handle:"Bar/straps",cues:["Dead hang, shoulders active (depress scapula)","Raise knees/legs by CURLING the pelvis up - not just hip flexion","Control the descent, no swinging","Knees bent = easier, straight legs = harder"],avoidFail:false,int:null,orm:false}
   ]}
@@ -889,6 +905,7 @@ const EX_MUSCLE = {
   lb4:{p:'rearDelt'}, lb5:{p:'chest'}, lb6:{p:'triceps'}, lb7:{p:'biceps'},
 
   ua9:{p:'biceps'}, ub9:{p:'lats',s:'biceps'},
+  lbham:{p:'hams'}, lbglt:{p:'glutes',s:'hams'}, lbtri:{p:'triceps'},
   ub8:{p:'midBack',s:'biceps'}, la8:{p:'quads',s:['glutes']}, la9:{p:'abs'}, laob:{p:'obliques',s:'abs'}, ubpal:{p:'obliques',s:'abs'}, lb8:{p:'abs'}, lbleg:{p:'abs'}, lb9:{p:'rearDelt'},
 };
 
@@ -1309,6 +1326,88 @@ function detectPlateaus(logs) {
 // For each `orm` compound: compare best e1RM in the trailing 21 days vs the 21 days before
 // that. Average the %Δ across lifts with data in BOTH windows. Read alongside the weight
 // trend: weight down + e1RM held/up = fat loss; both down = losing muscle, deficit too steep.
+// Actual LOGGED sets per muscle per training week. The heat map shows what the programme
+// PLANS; this shows what was really done — swaps, skipped sets and abandoned sessions all
+// change the answer, and only the logged version can tell you whether volume actually landed.
+function computeActualVolume(logs, block) {
+  const rows = (logs||[]).filter(s => s && s.week && (block==null || s.block===block) && Array.isArray(s.exercises));
+  if (!rows.length) return null;
+  const byWeek = {}, deloadWeeks = new Set();
+  for (const s of rows) {
+    const w = s.week;
+    // A deload week is half volume by design — including it in the average would read as
+    // under-training. Track it, show it, but leave it out of the per-week average.
+    if (s.deload === true || (s.deload == null && DLW.has(w))) deloadWeeks.add(w);
+    if (!byWeek[w]) byWeek[w] = {};
+    for (const e of s.exercises) {
+      if (!e || !Array.isArray(e.sets) || !e.sets.length) continue;
+      // A swapped exercise logs under its own id; fall back to the id it replaced.
+      const m = EX_MUSCLE[e.id] || EX_MUSCLE[e.origId];
+      if (!m) continue;
+      const n = e.sets.filter(st => st && (st.reps||0) > 0).length;
+      if (!n) continue;
+      byWeek[w][m.p] = (byWeek[w][m.p]||0) + n;
+      if (m.s) (Array.isArray(m.s)?m.s:[m.s]).forEach(sm => { byWeek[w][sm] = (byWeek[w][sm]||0) + n*0.5; });
+    }
+  }
+  const weeks = Object.keys(byWeek).map(Number).sort((a,b)=>a-b);
+  if (!weeks.length) return null;
+  const latest = weeks[weeks.length-1];
+  // Average across completed, non-deload weeks only (the in-progress latest week is excluded).
+  const done = weeks.slice(0, -1).filter(w => !deloadWeeks.has(w));
+  const avg = {};
+  if (done.length) {
+    for (const mus of Object.keys(MUSCLES)) {
+      let t=0; for (const w of done) t += (byWeek[w][mus]||0);
+      avg[mus] = +(t/done.length).toFixed(1);
+    }
+  }
+  return { byWeek, weeks, latest, avg, completedWeeks: done.length, deloadWeeks: [...deloadWeeks] };
+}
+
+// Per-exercise plateau detection. For each exercise, take the best e1RM per session across
+// the last N non-deload sessions; if the most recent sessions haven't beaten the best of the
+// earlier ones, the lift is stalled. Deload sessions are excluded (85% load isn't a stall)
+// and a lift needs >=3 sessions before any verdict — two points is noise, not a trend.
+function computeStalls(logs, minSessions = 3) {
+  const byEx = {};
+  for (const l of (logs||[])) {
+    if (l.deload === true) continue;
+    if (l.deload == null && DLW.has(l.week)) continue;
+    const t = new Date(l.date).getTime();
+    if (isNaN(t)) continue;
+    for (const ex of (l.exercises||[])) {
+      if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) continue;
+      const pid = ex.origId || ex.id;
+      const best = Math.max(...ex.sets.map(s => epley(s.weight||0, s.reps||0)));
+      if (!best || !isFinite(best)) continue;
+      (byEx[pid] = byEx[pid] || { name: ex.name, pts: [] }).pts.push({ t, e1rm: best });
+    }
+  }
+  const stalled = [], progressing = [];
+  for (const pid in byEx) {
+    const rec = byEx[pid];
+    // logs are newest-first; sort explicitly so order is not assumed
+    rec.pts.sort((a,b) => b.t - a.t);
+    const pts = rec.pts.slice(0, 6);
+    if (pts.length < minSessions) continue;
+    const recent = pts.slice(0, 2).map(p => p.e1rm);       // last 2 sessions
+    const earlier = pts.slice(2).map(p => p.e1rm);          // the 3rd back and older
+    if (!earlier.length) continue;
+    const bestRecent = Math.max(...recent), bestEarlier = Math.max(...earlier);
+    const pct = bestEarlier > 0 ? ((bestRecent - bestEarlier) / bestEarlier) * 100 : 0;
+    const entry = { id: pid, name: rec.name, sessions: pts.length,
+                    bestRecent: Math.round(bestRecent), bestEarlier: Math.round(bestEarlier),
+                    pct: +pct.toFixed(1) };
+    // A stall is no meaningful improvement (<1%) over the older sessions.
+    if (pct < 1) stalled.push(entry); else progressing.push(entry);
+  }
+  stalled.sort((a,b) => a.pct - b.pct);
+  progressing.sort((a,b) => b.pct - a.pct);
+  if (!stalled.length && !progressing.length) return null;
+  return { stalled, progressing, total: stalled.length + progressing.length };
+}
+
 function computeStrengthRetention(logs) {
   const dayMs=86400000, nowTs=Date.now();
   const recentStart=nowTs-21*dayMs, priorStart=nowTs-42*dayMs;
@@ -2087,7 +2186,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T1905';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T1945';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3189,6 +3288,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const deloadRebound=useMemo(()=>computeDeloadRebound(logs),[logs]);
   const rirDrift=useMemo(()=>computeRirDrift(logs,block),[logs,block]);
   const bpLoad=useMemo(()=>computeBpLoad(logs,bpLog,block),[logs,bpLog,block]);
+  const actualVol=useMemo(()=>computeActualVolume(logs,block),[logs,block]);
+  const stalls=useMemo(()=>computeStalls(logs),[logs]);
   const burnCheck=useMemo(()=>computeBurnCheck(whoopHistory, nutriCoach.ok?nutriCoach.tdee:null),[whoopHistory,nutriCoach]);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
   // --- Body dashboard derived data ---
@@ -3916,6 +4017,55 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
             <div className="hm-legend"><span><i style={{background:'#5aa9ff'}}/>below floor</span><span><i style={{background:'#00e87a'}}/>in range</span><span><i style={{background:'#e0b020'}}/>overreach</span></div>
           </div>
+
+          {actualVol && actualVol.completedWeeks > 0 && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Volume actually logged</span><span className="hm-wk">avg/wk · {actualVol.completedWeeks} completed wk{actualVol.completedWeeks===1?'':'s'}</span></div>
+              <div className="av-note">What you really did, vs what the programme plans. Gaps here are swaps, cut sets or missed sessions.</div>
+              {Object.entries(MUSCLES).map(([key,mus])=>{
+                const act=actualVol.avg[key]||0, plan=Math.round((plannedVol[key]||0)*10)/10;
+                if(act===0 && mus.optional) return null;
+                const pctOfPlan = plan>0 ? (act/plan)*100 : 0;
+                const col = act<mus.min ? '#5aa9ff' : act>mus.max ? '#e0b020' : '#00e87a';
+                return (
+                  <div key={key} className="av-row">
+                    <span className="av-mus">{mus.name}</span>
+                    <div className="av-bar"><div className="av-fill" style={{width:Math.min(100,pctOfPlan)+'%',background:col}}/></div>
+                    <span className="av-val" style={{color:col}}>{act}</span>
+                    <span className="av-plan">/ {plan}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {stalls && stalls.stalled.length > 0 && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Stalled lifts</span><span className="hm-wk">{stalls.stalled.length} of {stalls.total}</span></div>
+              <div className="av-note">Best e1RM in the last 2 sessions vs the sessions before. Deloads excluded. Under 1% improvement = stalled.</div>
+              {stalls.stalled.slice(0,8).map(s=>(
+                <div key={s.id} className="st-row">
+                  <span className="st-name">{s.name}</span>
+                  <span className="st-e1">{s.bestRecent}<span className="st-u">kg e1RM</span></span>
+                  <span className="st-pct" style={{color: s.pct < -2 ? 'var(--err)' : 'var(--warn)'}}>{s.pct>0?'+':''}{s.pct}%</span>
+                </div>
+              ))}
+              <div className="av-note" style={{marginTop:9,marginBottom:0}}>A stall on a cut is often fine — holding load while losing weight is a win. Act on it if a lift stalls <b>and</b> bodyweight is stable.</div>
+            </div>
+          )}
+
+          {stalls && stalls.progressing.length > 0 && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Progressing</span><span className="hm-wk">{stalls.progressing.length} lift{stalls.progressing.length===1?'':'s'}</span></div>
+              {stalls.progressing.slice(0,6).map(s=>(
+                <div key={s.id} className="st-row">
+                  <span className="st-name">{s.name}</span>
+                  <span className="st-e1">{s.bestRecent}<span className="st-u">kg e1RM</span></span>
+                  <span className="st-pct" style={{color:'var(--ok)'}}>+{s.pct}%</span>
+                </div>
+              ))}
+            </div>
+          )}
           {bpLoad && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">BP vs training load</span><span className="hm-wk">weekly · block {block}</span></div>
