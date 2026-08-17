@@ -676,7 +676,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T1855';
+  var BUILD='2026-08-15T1905';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2087,7 +2087,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T1855';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T1905';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -4937,15 +4937,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="body-ttl">Morning Wood</div>
             <div className="body-sub">Daily functional marker &#8212; tap on Today, or log any date here</div>
             <div className="body-form" style={{marginBottom:8}}>
-              <div className="bf-row">
-                <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={wDate} onChange={e=>setWDate(e.target.value)}/></div>
-                <div className="bf-grp"><div className="bf-lbl">Morning wood</div>
-                  <div className="td-wood" style={{marginTop:0}}>
-                    {(()=>{ const ex=vitalsLog.find(v=>v&&v.date===wDate); const cur=ex?ex.wood:null; return (<>
-                      <button className={cur===true?'on':''} onClick={()=>upsertVitalsDated(wDate,{wood:cur===true?null:true})}>Yes</button>
-                      <button className={cur===false?'on':''} onClick={()=>upsertVitalsDated(wDate,{wood:cur===false?null:false})}>No</button>
-                    </>); })()}
-                  </div>
+              <div className="bf-grp" style={{marginBottom:10}}><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={wDate} onChange={e=>setWDate(e.target.value)}/></div>
+              <div className="bf-grp"><div className="bf-lbl">Morning wood</div>
+                <div className="td-wood" style={{marginTop:0}}>
+                  {(()=>{ const ex=vitalsLog.find(v=>v&&v.date===wDate); const cur=ex?ex.wood:null; return (<>
+                    <button className={cur===true?'on':''} onClick={()=>upsertVitalsDated(wDate,{wood:cur===true?null:true})}>Yes</button>
+                    <button className={cur===false?'on':''} onClick={()=>upsertVitalsDated(wDate,{wood:cur===false?null:false})}>No</button>
+                  </>); })()}
                 </div>
               </div>
             </div>
