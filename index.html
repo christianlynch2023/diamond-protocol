@@ -624,6 +624,11 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .st-e1{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--t2)}
 .st-u{font-size:9px;color:var(--t3);margin-left:2px}
 .st-pct{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;min-width:46px;text-align:right}
+.dur-row{display:flex;align-items:baseline;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.dur-name{flex:1;font-size:12.5px;color:var(--t)}
+.dur-avg{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--inf)}
+.dur-rng{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:48px;text-align:right}
+.dur-plan{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--t3);min-width:56px;text-align:right}
 .nc-adj{font-size:12px;line-height:1.5;padding:9px 11px;border-radius:8px}
 .nc-adj.down{background:rgba(255,140,0,.1);color:var(--warn);border:1px solid rgba(255,140,0,.22)}
 .nc-adj.up{background:rgba(74,158,255,.1);color:var(--inf);border:1px solid rgba(74,158,255,.22)}
@@ -688,7 +693,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T1945';
+  var BUILD='2026-08-15T2010';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1369,6 +1374,46 @@ function computeActualVolume(logs, block) {
 // the last N non-deload sessions; if the most recent sessions haven't beaten the best of the
 // earlier ones, the lift is stalled. Deload sessions are excluded (85% load isn't a stall)
 // and a lift needs >=3 sessions before any verdict — two points is noise, not a trend.
+// Session duration analytics. Duration is wall-clock from start to finish, so a session that
+// was paused and resumed hours later logs an inflated time. Anything over OUTLIER_MIN is
+// excluded from averages (but still plotted, flagged) so one abandoned session can't skew
+// the picture. Averages are per session TYPE, since Upper 3 is legitimately shorter than Lower.
+function computeDurations(logs, limit = 20) {
+  const OUTLIER_MIN = 150;
+  const rows = (logs||[]).filter(s => s && typeof s.duration === 'number' && s.duration > 0);
+  if (!rows.length) return null;
+  const recent = rows.slice(0, limit).reverse();   // logs are newest-first; chart oldest->newest
+  const series = recent.map(s => ({
+    x: fmtShort(s.date),
+    y: s.duration,
+    name: s.sessionName || (SESSIONS[s.sessionId] && SESSIONS[s.sessionId].name) || '?',
+    outlier: s.duration > OUTLIER_MIN
+  }));
+  const byType = {};
+  for (const s of rows) {
+    const key = s.sessionId || 'unknown';
+    const name = s.sessionName || (SESSIONS[key] && SESSIONS[key].name) || 'Unknown';
+    const rec = (byType[key] = byType[key] || { name, durs: [], excluded: 0, planned: (SESSIONS[key] && SESSIONS[key].time) || null });
+    if (s.duration > OUTLIER_MIN) { rec.excluded++; continue; }
+    rec.durs.push(s.duration);
+  }
+  const types = [];
+  for (const key in byType) {
+    const r = byType[key];
+    if (!r.durs.length) continue;
+    const sorted = [...r.durs].sort((a,b)=>a-b);
+    const avg = Math.round(r.durs.reduce((a,b)=>a+b,0) / r.durs.length);
+    const med = sorted.length % 2 ? sorted[(sorted.length-1)/2] : Math.round((sorted[sorted.length/2-1]+sorted[sorted.length/2])/2);
+    types.push({ key, name: r.name, avg, med, n: r.durs.length,
+                 min: sorted[0], max: sorted[sorted.length-1], excluded: r.excluded, planned: r.planned });
+  }
+  types.sort((a,b) => b.avg - a.avg);
+  const clean = rows.filter(s => s.duration <= OUTLIER_MIN);
+  const overall = clean.length ? Math.round(clean.reduce((a,b)=>a+b.duration,0)/clean.length) : null;
+  const outliers = rows.length - clean.length;
+  return { series, types, overall, n: clean.length, outliers };
+}
+
 function computeStalls(logs, minSessions = 3) {
   const byEx = {};
   for (const l of (logs||[])) {
@@ -2186,7 +2231,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T1945';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T2010';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3290,6 +3335,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const bpLoad=useMemo(()=>computeBpLoad(logs,bpLog,block),[logs,bpLog,block]);
   const actualVol=useMemo(()=>computeActualVolume(logs,block),[logs,block]);
   const stalls=useMemo(()=>computeStalls(logs),[logs]);
+  const durations=useMemo(()=>computeDurations(logs),[logs]);
   const burnCheck=useMemo(()=>computeBurnCheck(whoopHistory, nutriCoach.ok?nutriCoach.tdee:null),[whoopHistory,nutriCoach]);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
   // --- Body dashboard derived data ---
@@ -4036,6 +4082,24 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {durations && durations.series.length > 1 && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Session length</span><span className="hm-wk">last {durations.series.length} · avg {durations.overall} min</span></div>
+              <SVGChart data={durations.series} height={120} color="#4a9eff"/>
+              {durations.types.map(t=>{
+                return (
+                  <div key={t.key} className="dur-row">
+                    <span className="dur-name">{t.name}</span>
+                    <span className="dur-avg">{t.avg}<span className="st-u">min avg</span></span>
+                    <span className="dur-rng">{t.min}&ndash;{t.max}</span>
+                    {t.planned && <span className="dur-plan">plan {t.planned.replace(' min','')}</span>}
+                  </div>
+                );
+              })}
+              {durations.outliers > 0 && <div className="av-note" style={{marginTop:9,marginBottom:0}}>{durations.outliers} session{durations.outliers===1?'':'s'} over 150 min excluded from averages &#8212; almost certainly paused and resumed rather than genuinely that long.</div>}
             </div>
           )}
 
