@@ -629,6 +629,22 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .dur-avg{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--inf)}
 .dur-rng{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:48px;text-align:right}
 .dur-plan{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--t3);min-width:56px;text-align:right}
+.sec-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
+.sec-head .body-ttl{margin-bottom:0}
+.sec-chev{color:var(--t3);font-size:15px;transition:transform .2s,color .2s;padding:4px 2px 4px 12px}
+.sec-chev.op{transform:rotate(180deg);color:var(--acc)}
+.wr-row{display:flex;align-items:baseline;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.wr-dot{width:7px;height:7px;border-radius:50%;flex:0 0 7px;position:relative;top:-1px}
+.wr-dot.good{background:var(--ok)}.wr-dot.ok{background:var(--warn)}.wr-dot.miss{background:var(--err)}
+.wr-k{flex:0 0 92px;font-size:12px;color:var(--t2)}
+.wr-v{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--t);min-width:74px}
+.wr-note{flex:1;font-size:10.5px;color:var(--t3);text-align:right;line-height:1.35}
+.td-hero{background:linear-gradient(160deg,rgba(255,255,255,.05),var(--crd));border:1px solid var(--bdr);border-radius:14px;padding:18px 18px 15px;margin-bottom:10px}
+.td-hero .th-lbl{font-size:10.5px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--t2)}
+.td-hero .th-val{font-family:'JetBrains Mono',monospace;font-size:52px;font-weight:800;line-height:1.05;margin-top:4px}
+.td-hero .th-tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;margin-left:10px;vertical-align:middle;background:rgba(255,255,255,.08)}
+.td-hero .th-sub{font-size:11.5px;color:var(--t3);font-family:'JetBrains Mono',monospace;margin-top:9px;line-height:1.5}
+.td-hero .th-none{font-size:16px;color:var(--t3);margin-top:6px}
 .nc-adj{font-size:12px;line-height:1.5;padding:9px 11px;border-radius:8px}
 .nc-adj.down{background:rgba(255,140,0,.1);color:var(--warn);border:1px solid rgba(255,140,0,.22)}
 .nc-adj.up{background:rgba(74,158,255,.1);color:var(--inf);border:1px solid rgba(74,158,255,.22)}
@@ -693,7 +709,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T2010';
+  var BUILD='2026-08-15T2130';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1161,14 +1177,18 @@ function Sparkline({ vals, color='#4a9eff', w=54, h=18 }) {
   const pts=nums.map((v,i)=>`${(i/(nums.length-1))*w},${h-((v-min)/rng)*h}`).join(' ');
   return <svg width={w} height={h} style={{display:'block'}}><polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/></svg>;
 }
-function SVGChart({ data, color='#c4ff00', height=130 }) {
+function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00e87a', bandLabel=null }) {
   // Defense-in-depth: drop any points with non-finite y (NaN/Infinity) before plotting.
   // Protects against legacy localStorage data corrupted before input validation existed,
   // so a single bad value can never produce a broken "M NaN,NaN" path or blank chart.
   data = (data || []).filter(d => d && Number.isFinite(d.y));
   if (!data || data.length < 2) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12}}>Need more sessions to show chart</div>;
   const vals = data.map(d => d.y);
-  const maxV = Math.max(...vals), minV = Math.min(...vals);
+  // A reference band should be visible even when every reading sits outside it, so widen the
+  // scale to include the band — otherwise the shading clips to an edge and tells you nothing.
+  const hasBand = band && Number.isFinite(band.lo) && Number.isFinite(band.hi) && band.hi > band.lo;
+  const maxV = Math.max(...vals, hasBand ? band.hi : -Infinity);
+  const minV = Math.min(...vals, hasBand ? band.lo : Infinity);
   const range = maxV - minV || 1;
   const W=320, H=height, PX=36, PY=14, iW=W-PX*2, iH=H-PY*2;
   const tx = i => PX + (i/(data.length-1))*iW;
@@ -1187,6 +1207,18 @@ function SVGChart({ data, color='#c4ff00', height=130 }) {
           <stop offset="100%" stopColor={color} stopOpacity="0"/>
         </linearGradient>
       </defs>
+      {hasBand && (() => {
+        const yHi = ty(band.hi), yLo = ty(band.lo);
+        const top = Math.min(yHi, yLo), h = Math.abs(yLo - yHi);
+        return (
+          <g>
+            <rect x={PX} y={top} width={iW} height={h} fill={bandColor} opacity="0.10"/>
+            <line x1={PX} y1={top} x2={W-PX} y2={top} stroke={bandColor} strokeWidth="1" strokeDasharray="4 3" opacity="0.45"/>
+            <line x1={PX} y1={top+h} x2={W-PX} y2={top+h} stroke={bandColor} strokeWidth="1" strokeDasharray="4 3" opacity="0.45"/>
+            {bandLabel && <text x={W-PX-2} y={top-3} textAnchor="end" fontSize="8" fill={bandColor} opacity="0.75" fontFamily="JetBrains Mono">{bandLabel}</text>}
+          </g>
+        );
+      })()}
       {yTicks.map((t,i) => (
         <g key={i}>
           <line x1={PX} y1={t.y} x2={W-PX} y2={t.y} stroke="#1d2733" strokeWidth="1" strokeDasharray="3 3"/>
@@ -2158,6 +2190,15 @@ function App() {
   const [tDate, setTDate] = useState(localToday());
   const [wDate, setWDate] = useState(localToday());
   const [showAddTemp, setShowAddTemp] = useState(false);
+  // Body tab is 12 stacked sections; collapse all but Body Weight by default so Bloods and
+  // Protocol Log aren't a 600-line scroll away. Open/closed state persists across sessions.
+  const [secClosed, setSecClosed] = usePersistentState('body_sec_closed',
+    ['measurements','photos','nutrition','cardio','bp','ctx','glucose','temp','wood','bloods','protocol']);
+  const secOpen = (id) => !(secClosed||[]).includes(id);
+  const toggleSec = (id) => setSecClosed(prev => {
+    const arr = Array.isArray(prev) ? prev : [];
+    return arr.includes(id) ? arr.filter(x=>x!==id) : [...arr, id];
+  });
   const [showTempLog, setShowTempLog] = useState(false);
   const [showWoodLog, setShowWoodLog] = useState(false);
   const todayVitals = useMemo(()=>{ const t=localToday(); return vitalsLog.find(v=>v&&v.date===t)||null; },[vitalsLog]);
@@ -2183,6 +2224,14 @@ function App() {
   const tempLogList = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null), [vitalsLog]);
   const woodLogList = useMemo(()=> vitalsLog.filter(v=>v&&v.wood!=null), [vitalsLog]);
   const tempChartSeries = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null).slice(0,21).reverse().map(v=>({x:fmtShort(v.date),y:v.temp})), [vitalsLog]);
+  // Waking temp has no universal target — what matters is drift from YOUR baseline. Band is
+  // the median of the last 21 readings ±0.2. Needs >=7 readings before a baseline means anything.
+  const tempBand = useMemo(()=>{
+    const xs = vitalsLog.filter(v=>v&&v.temp!=null).slice(0,21).map(v=>v.temp).sort((a,b)=>a-b);
+    if (xs.length < 7) return null;
+    const med = xs.length%2 ? xs[(xs.length-1)/2] : (xs[xs.length/2-1]+xs[xs.length/2])/2;
+    return { lo:+(med-0.2).toFixed(2), hi:+(med+0.2).toFixed(2) };
+  },[vitalsLog]);
   const [bloodsLogRaw, setBloodsLog] = usePersistentState('bloods_log', [MAY_2026_BLOODS]);
   const bloodsLog = useMemo(()=>live(bloodsLogRaw),[bloodsLogRaw]);
   const tempSeries = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null).slice(0,7).reverse().map(v=>({x:fmtShort(v.date),y:v.temp})), [vitalsLog]);
@@ -2231,7 +2280,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T2010';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T2130';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3428,6 +3477,70 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const pTgt = (nutriCoach && nutriCoach.proteinG) ? nutriCoach.proteinG : 210;
     return { avgCal, avgP, calTgt, pTgt, calDelta: avgCal-calTgt, pDelta: avgP-pTgt, n:l7.length };
   }, [nutrition, nutriCoach]);
+
+  // Week in review: assembles the analytics that already exist into one decision-shaped summary.
+  // Deliberately no composite score — each line carries its own verdict so the inputs stay visible.
+  const weekReview = useMemo(() => {
+    const dayMs=86400000, now=Date.now();
+    const wk = (logs||[]).filter(l => { const t=new Date(l.date).getTime(); return !isNaN(t) && (now-t)/dayMs <= 7; });
+    const items = [];
+
+    // Sessions
+    const target = 4;
+    items.push({ k:'Sessions', v:`${wk.length} / ${target}`,
+      verdict: wk.length>=target ? 'good' : wk.length>=target-1 ? 'ok' : 'miss',
+      note: wk.length>=target ? 'full week' : `${target-wk.length} short` });
+
+    // Volume: muscles under floor, from what was actually LOGGED
+    if (actualVol && actualVol.completedWeeks > 0) {
+      const under = Object.entries(MUSCLES)
+        .filter(([k,m]) => !m.optional && (actualVol.avg[k]||0) < m.min)
+        .map(([k,m]) => m.name);
+      items.push({ k:'Volume', v: under.length ? `${under.length} under floor` : 'all in range',
+        verdict: under.length===0 ? 'good' : under.length<=2 ? 'ok' : 'miss',
+        note: under.length ? under.slice(0,3).join(', ') : 'every muscle at or above minimum' });
+    }
+
+    // Nutrition adherence
+    if (calStats) {
+      const d = calStats.calDelta, ad = Math.abs(d);
+      items.push({ k:'Calories', v:`${calStats.avgCal} avg`,
+        verdict: ad<=100 ? 'good' : ad<=250 ? 'ok' : 'miss',
+        note: `${d>0?'+':''}${d} vs ${calStats.calTgt} target` });
+      items.push({ k:'Protein', v:`${calStats.avgP}g avg`,
+        verdict: calStats.pDelta>=-10 ? 'good' : calStats.pDelta>=-25 ? 'ok' : 'miss',
+        note: `${calStats.pDelta>0?'+':''}${calStats.pDelta} vs ${calStats.pTgt}g` });
+    }
+
+    // Weight direction, judged against the goal phase
+    if (bwRate) {
+      const r = bwRate.perWeek;
+      const good = goalPhase==='cut' ? (r < -0.15) : goalPhase==='bulk' ? (r > 0.05) : Math.abs(r)<0.2;
+      const okish = goalPhase==='cut' ? (r < 0.05) : goalPhase==='bulk' ? (r > -0.1) : Math.abs(r)<0.4;
+      items.push({ k:'Weight', v:`${r>0?'+':''}${r.toFixed(2)} kg/wk`,
+        verdict: good ? 'good' : okish ? 'ok' : 'miss',
+        note: goalPhase==='cut' ? (r<-0.15?'losing as planned':r<0.05?'flat — tighten intake':'gaining on a cut') : `${goalPhase} phase` });
+    }
+
+    // Blood pressure
+    if (bpStats) {
+      items.push({ k:'Blood pressure', v:`${bpStats.avgSys}/${bpStats.avgDia}`,
+        verdict: bpStats.avgSys<130 ? 'good' : bpStats.avgSys<140 ? 'ok' : 'miss',
+        note:`7-day avg over ${bpStats.n} reading${bpStats.n===1?'':'s'}` });
+    }
+
+    // Stalls
+    if (stalls && stalls.total>0) {
+      items.push({ k:'Stalled lifts', v:`${stalls.stalled.length} of ${stalls.total}`,
+        verdict: stalls.stalled.length===0 ? 'good' : stalls.stalled.length<=2 ? 'ok' : 'miss',
+        note: stalls.stalled.length ? stalls.stalled.slice(0,2).map(s=>s.name).join(', ') : 'everything progressing' });
+    }
+
+    if (!items.length) return null;
+    const misses = items.filter(i=>i.verdict==='miss');
+    return { items, sessions:wk.length, misses: misses.map(i=>i.k) };
+  }, [logs, actualVol, calStats, bwRate, bpStats, stalls, goalPhase]);
+
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
@@ -3553,6 +3666,16 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         <div className="screen">
           <div className="topbar"><span className="logo">Today</span><span className="top-badge">B{block} · W{week}/12</span></div>
           <div className="today-date">{new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div>
+          <div className="td-hero">
+            <div className="th-lbl">Recovery</div>
+            {whoopData && whoopData.recovery!=null ? (
+              <>
+                <div className="th-val"><span className={'wcls '+getWhoopCls(whoopData.recovery)}>{whoopData.recovery}<span style={{fontSize:26}}>%</span></span>
+                  <span className="th-tag" style={{color: whoopData.recovery>=67?'var(--ok)':whoopData.recovery>=34?'#ffd24a':'var(--err)'}}>{whoopData.recovery>=67?'Green':whoopData.recovery>=34?'Yellow':'Red'}</span></div>
+                <div className="th-sub">RHR {whoopData.rhr}bpm · HRV {whoopData.hrv}ms{whoopData.sleepHrs!=null?' · Sleep '+whoopData.sleepHrs+'h':''}<br/>{fmtAgo(whoopData.cachedAt)}</div>
+              </>
+            ) : <div className="th-none">No WHOOP data yet today</div>}
+          </div>
 
           <div className="td-card">
             <div className="td-row"><span className="td-lbl">Session</span>
@@ -3560,13 +3683,6 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="td-sub">{getPhase(week).name} · {isDeload?'Deload':showInt?'Intensifiers on':'Straight sets'}</div>
           </div>
 
-          <div className="td-card">
-            <div className="td-row"><span className="td-lbl">Recovery</span>
-              {whoopData && whoopData.recovery!=null
-                ? <span className="td-val"><span className={'wcls '+getWhoopCls(whoopData.recovery)}>{whoopData.recovery}%</span><span className="td-chip">{whoopData.recovery>=67?'Green':whoopData.recovery>=34?'Yellow':'Red'}</span></span>
-                : <span className="td-val td-muted">no WHOOP data</span>}</div>
-            {whoopData && whoopData.recovery!=null && <div className="td-sub">RHR {whoopData.rhr}bpm · HRV {whoopData.hrv}ms{whoopData.sleepHrs!=null?' · Sleep '+whoopData.sleepHrs+'h':''} · {fmtAgo(whoopData.cachedAt)}</div>}
-          </div>
 
           <div className="td-card">
             <div className="td-row"><span className="td-lbl">Weight</span>
@@ -4044,6 +4160,24 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       {view === 'progress' && (
         <div className="screen">
           <div className="topbar"><span className="logo">Progress</span></div>
+          {weekReview && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Week in review</span><span className="hm-wk">last 7 days</span></div>
+              {weekReview.items.map((it,i)=>(
+                <div key={i} className="wr-row">
+                  <span className={'wr-dot '+it.verdict}/>
+                  <span className="wr-k">{it.k}</span>
+                  <span className="wr-v">{it.v}</span>
+                  <span className="wr-note">{it.note}</span>
+                </div>
+              ))}
+              <div className="av-note" style={{marginTop:10,marginBottom:0}}>
+                {weekReview.misses.length===0
+                  ? 'Nothing off-target this week. Hold the line.'
+                  : <>Attention: <b>{weekReview.misses.join(', ')}</b>. Fix the highest one first &#8212; the rest often follow.</>}
+              </div>
+            </div>
+          )}
           <div className="hm-card">
             <div className="hm-head"><span className="hm-ttl">Muscle heat map</span><span className="hm-wk">planned · Wk {week}{hvActive?' · HV':''}</span></div>
             <div className="hm-grid">
@@ -4633,7 +4767,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="topbar"><span className="logo">Body</span></div>
 
           <div className="body-sec">
-            <div className="body-ttl">Body Weight</div>
+            <div className="sec-head" onClick={()=>toggleSec('weight')}><div className="body-ttl">Body Weight</div><span className={'sec-chev'+(secOpen('weight')?' op':'')}>▾</span></div>
+            {secOpen('weight') && <>
             <div className="body-sub">Weekly weigh-in — track alongside your training block</div>
             {(bodyDash.curW!=null) && (
               <div className="dash-cards">
@@ -4691,10 +4826,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
               {bodyMetrics.length===0&&<div className="empty-msg">No entries yet — log your first weigh-in above.</div>}
             </div>}
+            </>}
           </div>
 
           <div className="body-sec">
-            <div className="body-ttl">Measurements</div>
+            <div className="sec-head" onClick={()=>toggleSec('measurements')}><div className="body-ttl">Measurements</div><span className={'sec-chev'+(secOpen('measurements')?' op':'')}>▾</span></div>
+            {secOpen('measurements') && <>
             <div className="body-sub">Track circumference to separate muscle gain from fat and water</div>
             {Object.keys(latestBySite).length > 0 && (
               <div className="site-trends">
@@ -4757,10 +4894,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               </div>
             )}
             {measurements.length === 0 && <div className="empty-msg">No measurements yet.<br/>Log your first site above.</div>}
+            </>}
           </div>
 
           <div className="body-sec">
-            <div className="body-ttl">Check-In Photos</div>
+            <div className="sec-head" onClick={()=>toggleSec('photos')}><div className="body-ttl">Check-In Photos</div><span className={'sec-chev'+(secOpen('photos')?' op':'')}>▾</span></div>
+            {secOpen('photos') && <>
             <div className="body-sub">Stored on this device only. Same pose, same light, same time of day — consistency is what makes progress visible. Compress automatically; keeps your most recent 24.</div>
             <div style={{display:'flex',gap:6,marginBottom:10}}>
               {['front','side','back'].map(p=>(
@@ -4818,10 +4957,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 )}
               </div>
             )}
+            </>}
           </div>
 
           <div className="body-sec">
-            <div className="body-ttl">Nutrition</div>
+            <div className="sec-head" onClick={()=>toggleSec('nutrition')}><div className="body-ttl">Nutrition</div><span className={'sec-chev'+(secOpen('nutrition')?' op':'')}>▾</span></div>
+            {secOpen('nutrition') && <>
             <div className="body-sub">Daily macro totals — read them off your tracker and log them here to line fuel up with training</div>
             <div className="nc">
               <div className="nc-hd"><span className="nc-ttl">Smart targets</span>{nutriCoach.ok && <span className={'nc-conf '+nutriCoach.conf}>{nutriCoach.conf} confidence</span>}</div>
@@ -4935,10 +5076,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
               {nutrition.length === 0 && <div className="empty-msg">No macros logged yet.<br/>Log today's totals above.</div>}
             </div>}
+            </>}
           </div>
 
           <div className="body-sec">
-            <div className="body-ttl">Cardio</div>
+            <div className="sec-head" onClick={()=>toggleSec('cardio')}><div className="body-ttl">Cardio</div><span className={'sec-chev'+(secOpen('cardio')?' op':'')}>▾</span></div>
+            {secOpen('cardio') && <>
             <div className="body-sub">Zone-2 work for recovery, work capacity and heart health &#8212; aim 2-3x a week</div>
             {cardioLog.length > 0 && (
               <div className="meas-grid">
@@ -4972,10 +5115,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
               {cardioLog.length === 0 && <div className="empty-msg">No cardio logged yet.<br/>Log a session above.</div>}
             </div>
+            </>}
           </div>
 
           <div className="body-sec">
-            <div className="body-ttl">Blood Pressure</div>
+            <div className="sec-head" onClick={()=>toggleSec('bp')}><div className="body-ttl">Blood Pressure</div><span className={'sec-chev'+(secOpen('bp')?' op':'')}>▾</span></div>
+            {secOpen('bp') && <>
             <div className="body-sub">Track BP for cardiovascular health &#8212; your stack can raise it, so watch the trend</div>
             {latestBP && (() => { const c = bpCategory(latestBP.sys, latestBP.dia); return (
               <div className="bp-latest">
@@ -4987,7 +5132,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {bpSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Systolic &#8212; last {Math.min(bpLog.length,21)} readings</div>
-                <SVGChart data={bpSeries} height={110} color="#ff6b6b"/>
+                <SVGChart data={bpSeries} height={110} color="#ff6b6b" band={{lo:90,hi:120}} bandColor="#00e87a" bandLabel="normal systolic"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddBP(v => !v)}>
@@ -5019,10 +5164,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ); })}
               {bpLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your blood pressure above.</div>}
             </div>}
+            </>}
           </div>
 
           <div className="body-sec">
-            <div className="body-ttl">Context Flags</div>
+            <div className="sec-head" onClick={()=>toggleSec('ctx')}><div className="body-ttl">Context Flags</div><span className={'sec-chev'+(secOpen('ctx')?' op':'')}>▾</span></div>
+            {secOpen('ctx') && <>
             <div className="body-sub">Alcohol, illness, bad nights and travel all suppress HRV and REM for 24&#8211;48h. Flag them and the readiness engine attributes the dip to the cause instead of reading it as training fatigue and pushing you toward an unnecessary deload.</div>
             {ctxReasons && <div className="info-banner warn" style={{margin:'0 0 10px'}}>Active: {ctxReasons.join(' · ')}</div>}
             <button className="add-toggle" onClick={() => setShowAddCtx(v => !v)}>
@@ -5064,10 +5211,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
               {contextLog.length===0&&<div className="empty-msg">No flags logged.<br/>Log alcohol or an off day above.</div>}
             </div>}
+            </>}
           </div>
 
           <div className="body-sec">
-            <div className="body-ttl">Fasting Glucose</div>
+            <div className="sec-head" onClick={()=>toggleSec('glucose')}><div className="body-ttl">Fasting Glucose</div><span className={'sec-chev'+(secOpen('glucose')?' op':'')}>▾</span></div>
+            {secOpen('glucose') && <>
             <div className="body-sub">HGH and tren both impair insulin sensitivity &#8212; log fasted (morning, pre-caffeine, pre-training) 2&#8211;3&#215;/week and watch the trend, not single readings</div>
             {latestGl && (() => { const c = glucoseCategory(latestGl.value); return (
               <div className="bp-latest">
@@ -5079,7 +5228,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {glSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Fasting glucose &#8212; last {Math.min(glucoseLog.length,21)} readings (mmol/L)</div>
-                <SVGChart data={glSeries} height={110} color="#f0a020"/>
+                <SVGChart data={glSeries} height={110} color="#f0a020" band={{lo:4.0,hi:5.5}} bandColor="#00e87a" bandLabel="fasting in-range"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddGl(v => !v)}>
@@ -5109,15 +5258,17 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ); })}
               {glucoseLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your fasting glucose above.</div>}
             </div>}
+            </>}
           </div>
 
           <div className="body-sec">
-            <div className="body-ttl">Waking Temp</div>
+            <div className="sec-head" onClick={()=>toggleSec('temp')}><div className="body-ttl">Waking Temp</div><span className={'sec-chev'+(secOpen('temp')?' op':'')}>▾</span></div>
+            {secOpen('temp') && <>
             <div className="body-sub">Morning basal temp &#8212; only the 3-week trend is meaningful, not day-to-day</div>
             {tempChartSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Waking temp &#8212; last {Math.min(tempLogList.length,21)} readings (&deg;)</div>
-                <SVGChart data={tempChartSeries} height={110} color="#ff9f43"/>
+                <SVGChart data={tempChartSeries} height={110} color="#ff9f43" band={tempBand} bandColor="#00e87a" bandLabel="your baseline"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddTemp(v => !v)}>
@@ -5145,10 +5296,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
               {tempLogList.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your waking temp above.</div>}
             </div>}
+            </>}
           </div>
 
           <div className="body-sec">
-            <div className="body-ttl">Morning Wood</div>
+            <div className="sec-head" onClick={()=>toggleSec('wood')}><div className="body-ttl">Morning Wood</div><span className={'sec-chev'+(secOpen('wood')?' op':'')}>▾</span></div>
+            {secOpen('wood') && <>
             <div className="body-sub">Daily functional marker &#8212; tap on Today, or log any date here</div>
             <div className="body-form" style={{marginBottom:8}}>
               <div className="bf-grp" style={{marginBottom:10}}><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={wDate} onChange={e=>setWDate(e.target.value)}/></div>
@@ -5174,10 +5327,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
               {woodLogList.length === 0 && <div className="empty-msg">No entries yet.<br/>Log Yes/No on the Today tab.</div>}
             </div>}
+            </>}
           </div>
 
           <div className="body-sec">
-            <div className="body-ttl">Bloods</div>
+            <div className="sec-head" onClick={()=>toggleSec('bloods')}><div className="body-ttl">Bloods</div><span className={'sec-chev'+(secOpen('bloods')?' op':'')}>▾</span></div>
+            {secOpen('bloods') && <>
             <div className="body-sub">Reference panel &#8212; the slow backdrop your daily markers read against</div>
             {bloodsLog[0] ? (
               <div>
@@ -5198,10 +5353,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 {bloodsLog[0].note && <div className="bld-note">{bloodsLog[0].note}</div>}
               </div>
             ) : <div className="empty-msg">No bloods stored.</div>}
+            </>}
           </div>
 
           <div className="body-sec">
-            <div className="body-ttl">Protocol Log</div>
+            <div className="sec-head" onClick={()=>toggleSec('protocol')}><div className="body-ttl">Protocol Log</div><span className={'sec-chev'+(secOpen('protocol')?' op':'')}>▾</span></div>
+            {secOpen('protocol') && <>
             <div className="body-sub">Track your protocol doses alongside training</div>
             <button className="add-toggle" onClick={()=>setShowAddProt(v=>!v)}>
               <span>Log a dose</span><span className="plus">{showAddProt?'−':'+'}</span>
@@ -5246,6 +5403,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
               {protocolLog.length===0&&<div className="empty-msg">No entries yet — log your first dose above.</div>}
             </div>
+            </>}
           </div>
         </div>
       )}
