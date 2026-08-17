@@ -709,7 +709,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T2130';
+  var BUILD='2026-08-15T2215';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1319,6 +1319,24 @@ function parseWhoopWorkouts(raw) {
       avgHr: s.average_heart_rate != null ? Math.round(s.average_heart_rate) : null,
       maxHr: s.max_heart_rate != null ? Math.round(s.max_heart_rate) : null,
       kcal: s.kilojoule != null ? Math.round(s.kilojoule / 4.184) : null,
+      // Zone durations (millis in HR zones 0-5). Zone 2+ is the cardio-relevant band:
+      // WHOOP zone_two upward corresponds to the sustained aerobic work that counts as
+      // zone-2 training, so this can populate the Cardio card without manual logging.
+      z2Min: (() => {
+        const z = s.zone_durations || s.zone_duration || null;
+        if (!z) return null;
+        const ms = (z.zone_two_milli||0) + (z.zone_three_milli||0);
+        return ms > 0 ? Math.round(ms/60000) : 0;
+      })(),
+      zoneMin: (() => {
+        const z = s.zone_durations || s.zone_duration || null;
+        if (!z) return null;
+        return { z1:Math.round((z.zone_one_milli||0)/60000), z2:Math.round((z.zone_two_milli||0)/60000),
+                 z3:Math.round((z.zone_three_milli||0)/60000), z4:Math.round((z.zone_four_milli||0)/60000),
+                 z5:Math.round((z.zone_five_milli||0)/60000) };
+      })(),
+      sport: w.sport_name || null,
+      distanceKm: s.distance_meter != null ? Math.round(s.distance_meter/100)/10 : null,
     };
   }).filter(w => w.start && w.strain != null);
 }
@@ -1942,7 +1960,7 @@ function App() {
   };
 
   const parseWhoop = data => {
-    const r = { recovery:null, hrv:null, rhr:null, sleep:null, strain:null, spo2:null, skinTemp:null, respRate:null, sleepHrs:null, deepHrs:null, remHrs:null, sleepDebt:null, dayCal:null };
+    const r = { recovery:null, hrv:null, rhr:null, sleep:null, strain:null, spo2:null, skinTemp:null, respRate:null, sleepConsistency:null, sleepEfficiency:null, sleepHrs:null, deepHrs:null, remHrs:null, sleepDebt:null, dayCal:null };
     // Recovery score, HRV, RHR, SpO2 and skin temp live on the /recovery feed (WHOOP v2)
     const recRec = data?.recovery?.records?.[0] || data?.recovery?.data?.[0];
     if (recRec) {
@@ -1959,6 +1977,8 @@ function App() {
       const s = sleep.score || sleep;
       r.sleep = Math.round(s.sleep_performance_percentage ?? s.sleep_efficiency_percentage ?? 0) || null;
       r.respRate = s.respiratory_rate != null ? Math.round(s.respiratory_rate*10)/10 : null;
+      r.sleepConsistency = s.sleep_consistency_percentage != null ? Math.round(s.sleep_consistency_percentage) : null;
+      r.sleepEfficiency = s.sleep_efficiency_percentage != null ? Math.round(s.sleep_efficiency_percentage) : null;
       const ss = s.stage_summary || {};
       const light = ss.total_light_sleep_time_milli || 0, deep = ss.total_slow_wave_sleep_time_milli || 0, rem = ss.total_rem_sleep_time_milli || 0;
       const asleep = light + deep + rem;
@@ -2226,6 +2246,16 @@ function App() {
   const tempChartSeries = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null).slice(0,21).reverse().map(v=>({x:fmtShort(v.date),y:v.temp})), [vitalsLog]);
   // Waking temp has no universal target — what matters is drift from YOUR baseline. Band is
   // the median of the last 21 readings ±0.2. Needs >=7 readings before a baseline means anything.
+  // WHOOP skin temp baseline. Wrist skin temp is absolute-inaccurate but drift-accurate,
+  // so only the deviation from the user's own 7-day mean is meaningful.
+  const skinTempStat = useMemo(()=>{
+    const xs = (whoopHistory||[]).filter(h=>h && h.skinTemp!=null).slice(-7).map(h=>h.skinTemp);
+    if (!xs.length) return null;
+    const avg = +(xs.reduce((a,b)=>a+b,0)/xs.length).toFixed(2);
+    const cur = whoopData && whoopData.skinTemp!=null ? whoopData.skinTemp : null;
+    return { avg, n:xs.length, delta: cur!=null ? +(cur-avg).toFixed(1) : null };
+  },[whoopHistory, whoopData]);
+
   const tempBand = useMemo(()=>{
     const xs = vitalsLog.filter(v=>v&&v.temp!=null).slice(0,21).map(v=>v.temp).sort((a,b)=>a-b);
     if (xs.length < 7) return null;
@@ -2280,7 +2310,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T2130';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T2215';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3442,8 +3472,28 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   // card now uses the empirical maintenance from nutriCoach — the single source of truth.
   const cardioWeekStart=(()=>{ const d=new Date(); const day=(d.getDay()+6)%7; d.setHours(0,0,0,0); d.setDate(d.getDate()-day); return d.getTime(); })();
   const cardioThisWeek=cardioLog.filter(c=>new Date(c.date).getTime()>=cardioWeekStart);
-  const cardioMins=cardioThisWeek.reduce((a,c)=>a+(c.minutes||0),0);
-  const cardioSessions=cardioThisWeek.length;
+  const cardioMinsManual=cardioThisWeek.reduce((a,c)=>a+(c.minutes||0),0);
+  const cardioSessionsManual=cardioThisWeek.length;
+  // WHOOP workouts already carry zone durations. Count zone 2+3 minutes as zone-2 cardio, but
+  // skip anything that overlaps a logged lifting session — otherwise a weights session with a
+  // high-HR stretch would be double-counted as cardio it never was.
+  const whoopCardio = useMemo(()=>{
+    const wos = (whoopWorkouts||[]).filter(w => {
+      const t = new Date(w.start).getTime();
+      if (isNaN(t) || t < cardioWeekStart) return false;
+      if (w.z2Min == null || w.z2Min < 10) return false;      // <10 min isn't a session
+      const clash = (logs||[]).some(l => {
+        const le = new Date(l.date).getTime();
+        const ls = le - (l.duration||60)*60000;
+        const ws = t, we = new Date(w.end||w.start).getTime();
+        return Math.min(le,we) - Math.max(ls,ws) > 5*60000;
+      });
+      return !clash;
+    });
+    return { sessions: wos.length, mins: wos.reduce((a,w)=>a+(w.z2Min||0),0), list: wos };
+  },[whoopWorkouts, logs, cardioWeekStart]);
+  const cardioMins = cardioMinsManual + whoopCardio.mins;
+  const cardioSessions = cardioSessionsManual + whoopCardio.sessions;
   const latestBP=bpLog[0]||null;
   const bpSeries=useMemo(()=>bpLog.slice(0,21).reverse().map(b=>({x:fmtShort(b.date),y:b.sys})),[bpLog]);
   const latestGl=glucoseLog[0]||null;
@@ -3672,7 +3722,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               <>
                 <div className="th-val"><span className={'wcls '+getWhoopCls(whoopData.recovery)}>{whoopData.recovery}<span style={{fontSize:26}}>%</span></span>
                   <span className="th-tag" style={{color: whoopData.recovery>=67?'var(--ok)':whoopData.recovery>=34?'#ffd24a':'var(--err)'}}>{whoopData.recovery>=67?'Green':whoopData.recovery>=34?'Yellow':'Red'}</span></div>
-                <div className="th-sub">RHR {whoopData.rhr}bpm · HRV {whoopData.hrv}ms{whoopData.sleepHrs!=null?' · Sleep '+whoopData.sleepHrs+'h':''}<br/>{fmtAgo(whoopData.cachedAt)}</div>
+                <div className="th-sub">RHR {whoopData.rhr}bpm · HRV {whoopData.hrv}ms{whoopData.sleepHrs!=null?' · Sleep '+whoopData.sleepHrs+'h':''}{whoopData.sleepDebt!=null&&whoopData.sleepDebt>0?<span style={{color:whoopData.sleepDebt>=1?'var(--warn)':'inherit'}}> · Debt {whoopData.sleepDebt}h</span>:''}<br/>{whoopData.sleepConsistency!=null?'Consistency '+whoopData.sleepConsistency+'% · ':''}{whoopData.spo2!=null?'SpO₂ '+whoopData.spo2+'% · ':''}{fmtAgo(whoopData.cachedAt)}</div>
               </>
             ) : <div className="th-none">No WHOOP data yet today</div>}
           </div>
@@ -3712,9 +3762,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
 
           <div className="td-card">
             <div className="td-row"><span className="td-lbl">Waking temp</span>
-              <span className="td-val">{todayVitals && todayVitals.temp!=null?todayVitals.temp+'°':<span className="td-muted" style={{fontSize:14}}>—</span>}</span></div>
+              <span className="td-val">{todayVitals && todayVitals.temp!=null
+                ? todayVitals.temp+'°'
+                : (whoopData && whoopData.skinTemp!=null
+                    ? <span>{whoopData.skinTemp}°<span className="td-chip">WHOOP skin</span></span>
+                    : <span className="td-muted" style={{fontSize:14}}>—</span>)}</span></div>
             {tempStat && <div className="td-sub">7-day avg {tempStat.avg}°{tempStat.delta!=null && Math.abs(tempStat.delta)>=0.05 ? ' · '+(tempStat.delta>0?'▲ +'+tempStat.delta.toFixed(1):'▼ '+tempStat.delta.toFixed(1))+'° today' : tempStat.delta!=null?' · → steady':''}{tempStat.n<7?' ('+tempStat.n+'d)':''}</div>}
-            {(!todayVitals || todayVitals.temp==null) && <div className="td-sub" style={{color:'var(--t3)'}}>Log in Body → Waking Temp</div>}
+            {(!todayVitals || todayVitals.temp==null) && whoopData && whoopData.skinTemp!=null && skinTempStat && <div className="td-sub">Wrist skin temp, not oral &#8212; read the drift, not the number. 7-day avg {skinTempStat.avg}°{skinTempStat.delta!=null && Math.abs(skinTempStat.delta)>=0.05 ? ' · '+(skinTempStat.delta>0?'▲ +'+skinTempStat.delta.toFixed(1):'▼ '+skinTempStat.delta.toFixed(1))+'°' : ' · → steady'}</div>}
+            {(!todayVitals || todayVitals.temp==null) && <div className="td-sub" style={{color:'var(--t3)'}}>Log manually in Body &#8594; Waking Temp to override</div>}
           </div>
 
           <div className="td-card">
@@ -5083,10 +5138,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="sec-head" onClick={()=>toggleSec('cardio')}><div className="body-ttl">Cardio</div><span className={'sec-chev'+(secOpen('cardio')?' op':'')}>▾</span></div>
             {secOpen('cardio') && <>
             <div className="body-sub">Zone-2 work for recovery, work capacity and heart health &#8212; aim 2-3x a week</div>
-            {cardioLog.length > 0 && (
-              <div className="meas-grid">
-                <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">This week</div><div className="meas-val">{cardioSessions}<span className="meas-unit">sessions</span></div></div>
-                <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">Weekly total</div><div className="meas-val">{cardioMins}<span className="meas-unit">min</span></div></div>
+            {(cardioLog.length > 0 || whoopCardio.sessions > 0) && (
+              <div>
+                <div className="meas-grid">
+                  <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">This week</div><div className="meas-val">{cardioSessions}<span className="meas-unit">sessions</span></div></div>
+                  <div className="meas-cell" style={{cursor:'default'}}><div className="meas-site">Weekly total</div><div className="meas-val">{cardioMins}<span className="meas-unit">min</span></div></div>
+                </div>
+                {whoopCardio.sessions > 0 && <div className="av-note" style={{marginTop:8}}>Includes {whoopCardio.sessions} WHOOP workout{whoopCardio.sessions===1?'':'s'} ({whoopCardio.mins} min in zone 2&ndash;3), auto-detected. Sessions overlapping a logged lift are excluded.</div>}
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddCardio(v => !v)}>
