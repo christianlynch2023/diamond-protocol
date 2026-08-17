@@ -676,7 +676,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T1840';
+  var BUILD='2026-08-15T1855';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2087,7 +2087,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T1840';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-15T1855';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -2636,7 +2636,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   };
 
   const BODY_TYPES = {
-    weight:    { setter:setBodyMetrics, slice:200, dateOnly:false, title:'Edit weigh-in', fields:[['weight','Weight (kg)','num'],['bodyFat','Body fat %','num'],['muscle','Muscle (kg)','num'],['notes','Notes','text']] },
+    weight:    { setter:setBodyMetrics, slice:200, dateOnly:false, title:'Edit weigh-in', fields:[['weight','Weight (kg)','num'],['notes','Notes','text']] },
     meas:      { setter:setMeasurements, slice:400, dateOnly:false, title:'Edit measurement', ro:[['site','Site']], fields:[['value','Value (cm)','num']] },
     nutrition: { setter:setNutrition, slice:400, dateOnly:true, title:'Edit nutrition', fields:[['protein','Protein (g)','num'],['carbs','Carbs (g)','num'],['fat','Fat (g)','num']], recompute:(d)=>({...d, calories:Math.round((parseFloat(d.protein)||0)*4+(parseFloat(d.carbs)||0)*4+(parseFloat(d.fat)||0)*9)}) },
     cardio:    { setter:setCardioLog, slice:400, dateOnly:false, title:'Edit cardio', fields:[['modality','Type','text'],['minutes','Minutes','num'],['note','Note','text']] },
@@ -2673,13 +2673,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const addBodyMetric = () => {
     const w=parseNum(newWt);
     if (w==null || w<=0) return;
-    let mus=parseNum(newMuscle);
-    // Typo guard: lean mass below 40% of bodyweight (e.g. 7.5 for 71.5) is physically
-    // impossible for this user and one bad point wrecks the lean trend. Reject with a prompt.
-    if (mus!=null && w>0 && mus < w*0.4) { alert('Muscle/lean of '+mus+'kg looks like a typo against '+w+'kg bodyweight \u2014 not saved. Re-enter it.'); return; }
-    const e={date:`${wtDate}T12:00:00.000Z`,weight:w,bodyFat:parseNum(newBF),muscle:mus,notes:newWtNote};
+    const e={date:`${wtDate}T12:00:00.000Z`,weight:w,bodyFat:null,muscle:null,notes:newWtNote};
     setBodyMetrics(prev=>[{...e, id:newId(), updatedAt: Date.now()},...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,200));
-    setNewWt('');setNewBF('');setNewMuscle('');setNewWtNote('');setWtDate(localToday());setShowAddBody(false);
+    setNewWt('');setNewWtNote('');setWtDate(localToday());setShowAddBody(false);
   };
 
   const addCardio = () => {
@@ -4433,16 +4429,6 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="dc-sub">{bodyDash.avg7!=null?`7-day avg ${bodyDash.avg7.toFixed(1)}kg`:''}</div>
                   {bodyDash.wtSpark.length>1 && <div style={{marginTop:4}}><Sparkline vals={bodyDash.wtSpark} color="#c4ff00" w={90}/></div>}
                 </div>
-                {bodyDash.curLean!=null && (
-                  <div className="dash-card">
-                    <div className="dc-lbl">Lean mass</div>
-                    <div className="dc-val">{bodyDash.curLean}<span className="dc-u">kg</span></div>
-                    <div className="dc-sub" style={{color: bodyDash.leanChange>0?'var(--ok)':bodyDash.leanChange<0?'var(--warn)':'var(--t2)'}}>
-                      {bodyDash.leanChange!=null?`${bodyDash.leanChange>0?'+':''}${bodyDash.leanChange}kg over ${bodyDash.leanSeries.length} logs`:'\u2014'}
-                    </div>
-                    {bodyDash.leanSeries.length>1 && <div style={{marginTop:4}}><Sparkline vals={bodyDash.leanSeries.map(p=>p.y)} color="#00e87a" w={90}/></div>}
-                  </div>
-                )}
               </div>
             )}
             {bwRate && (
@@ -4466,16 +4452,6 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="bf-grp">
                     <div className="bf-lbl">Weight (kg)</div>
                     <input className="bf-in" type="number" inputMode="decimal" placeholder="89.5" value={newWt} onChange={e=>setNewWt(e.target.value)}/>
-                  </div>
-                  <div className="bf-grp">
-                    <div className="bf-lbl">Body fat %</div>
-                    <input className="bf-in" type="number" inputMode="decimal" placeholder="18.5" value={newBF} onChange={e=>setNewBF(e.target.value)}/>
-                  </div>
-                </div>
-                <div className="bf-row">
-                  <div className="bf-grp">
-                    <div className="bf-lbl">Muscle (kg, opt)</div>
-                    <input className="bf-in" type="number" inputMode="decimal" placeholder="68" value={newMuscle} onChange={e=>setNewMuscle(e.target.value)}/>
                   </div>
                   <div className="bf-grp">
                     <div className="bf-lbl">Notes</div>
