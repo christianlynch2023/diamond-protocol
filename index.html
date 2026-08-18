@@ -711,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-18T1830';
+  var BUILD='2026-08-18T1915';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1598,14 +1598,20 @@ function computeRecoveryPerformance(logs, whoopHistory, bwAt = null) {
   const high = r.high && r.high.mean, mid = r.mid && r.mid.mean, low = r.low && r.low.mean;
   const usable = [high, mid, low].filter(v => v != null).length;
   if (usable < 2) return null;
-  let verdict = null, gap = null;
-  const cmp = low != null ? low : mid;
-  if (high != null && cmp != null) {
-    gap = +(high - cmp).toFixed(1);
-    verdict = gap > 3 ? 'costly' : gap < -3 ? 'inverse' : 'negligible';
+  let verdict = null, gap = null, provisional = false;
+  const cmpVal = low != null ? low : mid;
+  const cmpKey = low != null ? 'low' : 'mid';
+  if (high != null && cmpVal != null) {
+    gap = +(high - cmpVal).toFixed(1);
+    // Only judge when BOTH compared groups clear the verdict bar. Otherwise report the gap
+    // as an early signal — the difference may be real, but this many sessions cannot show it.
+    const enough = r.high.sessions >= PERF_MIN_VERDICT && r[cmpKey].sessions >= PERF_MIN_VERDICT;
+    if (enough) verdict = gap > 3 ? 'costly' : gap < -3 ? 'inverse' : 'negligible';
+    else provisional = true;
   }
   return {
-    high, mid, low, gap, verdict,
+    high, mid, low, gap, verdict, provisional,
+    minVerdict: PERF_MIN_VERDICT,
     highN: r.high ? r.high.sessions : 0,
     midN:  r.mid  ? r.mid.sessions  : 0,
     lowN:  r.low  ? r.low.sessions  : 0,
@@ -1650,7 +1656,15 @@ function computeTrainingLoad(logs, weeks = 8) {
 // don't dominate, and returns mean relative performance per bucket. Used by the recovery,
 // time-of-day and alcohol analytics so all three answer the same shape of question with
 // identical maths.
-function relPerfByBucket(rows, minSessions = 3) {
+// Two thresholds, not one. MIN_SHOW is the point at which a bucket's mean is worth
+// displaying; MIN_VERDICT is the much higher bar for turning that mean into behavioural
+// advice. Three sessions is enough to plot a number and nowhere near enough to tell someone
+// to change when they train or whether to drink. Between the two, the card shows the figures
+// and labels them an early signal instead of issuing a verdict.
+const PERF_MIN_SHOW = 3;
+const PERF_MIN_VERDICT = 8;
+
+function relPerfByBucket(rows, minSessions = PERF_MIN_SHOW) {
   if (!rows.length) return null;
   const meanBy = {};
   for (const r of rows) (meanBy[r.pid] = meanBy[r.pid] || []).push(r.e1rm);
@@ -1669,7 +1683,9 @@ function relPerfByBucket(rows, minSessions = 3) {
   // confident-looking verdict from one session.
   for (const k in acc) {
     const sess = acc[k].sids.size || 0;
-    out[k] = { n: acc[k].n, sessions: sess, mean: sess >= minSessions ? +(acc[k].sum/acc[k].n).toFixed(1) : null };
+    out[k] = { n: acc[k].n, sessions: sess,
+               mean: sess >= minSessions ? +(acc[k].sum/acc[k].n).toFixed(1) : null,
+               provisional: sess < PERF_MIN_VERDICT };
   }
   return out;
 }
@@ -1740,16 +1756,21 @@ function computeTimeOfDay(logs, bwAt = null) {
 
   // Compare the two most-used bands, not a preset pair.
   const ranked = bands.filter(b => b.mean != null).sort((a,b) => b.sessions - a.sessions);
-  let verdict = null, gap = null, better = null, worse = null;
+  let verdict = null, gap = null, better = null, worse = null, provisional = false;
   if (ranked.length >= 2) {
     const [a, b] = ranked.slice(0, 2);
     const hi = a.mean >= b.mean ? a : b;
     const lo = a.mean >= b.mean ? b : a;
     gap = +(hi.mean - lo.mean).toFixed(1);
     better = hi; worse = lo;
-    verdict = gap > 2 ? 'clear' : 'nodiff';
+    // Telling someone to move their training slot is a real behavioural ask; it needs more
+    // than a handful of sessions per slot before it is anything other than a guess.
+    if (hi.sessions >= PERF_MIN_VERDICT && lo.sessions >= PERF_MIN_VERDICT) {
+      verdict = gap > 2 ? 'clear' : 'nodiff';
+    } else provisional = true;
   }
-  return { bands, verdict, gap, better, worse, total: new Set(rows.map(x=>x.sid)).size };
+  return { bands, verdict, gap, better, worse, provisional, minVerdict: PERF_MIN_VERDICT,
+           total: new Set(rows.map(x=>x.sid)).size };
 }
 
 // Alcohol vs lifting. A session counts as "after drinking" if units were logged that day or
@@ -1774,12 +1795,15 @@ function computeAlcoholImpact(logs, contextLog, bwAt = null) {
   const r = relPerfByBucket(rows);
   if (!r || !r.after || !r.clear) return null;
   const a = r.after.mean, c = r.clear.mean;
-  let verdict = null, gap = null;
+  let verdict = null, gap = null, provisional = false;
   if (a != null && c != null) {
     gap = +(a - c).toFixed(1);
-    verdict = gap < -2 ? 'costly' : gap > 2 ? 'inverse' : 'negligible';
+    if (r.after.sessions >= PERF_MIN_VERDICT && r.clear.sessions >= PERF_MIN_VERDICT) {
+      verdict = gap < -2 ? 'costly' : gap > 2 ? 'inverse' : 'negligible';
+    } else provisional = true;
   }
-  return { ...r, verdict, gap, total: new Set(rows.map(x=>x.sid)).size, drinkDays: drinkDays.size };
+  return { ...r, verdict, gap, provisional, minVerdict: PERF_MIN_VERDICT,
+           total: new Set(rows.map(x=>x.sid)).size, drinkDays: drinkDays.size };
 }
 
 function computeStrengthRetention(logs) {
@@ -2594,7 +2618,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-18T1830';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-18T1915';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -4686,10 +4710,11 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div key={k} className="st-row">
                   <span className="st-name">{lbl}</span>
                   <span className="st-e1">{n} session{n===1?'':'s'}</span>
-                  <span className="st-pct" style={{color: v==null?'var(--t3)': v>0.5?'var(--ok)': v<-0.5?'var(--warn)':'var(--t2)'}}>{v==null?'—':(v>0?'+':'')+v+'%'}</span>
+                  <span className="st-pct" style={{color: v==null?'var(--t3)': v>0.5?'var(--ok)': v<-0.5?'var(--warn)':'var(--t2)', opacity: recPerf.provisional?0.6:1}}>{v==null?'—':(v>0?'+':'')+v+'%'}</span>
                 </div>
               ))}
               <div className="av-note" style={{marginTop:9,marginBottom:0}}>
+                {recPerf.provisional && <><b>Early signal, not a verdict.</b> Gap is {recPerf.gap>0?'+':''}{recPerf.gap}% so far, but at least {recPerf.minVerdict} sessions in each band are needed before that means anything. Keep logging.</>}
                 {recPerf.verdict==='costly' && <>Green days out-perform low days by <b>{recPerf.gap}%</b>. Your recovery score is earning its place &#8212; respecting it is justified.</>}
                 {recPerf.verdict==='negligible' && <>Difference is only <b>{recPerf.gap}%</b> &#8212; within noise. On your data, recovery score is <b>not</b> predicting lift performance, which argues for trusting bar speed and RIR over the number.</>}
                 {recPerf.verdict==='inverse' && <>Low-recovery days score <b>higher</b> ({recPerf.gap}%). Almost certainly confounding &#8212; likely tren suppressing HRV on days you're actually fresh. Treat the recovery number with caution.</>}
@@ -4710,6 +4735,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 </div>
               ))}
               <div className="av-note" style={{marginTop:9,marginBottom:0}}>
+                {timeOfDay.provisional && <><b>Early signal, not a verdict.</b> {timeOfDay.better.label} is ahead by {timeOfDay.gap}% so far, but moving your training slot is a real change &#8212; it needs {timeOfDay.minVerdict}+ sessions in each band first ({timeOfDay.better.label} has {timeOfDay.better.sessions}, {timeOfDay.worse.label} has {timeOfDay.worse.sessions}).</>}
                 {timeOfDay.verdict==='clear' && <><b>{timeOfDay.better.label}</b> out-performs <b>{timeOfDay.worse.label}</b> by <b>{timeOfDay.gap}%</b> across your two most-used slots. Put your hardest sessions there where life allows.</>}
                 {timeOfDay.verdict==='nodiff' && <>Only <b>{timeOfDay.gap}%</b> between your two most-used slots &#8212; within noise. Train whenever adherence is easiest; consistency beats the clock.</>}
                 {!timeOfDay.verdict && 'Need 3+ sessions in at least two bands before comparing.'}
@@ -4733,6 +4759,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 );
               })}
               <div className="av-note" style={{marginTop:9,marginBottom:0}}>
+                {alcoholImpact.provisional && <><b>Early signal, not a verdict.</b> Difference is {alcoholImpact.gap>0?'+':''}{alcoholImpact.gap}% so far ({alcoholImpact.after.sessions} sessions after drinking vs {alcoholImpact.clear.sessions} clear). Needs {alcoholImpact.minVerdict}+ in each before drawing a conclusion.</>}
                 {alcoholImpact.verdict==='costly' && <>Lifting is <b>{Math.abs(alcoholImpact.gap)}%</b> down within 24h of drinking. That is your own data, not a general claim &#8212; worth weighing against training days.</>}
                 {alcoholImpact.verdict==='negligible' && <>Difference is <b>{Math.abs(alcoholImpact.gap)}%</b> &#8212; within noise at this sample size. Note that alcohol affects sleep, recovery and protein synthesis whether or not the bar notices.</>}
                 {alcoholImpact.verdict==='inverse' && <>Sessions after drinking score <b>higher</b>, which is almost certainly confounding (weekend sessions, more rest beforehand) rather than a real effect.</>}
