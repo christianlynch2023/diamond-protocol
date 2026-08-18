@@ -711,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-18T1620';
+  var BUILD='2026-08-18T1710';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2547,7 +2547,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-18T1620';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-18T1710';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3440,7 +3440,27 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // A block needs >=3 weigh-ins before its average is meaningful; below that a single
     // water-heavy day dominates and the comparison is no better than an endpoint read.
     if (w0.n < 3 || w1.n < 3) return null;
-    const perWeek = +(w0.avg - w1.avg).toFixed(2);
+    const weekOverWeek = +(w0.avg - w1.avg).toFixed(2);
+
+    // HEADLINE = regression across ALL available weekly averages, not just the last two.
+    // Week-over-week alone breaks when a water event lands inside one of the two blocks: a
+    // spike week followed by a normal week manufactures a huge apparent "loss" that is only
+    // water leaving. Fitting a line through three or four weekly averages lets one anomalous
+    // week be outvoted instead of driving the entire number.
+    const blocks = [w0, w1, w2, w3];
+    const fit = [];
+    for (let i = 0; i < blocks.length; i++) if (blocks[i] && blocks[i].n >= 3) fit.push({ x: -i, y: blocks[i].avg });
+    let perWeek = weekOverWeek;
+    if (fit.length >= 3) {
+      const n = fit.length;
+      const mx = fit.reduce((a,p)=>a+p.x,0)/n, my = fit.reduce((a,p)=>a+p.y,0)/n;
+      let num = 0, den = 0;
+      for (const p of fit) { num += (p.x-mx)*(p.y-my); den += (p.x-mx)*(p.x-mx); }
+      if (den > 0) perWeek = +(num/den).toFixed(2);
+    }
+    // Surface when the last two weeks disagree sharply with the multi-week fit — that gap is
+    // the signature of a water swing, and the user should see it rather than trust either alone.
+    const waterFlag = fit.length >= 3 && Math.abs(weekOverWeek - perWeek) > 0.6;
     const newestW = bodyMetrics[0].weight;
 
     // EWMA (Hacker's Diet / TrendWeight): a smooth daily-updating line as a cross-check.
@@ -3463,6 +3483,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
 
     return {
       perWeek, pctWeek: perWeek/newestW*100,
+      weekOverWeek, weeksUsed: fit.length, waterFlag,
       thisWeek: w0, lastWeek: w1,
       prior: [w1, w2, w3].map(b => b ? b.avg : null),
       ewma, ewmaRate, disagree
@@ -5242,10 +5263,11 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             )}
             {bwRate && (
               <div className="av-note" style={{margin:'0 15px 10px'}}>
-                Last 7 days avg <b>{bwRate.thisWeek.avg}kg</b> ({bwRate.thisWeek.n} weigh-ins) vs prior 7 days <b>{bwRate.lastWeek.avg}kg</b> ({bwRate.lastWeek.n}).
-                {bwRate.ewmaRate!=null && <> Smoothed trend line agrees at <b>{bwRate.ewmaRate>0?'+':''}{bwRate.ewmaRate} kg/wk</b>.</>}
-                {bwRate.disagree && <> <span style={{color:'var(--warn)'}}>The two methods differ by more than 0.5kg/wk &#8212; usually a water swing sitting inside one week. Treat this week&rsquo;s figure as provisional.</span></>}
-                {bwRate.prior && bwRate.prior[1]!=null && <> Three-week averages: {bwRate.prior.filter(x=>x!=null).reverse().join(' &#8594; ')} &#8594; <b>{bwRate.thisWeek.avg}</b>.</>}
+                {bwRate.weeksUsed>=3
+                  ? <>Trend across <b>{bwRate.weeksUsed} weekly averages</b>: {bwRate.prior.filter(x=>x!=null).reverse().join(' &#8594; ')} &#8594; <b>{bwRate.thisWeek.avg}kg</b>.</>
+                  : <>Last 7 days avg <b>{bwRate.thisWeek.avg}kg</b> ({bwRate.thisWeek.n} weigh-ins) vs prior 7 days <b>{bwRate.lastWeek.avg}kg</b> ({bwRate.lastWeek.n}).</>}
+                {' '}Week-over-week alone reads {bwRate.weekOverWeek>0?'+':''}{bwRate.weekOverWeek} kg/wk.
+                {bwRate.waterFlag && <> <span style={{color:'var(--warn)'}}>That is far from the multi-week trend &#8212; a water swing is sitting inside one week, so the week-over-week figure is not real tissue change. The multi-week number is the honest one.</span></>}
               </div>
             )}
             {bodyMetrics.length>1&&(
