@@ -709,7 +709,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-16T0900';
+  var BUILD='2026-08-16T0940';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1486,6 +1486,102 @@ function computeStalls(logs, minSessions = 3) {
   progressing.sort((a,b) => b.pct - a.pct);
   if (!stalled.length && !progressing.length) return null;
   return { stalled, progressing, total: stalled.length + progressing.length };
+}
+
+// Pain by exercise. Pain is logged 0/1/2 (none/niggle/sharp) on every exercise of every
+// session, but until now only the most recent session's flag was used. For a lifter whose
+// goal includes joint longevity, the pattern that matters is WHICH exercises repeatedly
+// produce pain — a lift that niggles once is noise, one that niggles most sessions is a
+// signal to change the movement, not to push through it.
+function computePainTrend(logs, minSessions = 3) {
+  const byEx = {};
+  for (const l of (logs||[])) {
+    const t = new Date(l.date).getTime();
+    if (isNaN(t)) continue;
+    for (const ex of (l.exercises||[])) {
+      if (!ex) continue;
+      const pid = ex.origId || ex.id;
+      const rec = (byEx[pid] = byEx[pid] || { name: ex.name, pts: [] });
+      rec.pts.push({ t, pain: ex.pain || 0 });
+    }
+  }
+  const flagged = [];
+  let totalSessions = 0, painSessions = 0;
+  for (const pid in byEx) {
+    const rec = byEx[pid];
+    rec.pts.sort((a,b) => b.t - a.t);
+    if (rec.pts.length < minSessions) continue;
+    const n = rec.pts.length;
+    const anyPain = rec.pts.filter(p => p.pain > 0).length;
+    const sharp = rec.pts.filter(p => p.pain === 2).length;
+    totalSessions += n; painSessions += anyPain;
+    if (!anyPain) continue;
+    // Direction: is it getting worse? Compare last 3 sessions against the ones before.
+    const recent = rec.pts.slice(0,3), earlier = rec.pts.slice(3);
+    const rRate = recent.filter(p=>p.pain>0).length / recent.length;
+    const eRate = earlier.length ? earlier.filter(p=>p.pain>0).length / earlier.length : null;
+    const dir = eRate==null ? 'flat' : rRate > eRate + 0.15 ? 'worsening' : rRate < eRate - 0.15 ? 'improving' : 'flat';
+    flagged.push({ id:pid, name:rec.name, sessions:n, painCount:anyPain, sharpCount:sharp,
+                   rate:Math.round(anyPain/n*100), dir,
+                   severity: sharp>0 ? 'sharp' : 'niggle' });
+  }
+  if (!flagged.length && totalSessions===0) return null;
+  flagged.sort((a,b) => (b.sharpCount - a.sharpCount) || (b.rate - a.rate));
+  return { flagged, overallRate: totalSessions ? Math.round(painSessions/totalSessions*100) : 0 };
+}
+
+// Does training on low recovery actually cost performance? Splits sessions by the WHOOP
+// recovery recorded that day and compares mean e1RM per lift, normalised so lifts with big
+// absolute loads don't dominate. This is descriptive, not causal — a low-recovery day may
+// coincide with a deload or a bad night — but it either supports or undermines the
+// green-recovery veto with the user's own data instead of an assumption.
+function computeRecoveryPerformance(logs, whoopHistory, minPerBucket = 3) {
+  const recByDate = {};
+  for (const h of (whoopHistory||[])) if (h && h.date && h.recovery != null) recByDate[h.date] = h.recovery;
+  const rows = [];
+  for (const l of (logs||[])) {
+    if (l.deload === true || (l.deload == null && DLW.has(l.week))) continue;
+    const d = (l.date||'').slice(0,10);
+    const rec = recByDate[d];
+    if (rec == null) continue;
+    for (const ex of (l.exercises||[])) {
+      if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) continue;
+      const best = Math.max(...ex.sets.map(s => epley(s.weight||0, s.reps||0)));
+      if (!best || !isFinite(best)) continue;
+      rows.push({ pid: ex.origId||ex.id, e1rm: best, rec });
+    }
+  }
+  if (rows.length < 8) return null;
+  // Normalise each lift against its own mean so heavy lifts don't dominate the average.
+  const meanBy = {};
+  for (const r of rows) (meanBy[r.pid] = meanBy[r.pid] || []).push(r.e1rm);
+  for (const k in meanBy) { const a=meanBy[k]; meanBy[k] = a.reduce((x,y)=>x+y,0)/a.length; }
+  const buckets = { low:{n:0,sum:0}, mid:{n:0,sum:0}, high:{n:0,sum:0} };
+  for (const r of rows) {
+    const m = meanBy[r.pid]; if (!m) continue;
+    const rel = (r.e1rm/m - 1) * 100;
+    const b = r.rec < 34 ? 'low' : r.rec < 67 ? 'mid' : 'high';
+    buckets[b].n++; buckets[b].sum += rel;
+  }
+  const out = {};
+  let usable = 0;
+  for (const k in buckets) {
+    out[k] = buckets[k].n >= minPerBucket ? +(buckets[k].sum/buckets[k].n).toFixed(1) : null;
+    if (out[k] != null) usable++;
+    out[k+'N'] = buckets[k].n;
+  }
+  if (usable < 2) return null;
+  let verdict = null;
+  if (out.high != null && out.low != null) {
+    const gap = out.high - out.low;
+    verdict = gap > 3 ? 'costly' : gap < -3 ? 'inverse' : 'negligible';
+    out.gap = +gap.toFixed(1);
+  } else if (out.high != null && out.mid != null) {
+    const gap = out.high - out.mid;
+    verdict = gap > 3 ? 'costly' : gap < -3 ? 'inverse' : 'negligible';
+    out.gap = +gap.toFixed(1);
+  }
+  return { ...out, verdict, totalSessions: rows.length };
 }
 
 function computeStrengthRetention(logs) {
@@ -2295,7 +2391,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-16T0900';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-16T0940';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3409,6 +3505,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       .sort((a,b) => b.sessions - a.sessions);
   }, [stalls]);
   const durations=useMemo(()=>computeDurations(logs),[logs]);
+  const painTrend=useMemo(()=>computePainTrend(logs),[logs]);
+  const recPerf=useMemo(()=>computeRecoveryPerformance(logs,whoopHistory),[logs,whoopHistory]);
   const burnCheck=useMemo(()=>computeBurnCheck(whoopHistory, nutriCoach.ok?nutriCoach.tdee:null),[whoopHistory,nutriCoach]);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
   // --- Body dashboard derived data ---
@@ -4283,6 +4381,42 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 );
               })}
               {durations.outliers > 0 && <div className="av-note" style={{marginTop:9,marginBottom:0}}>{durations.outliers} session{durations.outliers===1?'':'s'} over 150 min excluded from averages &#8212; almost certainly paused and resumed rather than genuinely that long.</div>}
+            </div>
+          )}
+
+          {recPerf && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Recovery vs performance</span><span className="hm-wk">{recPerf.totalSessions} lift-sessions</span></div>
+              <div className="av-note">Mean e1RM on each day, relative to that lift's own average. Deloads excluded. Does training on low recovery actually cost you?</div>
+              {[['high','Green (67%+)',recPerf.high,recPerf.highN],['mid','Yellow (34-66%)',recPerf.mid,recPerf.midN],['low','Red (under 34%)',recPerf.low,recPerf.lowN]].map(([k,lbl,v,n])=>(
+                <div key={k} className="st-row">
+                  <span className="st-name">{lbl}</span>
+                  <span className="st-e1">{n} session{n===1?'':'s'}</span>
+                  <span className="st-pct" style={{color: v==null?'var(--t3)': v>0.5?'var(--ok)': v<-0.5?'var(--warn)':'var(--t2)'}}>{v==null?'—':(v>0?'+':'')+v+'%'}</span>
+                </div>
+              ))}
+              <div className="av-note" style={{marginTop:9,marginBottom:0}}>
+                {recPerf.verdict==='costly' && <>Green days out-perform low days by <b>{recPerf.gap}%</b>. Your recovery score is earning its place &#8212; respecting it is justified.</>}
+                {recPerf.verdict==='negligible' && <>Difference is only <b>{recPerf.gap}%</b> &#8212; within noise. On your data, recovery score is <b>not</b> predicting lift performance, which argues for trusting bar speed and RIR over the number.</>}
+                {recPerf.verdict==='inverse' && <>Low-recovery days score <b>higher</b> ({recPerf.gap}%). Almost certainly confounding &#8212; likely tren suppressing HRV on days you're actually fresh. Treat the recovery number with caution.</>}
+                {!recPerf.verdict && 'Not enough sessions in two recovery bands yet.'}
+              </div>
+            </div>
+          )}
+
+          {painTrend && painTrend.flagged.length > 0 && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Joint pain by lift</span><span className="hm-wk">{painTrend.overallRate}% of all sets</span></div>
+              <div className="av-note">Which lifts repeatedly produce pain. One niggle is noise; a lift flagging most sessions is telling you to change the movement, not push through it.</div>
+              {painTrend.flagged.slice(0,8).map(p=>(
+                <div key={p.id} className="st-row">
+                  <span className="st-name">{p.name}{p.severity==='sharp'&&<span className="h-pain sharp" style={{marginLeft:6}}>sharp</span>}</span>
+                  <span className="st-e1">{p.painCount}/{p.sessions}</span>
+                  <span className="st-pct" style={{color: p.rate>=60?'var(--err)':p.rate>=30?'var(--warn)':'var(--t2)'}}>{p.rate}%</span>
+                  <span className="dur-plan" style={{color: p.dir==='worsening'?'var(--err)':p.dir==='improving'?'var(--ok)':'var(--t3)'}}>{p.dir==='worsening'?'▲ worse':p.dir==='improving'?'▼ better':'→ flat'}</span>
+                </div>
+              ))}
+              <div className="av-note" style={{marginTop:9,marginBottom:0}}>Anything sharp, or over 60% and worsening, should be swapped for a variation rather than loaded through. Persistent joint pain is worth raising with a physio.</div>
             </div>
           )}
 
