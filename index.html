@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -18,7 +18,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;touch-action:pan-x pan-y;-ms-touch-action:pan-x pan-y}
 body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
-:root{--bg:#07090c;--sur:#0e1319;--crd:#141b22;--bdr:#1d2733;--acc:#c4ff00;--ag:rgba(196,255,0,.12);--ag2:rgba(196,255,0,.05);--ok:#00e87a;--warn:#ff8c00;--err:#ff4444;--inf:#4a9eff;--t:#dde5ee;--t2:#7b90a8;--t3:#3c4f62}
+:root{--bg:#07090c;--sur:#0e1319;--crd:#141b22;--bdr:#1d2733;--acc:#c4ff00;--ag:rgba(196,255,0,.12);--ag2:rgba(196,255,0,.05);--ok:#00e87a;--warn:#ff8c00;--err:#ff4444;--inf:#4a9eff;--t:#dde5ee;--t2:#7b90a8;--t3:#6b8299}
 #root{height:100%;overflow:hidden}
 .app{max-width:440px;margin:0 auto;height:100dvh;background:var(--bg);position:relative;overflow:hidden;display:flex;flex-direction:column}
 .screen{flex:1;overflow-y:auto;padding-bottom:calc(80px + env(safe-area-inset-bottom,0));-webkit-overflow-scrolling:touch}
@@ -364,7 +364,7 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .bl-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:68px}
 .bl-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--acc)}
 .bl-note{font-size:10px;color:var(--t2);flex:1;margin:0 8px}
-.bl-del{background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;padding:4px}
+.bl-del{background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;padding:10px;min-width:40px;min-height:40px}
 .p-row{display:flex;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr)}
 .p-row:last-child{border-bottom:none}
 .p-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:68px;padding-top:1px}
@@ -711,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-18T1710';
+  var BUILD='2026-08-18T1830';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -839,6 +839,15 @@ let _deloadNow = null; // resolved deload state for the current week; App writes
 // logic (week 2 / week 6) at 1-2 RIR rather than inventing a new intensity peak at 1 RIR —
 // four escalating weeks with no let-up is a fatigue trap, especially in a deficit.
 const TRAINED_THROUGH_WR = { rir: "1-2 RIR", rirN: 2, i: false };
+
+// Default logged RIR for a specific exercise. The week schedule sets the session-wide
+// target, but an exercise's own rirMin is a floor, not a suggestion: avoidFail lifts
+// declare 1-2 RIR because failure there is a tendon risk, and the global 0 RIR of weeks
+// 10-11 must not override it. Taking the max respects both (deload's 3-4 RIR still wins).
+const rirDefaultFor = (ex, weekRirN) => {
+  const floor = (ex && typeof ex.rirMin === 'number') ? ex.rirMin : 0;
+  return Math.max(weekRirN, floor);
+};
 const effWR = (week, dl = (_deloadNow == null ? DLW.has(week) : _deloadNow)) => {
   const base = WR[week] || WR[1];
   return (DLW.has(week) && !dl) ? TRAINED_THROUGH_WR : base;
@@ -938,6 +947,36 @@ const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short'
 const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
 
+// Exercises where the logged number is ADDED load, not total load. A weighted pull-up at
+// +20kg is really moving bodyweight + 20kg, so an e1RM built from 20 alone exaggerates
+// every percentage change: 20 -> 22.5kg reads +12.5% when the true change is about +2.3%.
+// That distortion fed stall detection, strength retention and every relative-performance
+// card. bwAt() resolves the nearest logged bodyweight to the session date; when no weight
+// history exists the behaviour falls back to added-load-only rather than inventing a figure.
+const BW_LOADED = new Set(['ub1']);
+function makeBwResolver(bodyMetrics) {
+  const pts = (bodyMetrics||[])
+    .filter(m => m && m.weight > 0)
+    .map(m => ({ t: new Date(m.date).getTime(), w: m.weight }))
+    .filter(m => !isNaN(m.t))
+    .sort((a,b) => a.t - b.t);
+  if (!pts.length) return null;
+  return (dateStr) => {
+    const t = new Date(dateStr).getTime();
+    if (isNaN(t)) return pts[pts.length-1].w;
+    let best = pts[0], bestGap = Math.abs(t - pts[0].t);
+    for (const p of pts) { const g = Math.abs(t - p.t); if (g < bestGap) { best = p; bestGap = g; } }
+    return best.w;
+  };
+}
+// Total load moved for a set, accounting for bodyweight-loaded lifts.
+function totalLoad(exId, weight, bwAt, dateStr) {
+  const w = weight || 0;
+  if (!BW_LOADED.has(exId) || !bwAt) return w;
+  const bw = bwAt(dateStr);
+  return (bw > 0 ? bw : 0) + w;
+}
+
 // Theil-Sen slope: the median of every pairwise slope. Ordinary least-squares is yanked by a
 // water-high day sitting at the START or END of the window (a window that happens to open on
 // a spike tilts the whole fit — the +0.68 kg/wk artefact). Theil-Sen ignores up to ~29% of
@@ -983,7 +1022,8 @@ const RAMP_P2 = new Set([3,7]);
 const HIGHVOL_EX = new Set(['ua5','ub4','ua8','ub5','ub7','ua6','ub8','la6','lb5','la7','lb7','ua7','lb6']);
 const getEffSets = (ex, week, hv, dl = (_deloadNow == null ? DLW.has(week) : _deloadNow)) => {
   let s = ex.sets;
-  if (dl) return Math.max(1, Math.round(s * 0.5));
+  // floor, not round: rounding 3->2 and 5->3 made the advertised 50% deload land nearer 60%.
+  if (dl) return Math.max(1, Math.floor(s * 0.5));
   if (hv && HIGHVOL_EX.has(ex.id)) s += 1;
   if (RAMP_EX.has(ex.id)) { if (RAMP_P2.has(week)) s += 2; else if (RAMP_P1.has(week)) s += 1; }
   return s;
@@ -1180,6 +1220,12 @@ function Sparkline({ vals, color='#4a9eff', w=54, h=18 }) {
   return <svg width={w} height={h} style={{display:'block'}}><polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/></svg>;
 }
 function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00e87a', bandLabel=null }) {
+  // Gradient id derived from the colour. Previously every instance emitted id="cg", so with
+  // several charts on one page all area fills resolved to whichever gradient rendered first
+  // and charts silently displayed the wrong colour. Deriving from colour is stable across
+  // re-renders, and two charts sharing a colour share an identical gradient, so any
+  // remaining duplicate is harmless.
+  const gid = 'cg' + String(color).replace(/[^a-zA-Z0-9]/g, '');
   // Defense-in-depth: drop any points with non-finite y (NaN/Infinity) before plotting.
   // Protects against legacy localStorage data corrupted before input validation existed,
   // so a single bad value can never produce a broken "M NaN,NaN" path or blank chart.
@@ -1204,7 +1250,7 @@ function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',display:'block'}}>
       <defs>
-        <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.22"/>
           <stop offset="100%" stopColor={color} stopOpacity="0"/>
         </linearGradient>
@@ -1231,7 +1277,7 @@ function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00
         const idx = data.indexOf(d);
         return <text key={i} x={tx(idx)} y={H-2} textAnchor="middle" fontSize="9" fill="#3c4f62" fontFamily="JetBrains Mono">{d.x}</text>;
       })}
-      <path d={area} fill="url(#cg)"/>
+      <path d={area} fill={`url(#${gid})`}/>
       <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       {pts.map((p,i) => <circle key={i} cx={p[0]} cy={p[1]} r="3" fill={color}/>)}
     </svg>
@@ -1444,7 +1490,7 @@ function computeDurations(logs, limit = 20) {
   return { series, types, overall, n: clean.length, outliers };
 }
 
-function computeStalls(logs, minSessions = 3) {
+function computeStalls(logs, minSessions = 3, bwAt = null) {
   const byEx = {};
   for (const l of (logs||[])) {
     if (l.deload === true) continue;
@@ -1454,7 +1500,7 @@ function computeStalls(logs, minSessions = 3) {
     for (const ex of (l.exercises||[])) {
       if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) continue;
       const pid = ex.origId || ex.id;
-      const best = Math.max(...ex.sets.map(s => epley(s.weight||0, s.reps||0)));
+      const best = Math.max(...ex.sets.map(s => epley(totalLoad(pid, s.weight, bwAt, l.date), s.reps||0)));
       if (!best || !isFinite(best)) continue;
       (byEx[pid] = byEx[pid] || { name: ex.name, pts: [] }).pts.push({ t, e1rm: best });
     }
@@ -1537,7 +1583,7 @@ function computePainTrend(logs, minSessions = 3) {
 // absolute loads don't dominate. This is descriptive, not causal — a low-recovery day may
 // coincide with a deload or a bad night — but it either supports or undermines the
 // green-recovery veto with the user's own data instead of an assumption.
-function computeRecoveryPerformance(logs, whoopHistory) {
+function computeRecoveryPerformance(logs, whoopHistory, bwAt = null) {
   const recByDate = {};
   for (const h of (whoopHistory||[])) if (h && h.date && h.recovery != null) recByDate[h.date] = h.recovery;
   if (!Object.keys(recByDate).length) return null;
@@ -1545,7 +1591,7 @@ function computeRecoveryPerformance(logs, whoopHistory) {
     const rec = recByDate[(l.date||'').slice(0,10)];
     if (rec == null) return null;
     return rec < 34 ? 'low' : rec < 67 ? 'mid' : 'high';
-  });
+  }, bwAt);
   if (rows.length < 8) return null;
   const r = relPerfByBucket(rows);
   if (!r) return null;
@@ -1629,7 +1675,7 @@ function relPerfByBucket(rows, minSessions = 3) {
 }
 
 // One row per exercise per non-deload session, tagged by a caller-supplied bucket.
-function perfRows(logs, bucketFn) {
+function perfRows(logs, bucketFn, bwAt = null) {
   const rows = [];
   for (const l of (logs||[])) {
     if (l.deload === true || (l.deload == null && DLW.has(l.week))) continue;
@@ -1637,9 +1683,10 @@ function perfRows(logs, bucketFn) {
     if (bucket == null) continue;
     for (const ex of (l.exercises||[])) {
       if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) continue;
-      const best = Math.max(...ex.sets.map(s => epley(s.weight||0, s.reps||0)));
+      const pid = ex.origId||ex.id;
+      const best = Math.max(...ex.sets.map(s => epley(totalLoad(pid, s.weight, bwAt, l.date), s.reps||0)));
       if (!best || !isFinite(best)) continue;
-      rows.push({ pid: ex.origId||ex.id, e1rm: best, bucket, sid: l.id || l.date });
+      rows.push({ pid, e1rm: best, bucket, sid: l.id || l.date });
     }
   }
   return rows;
@@ -1661,7 +1708,7 @@ const TOD_BANDS = [
   { k:'late',    label:'Late evening',  sub:'8pm onwards', lo:20, hi:24 },
 ];
 
-function computeTimeOfDay(logs) {
+function computeTimeOfDay(logs, bwAt = null) {
   const startMins = {};   // band -> list of start times in minutes, for the real average
   const rows = perfRows(logs, l => {
     const end = new Date(l.date).getTime();
@@ -1672,7 +1719,7 @@ function computeTimeOfDay(logs) {
     if (!band) return null;
     (startMins[band.k] = startMins[band.k] || []).push(h*60 + d.getMinutes());
     return band.k;
-  });
+  }, bwAt);
   if (rows.length < 8) return null;
   const r = relPerfByBucket(rows);
   if (!r) return null;
@@ -1707,7 +1754,7 @@ function computeTimeOfDay(logs) {
 
 // Alcohol vs lifting. A session counts as "after drinking" if units were logged that day or
 // the day before — alcohol's effect on sleep and recovery carries into the next day.
-function computeAlcoholImpact(logs, contextLog) {
+function computeAlcoholImpact(logs, contextLog, bwAt = null) {
   const drinkDays = new Set();
   for (const c of (contextLog||[])) {
     if (!c || !(c.units > 0)) continue;
@@ -1722,7 +1769,7 @@ function computeAlcoholImpact(logs, contextLog) {
     const today = new Date(t).toISOString().slice(0,10);
     const yest  = new Date(t - dayMs).toISOString().slice(0,10);
     return (drinkDays.has(today) || drinkDays.has(yest)) ? 'after' : 'clear';
-  });
+  }, bwAt);
   if (rows.length < 8) return null;
   const r = relPerfByBucket(rows);
   if (!r || !r.after || !r.clear) return null;
@@ -2547,7 +2594,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-18T1710';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-18T1830';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -2619,7 +2666,7 @@ function App() {
     const ex0 = SESSIONS[sid].exercises[0];
     setSel(sid); setExIdx(0); setCurSet(0); setSetData({});
     const _t0 = getTarget(ex0, logs, week, effPhase);
-    setWt(_t0.weight||60); setRp(_t0.reps||ex0.rMin); setRir(effWR(week).rirN);
+    setWt(_t0.weight||60); setRp(_t0.reps||ex0.rMin); setRir(rirDefaultFor(ex0, effWR(week).rirN));
     setEditIdx(null); startRef.current=Date.now();
     setPainData({}); painRef.current={}; setSubMap({}); setReviseMode(false); setFinishModal(false);
     clearWip(); setView('workout');
@@ -2634,7 +2681,7 @@ function App() {
     const last=(wipData.setData?.[_reff]||[]);
     setWt(last.length?last[last.length-1].weight:getLastWt(_reff)||60);
     const _rwk=wipData.week||week;
-    setRp(ex.rMin); setRir(effWR(_rwk, DLW.has(_rwk) && !deloadSkips[block+'-'+_rwk]).rirN);
+    setRp(ex.rMin); setRir(rirDefaultFor(ex, effWR(_rwk, DLW.has(_rwk) && !deloadSkips[block+'-'+_rwk]).rirN));
     startRef.current=wipData.startTime||Date.now();
     setPainData(wipData.painData||{}); painRef.current=wipData.painData||{}; setSubMap(wipData.subMap||{}); setReviseMode(false); setFinishModal(false);
     setWeek(wipData.week||week); setView('workout'); setWipData(null);
@@ -2658,7 +2705,7 @@ function App() {
     if (editIdx !== null) {
       const arr=[...(setData[ex.id]||[])]; arr[editIdx]=newSet;
       const nd={...setData,[ex.id]:arr}; setSetData(nd); setEditIdx(null);
-      setWt(arr[arr.length-1].weight); setRp(ex.rMin); setRir(effWR(week).rirN);
+      setWt(arr[arr.length-1].weight); setRp(ex.rMin); setRir(rirDefaultFor(ex, effWR(week).rirN));
       saveWip(sel,nd,exIdx,curSet); return;
     }
     const prev=setData[ex.id]||[];
@@ -3721,7 +3768,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const rirDrift=useMemo(()=>computeRirDrift(logs,block),[logs,block]);
   const bpLoad=useMemo(()=>computeBpLoad(logs,bpLog,block),[logs,bpLog,block]);
   const actualVol=useMemo(()=>computeActualVolume(logs,block),[logs,block]);
-  const stalls=useMemo(()=>computeStalls(logs),[logs]);
+  // Resolves the nearest logged bodyweight to a session date, so weighted pull-ups are
+  // scored on total load rather than added load alone.
+  const bwAt=useMemo(()=>makeBwResolver(bodyMetrics),[bodyMetrics]);
+  const stalls=useMemo(()=>computeStalls(logs,3,bwAt),[logs,bwAt]);
   // Single source of truth for stalls. The Program card previously used its own detector
   // (detectPlateaus) with different rules — deloads included, ORM-only, 4-session minimum —
   // which could contradict the Progress card about the same lift. Both now read computeStalls.
@@ -3735,9 +3785,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const durations=useMemo(()=>computeDurations(logs),[logs]);
   const painTrend=useMemo(()=>computePainTrend(logs),[logs]);
   const trainLoad=useMemo(()=>computeTrainingLoad(logs),[logs]);
-  const timeOfDay=useMemo(()=>computeTimeOfDay(logs),[logs]);
-  const alcoholImpact=useMemo(()=>computeAlcoholImpact(logs,contextLog),[logs,contextLog]);
-  const recPerf=useMemo(()=>computeRecoveryPerformance(logs,whoopHistory),[logs,whoopHistory]);
+  const timeOfDay=useMemo(()=>computeTimeOfDay(logs,bwAt),[logs,bwAt]);
+  const alcoholImpact=useMemo(()=>computeAlcoholImpact(logs,contextLog,bwAt),[logs,contextLog,bwAt]);
+  const recPerf=useMemo(()=>computeRecoveryPerformance(logs,whoopHistory,bwAt),[logs,whoopHistory,bwAt]);
   const burnCheck=useMemo(()=>computeBurnCheck(whoopHistory, nutriCoach.ok?nutriCoach.tdee:null),[whoopHistory,nutriCoach]);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
   // --- Body dashboard derived data ---
@@ -3903,7 +3953,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // Blood pressure
     if (bpStats) {
       items.push({ k:'Blood pressure', v:`${bpStats.avgSys}/${bpStats.avgDia}`,
-        verdict: bpStats.avgSys<130 ? 'good' : bpStats.avgSys<140 ? 'ok' : 'miss',
+        verdict: (bpStats.avgSys<130 && bpStats.avgDia<80) ? 'good'
+               : (bpStats.avgSys<140 && bpStats.avgDia<90) ? 'ok' : 'miss',
         note:`7-day avg over ${bpStats.n} reading${bpStats.n===1?'':'s'}` });
     }
 
@@ -4119,7 +4170,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         <div className="screen">
           <div className="topbar"><span className="logo">Diamond Protocol</span><span className="top-badge">B{block} · W{week}/12</span></div>
           <div className={`phase-bar ${bannerColor}`}>
-            <div><div className="ph-name">{bannerName}</div><div className="ph-sub">{isDeload?"Half volume · 85% load · 3-4 RIR":showInt?"Intensifiers active, selective failure":"Straight sets only, no failure"}</div></div>
+            <div><div className="ph-name">{bannerName}</div><div className="ph-sub">{isDeload?"~40-50% volume · 85% load · 3-4 RIR":showInt?"Intensifiers active, selective failure":"Straight sets only, no failure"}</div></div>
             <div className="rir-val">{wr.rir}</div>
           </div>
           <div className="wksel">
@@ -4191,7 +4242,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <button className={`rc${deloadActive?' bt':''}`} onClick={()=>setDeloadSkips(m=>{const n={...m};delete n[block+'-'+week];return n;})}>Take deload</button>
                 <button className={`rc${!deloadActive?' nm':''}`} onClick={()=>setDeloadSkips(m=>({...m,[block+'-'+week]:true}))}>Train through</button>
               </div>
-              <div className="hv-sub">{deloadActive?'Half volume · 85% load · 3-4 RIR':'Training through · full volume & progression'}</div>
+              <div className="hv-sub">{deloadActive?'~40-50% volume · 85% load · 3-4 RIR':'Training through · full volume & progression'}</div>
             </div>
           )}
           {isDeload && <div className="info-banner warn">Deload week — sets auto-reduced to 50%</div>}
@@ -4692,7 +4743,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
 
           {painTrend && painTrend.flagged.length > 0 && (
             <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Joint pain by lift</span><span className="hm-wk">{painTrend.overallRate}% of all sets</span></div>
+              <div className="hm-head"><span className="hm-ttl">Joint pain by lift</span><span className="hm-wk">{painTrend.overallRate}% of exercise-sessions</span></div>
               <div className="av-note">Which lifts repeatedly produce pain. One niggle is noise; a lift flagging most sessions is telling you to change the movement, not push through it.</div>
               {painTrend.flagged.slice(0,8).map(p=>(
                 <div key={p.id} className="st-row">
