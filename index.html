@@ -633,6 +633,8 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .sec-head .body-ttl{margin-bottom:0}
 .sec-chev{color:var(--t3);font-size:15px;transition:transform .2s,color .2s;padding:4px 2px 4px 12px}
 .sec-chev.op{transform:rotate(180deg);color:var(--acc)}
+.grp-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;padding:14px 15px 8px;border-top:1px solid var(--bdr);margin-top:6px}
+.grp-ttl{font-size:11px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--acc)}
 .wr-row{display:flex;align-items:baseline;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)}
 .wr-dot{width:7px;height:7px;border-radius:50%;flex:0 0 7px;position:relative;top:-1px}
 .wr-dot.good{background:var(--ok)}.wr-dot.ok{background:var(--warn)}.wr-dot.miss{background:var(--err)}
@@ -709,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-16T0940';
+  var BUILD='2026-08-16T1030';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1584,6 +1586,38 @@ function computeRecoveryPerformance(logs, whoopHistory, minPerBucket = 3) {
   return { ...out, verdict, totalSessions: rows.length };
 }
 
+// Weekly training load (tonnage = sets x reps x weight) with an acute:chronic ratio.
+// HONEST FRAMING: ACWR was popularised as an injury-risk predictor and has since taken
+// substantial methodological criticism — the predictive claims have not replicated well.
+// It is used here purely descriptively: "this week vs your recent norm", which is a fair
+// read of whether load has spiked or collapsed. It is NOT presented as an injury forecast.
+function computeTrainingLoad(logs, weeks = 8) {
+  const dayMs = 86400000, now = Date.now();
+  const buckets = [];
+  for (let w = 0; w < weeks; w++) {
+    const hi = now - w*7*dayMs, lo = hi - 7*dayMs;
+    let tonnage = 0, sessions = 0;
+    for (const l of (logs||[])) {
+      const t = new Date(l.date).getTime();
+      if (isNaN(t) || t <= lo || t > hi) continue;
+      sessions++;
+      for (const ex of (l.exercises||[])) for (const s of (ex.sets||[])) tonnage += (s.weight||0) * (s.reps||0);
+    }
+    buckets.push({ weeksAgo: w, tonnage: Math.round(tonnage), sessions });
+  }
+  const series = buckets.slice().reverse();
+  if (!series.some(b => b.tonnage > 0)) return null;
+  const acute = buckets[0].tonnage;
+  const prior = buckets.slice(1, 5).filter(b => b.tonnage > 0);
+  const chronic = prior.length ? Math.round(prior.reduce((a,b)=>a+b.tonnage,0)/prior.length) : null;
+  const ratio = chronic ? +(acute/chronic).toFixed(2) : null;
+  let verdict = null;
+  if (ratio != null && prior.length >= 2) {
+    verdict = ratio > 1.5 ? 'spike' : ratio < 0.7 ? 'drop' : 'steady';
+  }
+  return { series, acute, chronic, ratio, verdict, weeksOfData: buckets.filter(b=>b.tonnage>0).length };
+}
+
 function computeStrengthRetention(logs) {
   const dayMs=86400000, nowTs=Date.now();
   const recentStart=nowTs-21*dayMs, priorStart=nowTs-42*dayMs;
@@ -2300,6 +2334,14 @@ function App() {
     const arr = Array.isArray(prev) ? prev : [];
     return arr.includes(id) ? arr.filter(x=>x!==id) : [...arr, id];
   });
+  // Progress tab groups. 17 analytics cards is too many to scan; grouping into three
+  // collapsible bands keeps Week in review always visible and the rest one tap away.
+  const [grpClosed, setGrpClosed] = usePersistentState('prog_grp_closed', ['recovery','detail']);
+  const grpOpen = (id) => !(grpClosed||[]).includes(id);
+  const toggleGrp = (id) => setGrpClosed(prev => {
+    const arr = Array.isArray(prev) ? prev : [];
+    return arr.includes(id) ? arr.filter(x=>x!==id) : [...arr, id];
+  });
   const [showTempLog, setShowTempLog] = useState(false);
   const [showWoodLog, setShowWoodLog] = useState(false);
   const todayVitals = useMemo(()=>{ const t=localToday(); return vitalsLog.find(v=>v&&v.date===t)||null; },[vitalsLog]);
@@ -2391,7 +2433,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-16T0940';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-16T1030';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3506,6 +3548,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   }, [stalls]);
   const durations=useMemo(()=>computeDurations(logs),[logs]);
   const painTrend=useMemo(()=>computePainTrend(logs),[logs]);
+  const trainLoad=useMemo(()=>computeTrainingLoad(logs),[logs]);
   const recPerf=useMemo(()=>computeRecoveryPerformance(logs,whoopHistory),[logs,whoopHistory]);
   const burnCheck=useMemo(()=>computeBurnCheck(whoopHistory, nutriCoach.ok?nutriCoach.tdee:null),[whoopHistory,nutriCoach]);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
@@ -4325,6 +4368,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               </div>
             </div>
           )}
+          <div className="grp-head" onClick={()=>toggleGrp('training')}><span className="grp-ttl">Training & volume</span><span className={'sec-chev'+(grpOpen('training')?' op':'')}>▾</span></div>
+          {grpOpen('training') && <>
+
           <div className="hm-card">
             <div className="hm-head"><span className="hm-ttl">Muscle heat map</span><span className="hm-wk">planned · Wk {week}{hvActive?' · HV':''}</span></div>
             <div className="hm-grid">
@@ -4384,6 +4430,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
           )}
 
+          </>}
+          <div className="grp-head" onClick={()=>toggleGrp('recovery')}><span className="grp-ttl">Recovery & body</span><span className={'sec-chev'+(grpOpen('recovery')?' op':'')}>▾</span></div>
+          {grpOpen('recovery') && <>
+
           {recPerf && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Recovery vs performance</span><span className="hm-wk">{recPerf.totalSessions} lift-sessions</span></div>
@@ -4420,18 +4470,38 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
           )}
 
-          {stalls && stalls.stalled.length > 0 && (
+          {trainLoad && trainLoad.weeksOfData >= 2 && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Training load</span><span className="hm-wk">weekly tonnage</span></div>
+              <SVGChart data={trainLoad.series.map(b=>({x:b.weeksAgo===0?'now':b.weeksAgo+'w',y:Math.round(b.tonnage/1000)}))} height={110} color="#a479e2"/>
+              <div className="st-row"><span className="st-name">This week</span><span className="st-e1">{Math.round(trainLoad.acute/1000)}k kg</span><span className="st-pct" style={{color:'var(--t2)'}}>{trainLoad.series[trainLoad.series.length-1].sessions} sess</span></div>
+              {trainLoad.chronic!=null && <div className="st-row"><span className="st-name">4-week average</span><span className="st-e1">{Math.round(trainLoad.chronic/1000)}k kg</span><span className="st-pct" style={{color: trainLoad.verdict==='spike'?'var(--warn)':trainLoad.verdict==='drop'?'var(--inf)':'var(--ok)'}}>{trainLoad.ratio}&#215;</span></div>}
+              <div className="av-note" style={{marginTop:9,marginBottom:0}}>
+                {trainLoad.verdict==='spike' && <>This week is <b>{trainLoad.ratio}&#215;</b> your recent norm &#8212; a sharp jump. Not inherently bad, but pair it with a genuinely easier week rather than stacking another.</>}
+                {trainLoad.verdict==='drop' && <>This week is <b>{trainLoad.ratio}&#215;</b> your recent norm. Fine if deliberate (deload, illness, travel); worth a look if not.</>}
+                {trainLoad.verdict==='steady' && <>Load is steady at <b>{trainLoad.ratio}&#215;</b> your 4-week norm &#8212; consistent progression rather than lurching.</>}
+                {!trainLoad.verdict && 'Need a few more weeks before the ratio means anything.'}
+                <br/><span style={{color:'var(--t3)'}}>Descriptive only. Acute:chronic ratios were popularised for injury prediction and that claim has not held up well &#8212; read this as &quot;load vs my norm&quot;, not a risk score.</span>
+              </div>
+            </div>
+          )}
+
+          {stalls && stalls.total > 0 && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Stalled lifts</span><span className="hm-wk">{stalls.stalled.length} of {stalls.total}</span></div>
+              {stalls.stalled.length > 0 ? (<>
               <div className="av-note">Best e1RM in the last 2 sessions vs the sessions before. Deloads excluded. Under 1% improvement = stalled.</div>
               {stalls.stalled.slice(0,8).map(s=>(
                 <div key={s.id} className="st-row">
-                  <span className="st-name">{s.name}</span>
+                  <span className="st-name">{s.name}<span className="dur-plan" style={{display:'block',textAlign:'left',minWidth:0,marginTop:1}}>{s.sessionsSincePeak>0?s.sessionsSincePeak+' since peak · now '+s.lastE1rm+'kg vs '+s.peakE1rm+'kg peak':'at peak'}</span></span>
                   <span className="st-e1">{s.bestRecent}<span className="st-u">kg e1RM</span></span>
                   <span className="st-pct" style={{color: s.pct < -2 ? 'var(--err)' : 'var(--warn)'}}>{s.pct>0?'+':''}{s.pct}%</span>
                 </div>
               ))}
-              <div className="av-note" style={{marginTop:9,marginBottom:0}}>A stall on a cut is often fine — holding load while losing weight is a win. Act on it if a lift stalls <b>and</b> bodyweight is stable.</div>
+              <div className="av-note" style={{marginTop:9,marginBottom:0}}>Fixes: drop to a back-off set and rebuild, change the rep range, swap to a fresh variation, or check recovery and sleep for that muscle. <b>On a cut a stall is often a win</b> — holding load while losing weight is retention. Act only if a lift stalls <b>and</b> bodyweight is stable.</div>
+              </>) : (
+                <div className="av-note" style={{marginBottom:0}}>No stalled lifts — everything with enough history is still progressing.</div>
+              )}
             </div>
           )}
 
@@ -4584,6 +4654,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
             <div className="ar-note">Add freely on isolation work while a muscle is progressing and recovery holds - no ceiling. Push compounds with load, not sets. Stop adding when a muscle stalls 2 sessions. Health markers override: red recovery or rising BP means hold regardless.</div>
           </div>
+          </>}
+          <div className="grp-head" onClick={()=>toggleGrp('detail')}><span className="grp-ttl">Detail & coach review</span><span className={'sec-chev'+(grpOpen('detail')?' op':'')}>▾</span></div>
+          {grpOpen('detail') && <>
+
           <div className="mv-sec">
             <div className="mv-head">
               <span className="mv-ttl">Weekly Volume</span>
@@ -4655,25 +4729,6 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               </>
             )}
           </div>
-          {logs.length >= 4 && (
-            <div className="plateau-sec">
-              <div className="mv-head"><span className="mv-ttl">Stalled Lifts</span><span className="mv-wk">est. 1RM</span></div>
-              {plateaus.length > 0 ? (
-                <>
-                  <div className="mv-sub">No new estimated 1RM for 3+ sessions — time to change something</div>
-                  {plateaus.map((p, i) => (
-                    <div key={i} className="plateau-row">
-                      <div className="plateau-name">{p.name}</div>
-                      <div className="plateau-meta">{p.sessions} sessions stuck &#183; now {p.lastE1rm}kg vs {p.peakE1rm}kg peak</div>
-                    </div>
-                  ))}
-                  <div className="plateau-tip">Fixes: drop to a back-off set and rebuild, change the rep range, swap to a fresh variation, or check recovery and sleep for that muscle.</div>
-                </>
-              ) : (
-                <div className="mv-empty">No stalled lifts — everything with enough history is still progressing.</div>
-              )}
-            </div>
-          )}
           {logs.length >= 1 && (
             <div className="period-sec">
               <div className="mv-head"><span className="mv-ttl">Coach Review</span></div>
@@ -4724,9 +4779,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
           )}
           {!progEx && <div className="empty-msg">Select an exercise above to see your progression chart and history.</div>}
+          </>}
         </div>
       )}
-
       {view === 'history' && (
         <div className="screen">
           <div className="topbar"><span className="logo">History</span><span className="top-badge">{logs.length} sessions</span></div>
