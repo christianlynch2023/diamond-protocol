@@ -711,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-16T1310';
+  var BUILD='2026-08-18T1620';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2547,7 +2547,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-16T1310';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-18T1620';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3411,26 +3411,62 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     }
     return out;
   }, [logs, volParts, bpGate, readiness]);
+  // WEIGHT TREND — week-average comparison.
+  //
+  // Method choice matters more than the maths here. Daily weight carries roughly +/-1kg of
+  // water noise, while the signal being detected is ~0.5%/wk (about 0.45kg). The signal is
+  // therefore SMALLER than single-day noise, so any method resting on individual readings
+  // (endpoint-to-endpoint especially) reports mostly noise.
+  //
+  // Averaging a week of weigh-ins cuts that noise by roughly sqrt(n). Comparing two adjacent
+  // 7-day blocks is also structurally immune to the turning-point failure that broke the old
+  // 21-day Theil-Sen fit: a rise-then-fall inside one window cancels to ~0 in a regression,
+  // but cannot cancel between two separate blocks. This is the standard evidence-based
+  // coaching approach, and it agrees closely with EWMA on real data.
   const bwRate = (() => {
     if (!bodyMetrics || bodyMetrics.length < 2) return null;
-    // Least-squares regression over the trailing 21 days — the SAME method Smart Targets
-    // uses. The old endpoint-to-endpoint calc was spike-sensitive and could contradict the
-    // regression-based rate shown two cards below on the same screen.
-    const dayMs=86400000, nowTs=Date.now();
-    const pts = bodyMetrics
-      .filter(m => { const t=new Date(m.date).getTime(); const age=(nowTs-t)/dayMs; return m.weight>0 && age>=0 && age<=21; })
-      .map(m => ({ t: new Date(m.date).getTime()/dayMs, w: m.weight }));
-    if (pts.length < 2) return null;
+    const dayMs = 86400000, nowTs = Date.now();
+    const aged = bodyMetrics
+      .filter(m => m && m.weight > 0)
+      .map(m => ({ age: (nowTs - new Date(m.date).getTime()) / dayMs, w: m.weight }))
+      .filter(m => m.age >= 0 && m.age <= 28);
+    if (!aged.length) return null;
+    const block = (lo, hi) => {
+      const xs = aged.filter(m => m.age >= lo && m.age < hi).map(m => m.w);
+      return xs.length ? { avg: +(xs.reduce((a,b)=>a+b,0)/xs.length).toFixed(2), n: xs.length } : null;
+    };
+    const w0 = block(0,7), w1 = block(7,14), w2 = block(14,21), w3 = block(21,28);
+    if (!w0 || !w1) return null;
+    // A block needs >=3 weigh-ins before its average is meaningful; below that a single
+    // water-heavy day dominates and the comparison is no better than an endpoint read.
+    if (w0.n < 3 || w1.n < 3) return null;
+    const perWeek = +(w0.avg - w1.avg).toFixed(2);
     const newestW = bodyMetrics[0].weight;
-    let slope = pts.length >= 4 ? theilSenSlope(pts) : null;
-    if (slope == null) {
-      const a=pts[pts.length-1], b=pts[0];
-      if ((b.t - a.t) === 0) return null;
-      slope = (b.w - a.w) / (b.t - a.t);
+
+    // EWMA (Hacker's Diet / TrendWeight): a smooth daily-updating line as a cross-check.
+    // Two independent robust methods agreeing is a far stronger signal than either alone.
+    let ewma = null, ewmaRate = null;
+    const chron = bodyMetrics.filter(m => m && m.weight > 0)
+      .map(m => ({ t: new Date(m.date).getTime(), w: m.weight }))
+      .sort((a,b) => a.t - b.t);
+    if (chron.length >= 4) {
+      let e = chron[0].w; const line = [];
+      for (const p of chron) { e = e + 0.25 * (p.w - e); line.push({ t: p.t, e }); }
+      ewma = +line[line.length-1].e.toFixed(2);
+      const cutoff = nowTs - 7*dayMs;
+      const past = line.filter(p => p.t <= cutoff);
+      if (past.length) ewmaRate = +(ewma - past[past.length-1].e).toFixed(2);
     }
-    if (!isFinite(slope)) return null;
-    const perWeek = slope * 7;
-    return { perWeek, pctWeek: perWeek/newestW*100 };
+    // Flag when the two methods disagree materially — usually a water event sitting inside
+    // one block, which no algorithm can fully correct for. Better to surface it than hide it.
+    const disagree = ewmaRate != null && Math.abs(ewmaRate - perWeek) > 0.5;
+
+    return {
+      perWeek, pctWeek: perWeek/newestW*100,
+      thisWeek: w0, lastWeek: w1,
+      prior: [w1, w2, w3].map(b => b ? b.avg : null),
+      ewma, ewmaRate, disagree
+    };
   })();
   const nutriCoach = useMemo(() => {
     const dayMs=86400000, parse=d=>new Date(d).getTime();
@@ -3486,7 +3522,22 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       const wA=wWin[0], wB=wWin[wWin.length-1];
       spanDays=(parse(wB.date)-parse(wA.date))/dayMs;
       if(spanDays>=10){
-        let slopePerDay = pts.length >= 4 ? theilSenSlope(pts) : null;
+        // BLOCK-AVERAGED ENDS, matching the headline bwRate method. A trailing regression
+        // (Theil-Sen or least-squares) collapses to ~0 when the window contains a rise then a
+        // fall, because the up-pairs and down-pairs cancel — which fabricated an "at
+        // maintenance" verdict while the scale was falling steadily. Averaging a block of
+        // readings at each END cannot cancel that way, and it still suppresses single-day
+        // water noise. Needs >=3 readings per block to beat a plain endpoint read.
+        let slopePerDay = null;
+        {
+          const kk = Math.min(7, Math.floor(pts.length/2));
+          if (kk >= 3) {
+            const head = pts.slice(0, kk), tail = pts.slice(-kk);
+            const hW = head.reduce((a,p)=>a+p.w,0)/kk, tW = tail.reduce((a,p)=>a+p.w,0)/kk;
+            const hT = head.reduce((a,p)=>a+p.t,0)/kk, tT = tail.reduce((a,p)=>a+p.t,0)/kk;
+            if (tT - hT > 0) slopePerDay = (tW - hW) / (tT - hT);
+          }
+        }
         if (slopePerDay === null) {
           // averaged endpoints (up to 3 readings each end) instead of single points
           const k=Math.min(3, Math.floor(pts.length/2)) || 1;
@@ -3818,9 +3869,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       const r = bwRate.perWeek;
       const good = goalPhase==='cut' ? (r < -0.15) : goalPhase==='bulk' ? (r > 0.05) : Math.abs(r)<0.2;
       const okish = goalPhase==='cut' ? (r < 0.05) : goalPhase==='bulk' ? (r > -0.1) : Math.abs(r)<0.4;
+      const trendNote = goalPhase!=='cut' ? `${goalPhase} phase`
+        : r < -0.9 ? 'dropping fast — ease off'
+        : r < -0.15 ? 'losing as planned'
+        : r < 0.05 ? 'flat — tighten intake'
+        : 'gaining on a cut';
       items.push({ k:'Weight', v:`${r>0?'+':''}${r.toFixed(2)} kg/wk`,
         verdict: good ? 'good' : okish ? 'ok' : 'miss',
-        note: goalPhase==='cut' ? (r<-0.15?'losing as planned':r<0.05?'flat — tighten intake':'gaining on a cut') : `${goalPhase} phase` });
+        note: bwRate.disagree ? trendNote + ' (methods differ)' : trendNote });
     }
 
     // Blood pressure
@@ -5182,6 +5238,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <span className="bw-rate-v" style={{color: bwRate.perWeek<0?'var(--ok)':bwRate.perWeek>0?'var(--inf)':'var(--t2)'}}>{bwRate.perWeek>0?'+':''}{bwRate.perWeek.toFixed(2)} kg/wk</span>
                 <span className="bw-rate-pct">{bwRate.pctWeek>0?'+':''}{bwRate.pctWeek.toFixed(2)}%/wk</span>
                 {goalPhase==='cut' && <span className="bw-rate-tgt">target -0.5 to -1%/wk</span>}
+              </div>
+            )}
+            {bwRate && (
+              <div className="av-note" style={{margin:'0 15px 10px'}}>
+                Last 7 days avg <b>{bwRate.thisWeek.avg}kg</b> ({bwRate.thisWeek.n} weigh-ins) vs prior 7 days <b>{bwRate.lastWeek.avg}kg</b> ({bwRate.lastWeek.n}).
+                {bwRate.ewmaRate!=null && <> Smoothed trend line agrees at <b>{bwRate.ewmaRate>0?'+':''}{bwRate.ewmaRate} kg/wk</b>.</>}
+                {bwRate.disagree && <> <span style={{color:'var(--warn)'}}>The two methods differ by more than 0.5kg/wk &#8212; usually a water swing sitting inside one week. Treat this week&rsquo;s figure as provisional.</span></>}
+                {bwRate.prior && bwRate.prior[1]!=null && <> Three-week averages: {bwRate.prior.filter(x=>x!=null).reverse().join(' &#8594; ')} &#8594; <b>{bwRate.thisWeek.avg}</b>.</>}
               </div>
             )}
             {bodyMetrics.length>1&&(
