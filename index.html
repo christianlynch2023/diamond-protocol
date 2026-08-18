@@ -709,7 +709,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-15T2215';
+  var BUILD='2026-08-16T0900';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1354,28 +1354,6 @@ function matchWorkout(log, workouts) {
 }
 
 const ORM_IDS = (() => { const s=new Set(); for(const k in SESSIONS) for(const e of SESSIONS[k].exercises) if(e.orm) s.add(e.id); return s; })();
-function detectPlateaus(logs) {
-  const byEx = {};
-  for (const l of logs) {
-    for (const ex of (l.exercises || [])) {
-      if (!ex.sets?.length) continue;
-      const _pid = ex.origId || ex.id;
-      if (!ORM_IDS.has(_pid)) continue;
-      const best = Math.max(...ex.sets.map(s => epley(s.weight, s.reps)));
-      (byEx[_pid] = byEx[_pid] || { name: ex.name, vals: [] }).vals.push(best);
-    }
-  }
-  const stalled = [];
-  for (const id in byEx) {
-    const v = byEx[id].vals;
-    if (v.length < 4) continue;
-    const peak = Math.max(...v);
-    let stuck = 0;
-    for (const x of v) { if (x >= peak - 0.001) break; stuck++; }
-    if (stuck >= 3) stalled.push({ name: byEx[id].name, sessions: stuck, lastE1rm: Math.round(v[0]), peakE1rm: Math.round(peak) });
-  }
-  return stalled.sort((a, b) => b.sessions - a.sessions);
-}
 
 // ---- Strength-retention index (the cut KPI) ----
 // For each `orm` compound: compare best e1RM in the trailing 21 days vs the 21 days before
@@ -1491,9 +1469,16 @@ function computeStalls(logs, minSessions = 3) {
     if (!earlier.length) continue;
     const bestRecent = Math.max(...recent), bestEarlier = Math.max(...earlier);
     const pct = bestEarlier > 0 ? ((bestRecent - bestEarlier) / bestEarlier) * 100 : 0;
+    // Sessions elapsed since the all-time peak e1RM for this lift (newest-first walk).
+    const all = rec.pts.map(p => p.e1rm);
+    const peak = Math.max(...all);
+    let sincePeak = 0;
+    for (const x of all) { if (x >= peak - 0.001) break; sincePeak++; }
     const entry = { id: pid, name: rec.name, sessions: pts.length,
                     bestRecent: Math.round(bestRecent), bestEarlier: Math.round(bestEarlier),
-                    pct: +pct.toFixed(1) };
+                    pct: +pct.toFixed(1),
+                    sessionsSincePeak: sincePeak, peakE1rm: Math.round(peak), lastE1rm: Math.round(all[0]),
+                    isOrm: ORM_IDS.has(pid) };
     // A stall is no meaningful improvement (<1%) over the older sessions.
     if (pct < 1) stalled.push(entry); else progressing.push(entry);
   }
@@ -2310,7 +2295,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-15T2215';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-16T0900';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3407,13 +3392,22 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const _unit=progMetric==='volume'?'':'kg';
   const curVol=weekMuscleVolume(logs,week,block);
   const volSeries=weeklyVolumeSeries(logs,volMuscle,block);
-  const plateaus=detectPlateaus(logs);
   const strengthRet=useMemo(()=>computeStrengthRetention(logs),[logs]);
   const deloadRebound=useMemo(()=>computeDeloadRebound(logs),[logs]);
   const rirDrift=useMemo(()=>computeRirDrift(logs,block),[logs,block]);
   const bpLoad=useMemo(()=>computeBpLoad(logs,bpLog,block),[logs,bpLog,block]);
   const actualVol=useMemo(()=>computeActualVolume(logs,block),[logs,block]);
   const stalls=useMemo(()=>computeStalls(logs),[logs]);
+  // Single source of truth for stalls. The Program card previously used its own detector
+  // (detectPlateaus) with different rules — deloads included, ORM-only, 4-session minimum —
+  // which could contradict the Progress card about the same lift. Both now read computeStalls.
+  const plateaus = useMemo(() => {
+    if (!stalls) return [];
+    return stalls.stalled
+      .filter(s => s.sessionsSincePeak >= 3)
+      .map(s => ({ name:s.name, sessions:s.sessionsSincePeak, lastE1rm:s.lastE1rm, peakE1rm:s.peakE1rm }))
+      .sort((a,b) => b.sessions - a.sessions);
+  }, [stalls]);
   const durations=useMemo(()=>computeDurations(logs),[logs]);
   const burnCheck=useMemo(()=>computeBurnCheck(whoopHistory, nutriCoach.ok?nutriCoach.tdee:null),[whoopHistory,nutriCoach]);
   const latestBySite={}; measurements.forEach(m=>{ if(!(m.site in latestBySite)) latestBySite[m.site]=m; });
