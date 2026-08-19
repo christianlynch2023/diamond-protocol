@@ -711,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-19T1320';
+  var BUILD='2026-08-19T1420';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2536,7 +2536,10 @@ function App() {
   const [measurementsRaw, setMeasurements] = usePersistentState('body_measurements', []);
   const measurements = useMemo(()=>live(measurementsRaw),[measurementsRaw]);
   const [checkins, setCheckins] = useState(() => { try { return JSON.parse(LS.get('checkin_photos') || '[]'); } catch(e) { return []; } });
-  const [ciPose, setCiPose] = useState('front');
+  // 'all' shows every pose grouped by check-in date; the pose names act as filters.
+  const [ciPose, setCiPose] = useState('all');
+  // Which pose a new upload is tagged as (the 'all' view is not a pose you can shoot).
+  const [ciAddPose, setCiAddPose] = useState('front');
   const [ciCompareA, setCiCompareA] = useState(null);
   const [ciCompareB, setCiCompareB] = useState(null);
   const [ciAnalysis, setCiAnalysis] = useState(null);
@@ -2689,7 +2692,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-19T1320';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-19T1420';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3062,7 +3065,7 @@ function App() {
       const ph = getPhase(wk);
       const bw = bodyMetrics[0]?.weight || null;
       const waist = measurements.find(m => m.site === 'Waist')?.value || null;
-      const entry = { id: Date.now(), date: new Date().toISOString(), pose: ciPose, week: wk, phase: ph.name, weight: bw, waist, img: dataUrl };
+      const entry = { id: Date.now(), date: new Date().toISOString(), pose: ciAddPose, week: wk, phase: ph.name, weight: bw, waist, img: dataUrl };
       setCheckins(prev => [entry, ...prev].slice(0, 24));
     } catch(e) { alert('Could not process image: ' + e.message); }
   };
@@ -3075,6 +3078,13 @@ function App() {
     if (!ciCompareA || !ciCompareB) { alert('Pick two check-ins to compare (baseline and current).'); return; }
     const a = checkins.find(c => c.id === ciCompareA);
     const b = checkins.find(c => c.id === ciCompareB);
+    // Belt and braces: the grid already blocks mismatched selections, but a stale selection
+    // could survive a filter change. Comparing a front against a side would yield a
+    // confident and meaningless read, so refuse it here too.
+    if (a && b && a.pose !== b.pose) {
+      alert('Compare the same pose \u2014 you have picked a ' + a.pose + ' and a ' + b.pose + '.');
+      return;
+    }
     if (!a || !b) return;
     // order chronologically: earlier = baseline
     const [base, cur] = new Date(a.date) < new Date(b.date) ? [a, b] : [b, a];
@@ -5563,45 +5573,81 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {secOpen('photos') && <>
             <div className="body-sub">Stored on this device only. Same pose, same light, same time of day — consistency is what makes progress visible. Compress automatically; keeps your most recent 24.</div>
             <div style={{display:'flex',gap:6,marginBottom:10}}>
-              {['front','side','back'].map(p=>(
+              {['all','front','side','back'].map(p=>(
                 <button key={p} onClick={()=>setCiPose(p)} style={{flex:1,padding:'7px',fontSize:11,borderRadius:7,border:'1px solid var(--bdr)',background:ciPose===p?'var(--acc)':'var(--sur)',color:ciPose===p?'#000':'var(--t2)',fontWeight:ciPose===p?700:500,textTransform:'capitalize'}}>{p}</button>
               ))}
             </div>
+            <div style={{display:'flex',gap:6,marginBottom:8,alignItems:'center'}}>
+              <span style={{fontSize:10.5,color:'var(--t2)',letterSpacing:'.1em',textTransform:'uppercase'}}>Add as</span>
+              {['front','side','back'].map(p=>(
+                <button key={p} onClick={()=>setCiAddPose(p)} style={{padding:'5px 11px',fontSize:10.5,borderRadius:6,border:'1px solid var(--bdr)',background:ciAddPose===p?'var(--acc)':'var(--sur)',color:ciAddPose===p?'#000':'var(--t2)',fontWeight:ciAddPose===p?700:500,textTransform:'capitalize'}}>{p}</button>
+              ))}
+            </div>
             <label className="add-toggle" style={{cursor:'pointer',display:'flex'}}>
-              <span>Add {ciPose} photo</span><span className="plus">+</span>
+              <span>Add {ciAddPose} photo</span><span className="plus">+</span>
               <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{addCheckin(e.target.files[0]); e.target.value='';}}/>
             </label>
 
             {checkins.length>0&&(() => {
-              // Ordered strictly by date, newest first. These were previously grouped by the
-              // TRAINING WEEK number captured at the time, which put photos from different
-              // blocks into the same heading (21 Jun and 13 Jul both landing under "Week 1")
-              // and sorted groups by week number, so a Week 12 photo from months ago could
-              // appear above a recent Week 3 one. Date order is what a progress gallery needs.
-              const posed = checkins.filter(c => c.pose === ciPose)
-                .slice()
-                .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-              if (!posed.length) return <div className="empty-msg">No {ciPose} photos yet.<br/>Add one above.</div>;
+              // GROUPED BY CHECK-IN DATE, newest first. A check-in is one event - you stand in
+              // the same spot and shoot front, side and back together - so the date is the
+              // natural unit. Grouping by pose hid the side view behind a tab, which is where
+              // waist change reads most clearly on a cut. Poses keep consistent order within a
+              // row so scanning down a column is still a like-for-like comparison, and a date
+              // with only one pose shows one photo rather than two empty slots.
+              const POSE_ORDER = ['front','side','back'];
+              const POSE_TAG = { front:'F', side:'S', back:'B' };
+              const pool = ciPose === 'all' ? checkins : checkins.filter(c => c.pose === ciPose);
+              if (!pool.length) return <div className="empty-msg">No {ciPose==='all'?'':ciPose+' '}photos yet.<br/>Add one above.</div>;
+              const byDay = {};
+              for (const c of pool) {
+                const d = (c.date||'').slice(0,10);
+                (byDay[d] = byDay[d] || []).push(c);
+              }
+              const days = Object.keys(byDay).sort((a,b) => a < b ? 1 : -1);
               return (
                 <div style={{marginTop:10}}>
-                  <div style={{marginBottom:10}}>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
-                        {posed.map(c=>{
-                          const selA=ciCompareA===c.id, selB=ciCompareB===c.id;
-                          return (
-                            <div key={c.id} style={{position:'relative',borderRadius:8,overflow:'hidden',border:selA?'2px solid var(--acc)':selB?'2px solid var(--inf)':'1px solid var(--bdr)'}}>
-                              <img src={c.img} alt={c.pose} style={{width:'100%',aspectRatio:'3/4',objectFit:'cover',display:'block'}}
-                                onClick={()=>{ if(selA){setCiCompareA(null);} else if(selB){setCiCompareB(null);} else if(!ciCompareA){setCiCompareA(c.id);} else if(!ciCompareB){setCiCompareB(c.id);} else {setCiCompareA(c.id);setCiCompareB(null);} }}/>
-                              <div style={{position:'absolute',top:0,left:0,right:0,padding:'3px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff',display:'flex',justifyContent:'flex-end'}}>
-                                {selA&&<span style={{color:'var(--acc)',fontWeight:700}}>A</span>}{selB&&<span style={{color:'var(--inf)',fontWeight:700}}>B</span>}
+                  {days.map(day => {
+                    const row = byDay[day].slice().sort(
+                      (a,b) => POSE_ORDER.indexOf(a.pose) - POSE_ORDER.indexOf(b.pose));
+                    const head = row[0];
+                    return (
+                      <div key={day} style={{marginBottom:12}}>
+                        <div className="dc-lbl" style={{marginBottom:5}}>
+                          {fmtShort(head.date)}{head.weight?` \u00b7 ${head.weight}kg`:''}{head.week?` \u00b7 W${head.week}`:''}
+                        </div>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
+                          {row.map(c=>{
+                            const selA=ciCompareA===c.id, selB=ciCompareB===c.id;
+                            // Same-pose guard. With poses mixed on screen it becomes possible to
+                            // tap a front for A and a side for B, and the AI would produce a
+                            // confident read of two different views. Once A is chosen, only the
+                            // matching pose can be selected for B.
+                            const aSel = ciCompareA ? checkins.find(x=>x.id===ciCompareA) : null;
+                            const blocked = !!(aSel && !selA && !selB && aSel.pose !== c.pose);
+                            return (
+                              <div key={c.id} style={{position:'relative',borderRadius:8,overflow:'hidden',opacity:blocked?0.35:1,border:selA?'2px solid var(--acc)':selB?'2px solid var(--inf)':'1px solid var(--bdr)'}}>
+                                <img src={c.img} alt={c.pose} style={{width:'100%',aspectRatio:'3/4',objectFit:'cover',display:'block'}}
+                                  onClick={()=>{
+                                    if(selA){setCiCompareA(null);setCiCompareB(null);}
+                                    else if(selB){setCiCompareB(null);}
+                                    else if(blocked){return;}
+                                    else if(!ciCompareA){setCiCompareA(c.id);}
+                                    else if(!ciCompareB){setCiCompareB(c.id);}
+                                    else {setCiCompareA(c.id);setCiCompareB(null);}
+                                  }}/>
+                                <div style={{position:'absolute',top:0,left:0,right:0,padding:'3px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff',display:'flex',justifyContent:'space-between'}}>
+                                  <span style={{fontWeight:700,letterSpacing:'.06em'}}>{POSE_TAG[c.pose]||'?'}</span>
+                                  <span>{selA&&<span style={{color:'var(--acc)',fontWeight:700}}>A</span>}{selB&&<span style={{color:'var(--inf)',fontWeight:700}}>B</span>}</span>
+                                </div>
+                                <button onClick={()=>delCheckin(c.id)} style={{position:'absolute',top:2,right:2,width:30,height:30,borderRadius:15,border:'none',background:'rgba(0,0,0,.6)',color:'#fff',fontSize:15,lineHeight:'28px',padding:0}}>&#215;</button>
                               </div>
-                              <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'2px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff'}}>{fmtShort(c.date)}{c.weight?` · ${c.weight}kg`:''}{c.week?` · W${c.week}`:''}</div>
-                              <button onClick={()=>delCheckin(c.id)} style={{position:'absolute',top:2,right:2,width:30,height:30,borderRadius:15,border:'none',background:'rgba(0,0,0,.6)',color:'#fff',fontSize:15,lineHeight:'28px',padding:0}}>&#215;</button>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                  </div>
+                    );
+                  })}
                 </div>
               );
             })()}
