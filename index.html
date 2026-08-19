@@ -711,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-19T1000';
+  var BUILD='2026-08-19T1130';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1219,7 +1219,8 @@ function Sparkline({ vals, color='#4a9eff', w=54, h=18 }) {
   const pts=nums.map((v,i)=>`${(i/(nums.length-1))*w},${h-((v-min)/rng)*h}`).join(' ');
   return <svg width={w} height={h} style={{display:'block'}}><polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/></svg>;
 }
-function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00e87a', bandLabel=null }) {
+function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00e87a', bandLabel=null,
+                    trend=false, trendAlpha=0.25, anchor=null }) {
   // Gradient id derived from the colour. Previously every instance emitted id="cg", so with
   // several charts on one page all area fills resolved to whichever gradient rendered first
   // and charts silently displayed the wrong colour. Deriving from colour is stable across
@@ -1235,8 +1236,20 @@ function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00
   // A reference band should be visible even when every reading sits outside it, so widen the
   // scale to include the band — otherwise the shading clips to an edge and tells you nothing.
   const hasBand = band && Number.isFinite(band.lo) && Number.isFinite(band.hi) && band.hi > band.lo;
-  const maxV = Math.max(...vals, hasBand ? band.hi : -Infinity);
-  const minV = Math.min(...vals, hasBand ? band.lo : Infinity);
+  let maxV = Math.max(...vals, hasBand ? band.hi : -Infinity);
+  let minV = Math.min(...vals, hasBand ? band.lo : Infinity);
+  // AXIS ANCHORING. Auto-scaling to the data means a 0.4kg water fluctuation fills a third
+  // of the chart and reads as a crisis. `anchor` sets a minimum visible span (e.g. 6kg on
+  // bodyweight) centred on the data, so ordinary noise looks like ordinary noise. The axis
+  // still expands when real movement exceeds the anchor, so nothing is ever clipped.
+  if (Number.isFinite(anchor) && anchor > 0) {
+    const span = maxV - minV;
+    if (span < anchor) {
+      const mid = (maxV + minV) / 2;
+      maxV = mid + anchor / 2;
+      minV = mid - anchor / 2;
+    }
+  }
   const range = maxV - minV || 1;
   const W=320, H=height, PX=36, PY=14, iW=W-PX*2, iH=H-PY*2;
   // Points were previously spaced purely by index, so a three-day gap between weigh-ins
@@ -1253,6 +1266,16 @@ function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00
     : PX + (i/(data.length-1))*iW;
   const ty = v => H-PY-((v-minV)/range)*iH;
   const pts = data.map((d,i) => [tx(i), ty(d.y)]);
+  // SMOOTHED TREND over raw scatter. A line joining every raw weigh-in makes a water spike
+  // look identical to real tissue change - which is exactly how a flat three weeks read as
+  // "-1.63 kg/wk". Drawing the raw values as faint dots and the EWMA as the bold line makes
+  // the distinction visible without needing a paragraph underneath to explain it.
+  let trendPath = null;
+  if (trend && data.length >= 4) {
+    let e = data[0].y;
+    const tp = data.map((d,i) => { e = e + trendAlpha * (d.y - e); return [tx(i), ty(e)]; });
+    trendPath = tp.map((p,i) => `${i===0?'M':'L'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+  }
   const line = pts.map((p,i) => `${i===0?'M':'L'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
   const area = line + ` L${pts[pts.length-1][0].toFixed(1)} ${H-PY} L${PX} ${H-PY} Z`;
   const yTicks = [0,0.5,1].map(t => ({v: minV+t*range, y: ty(minV+t*range)}));
@@ -1289,8 +1312,12 @@ function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00
         return <text key={i} x={tx(idx)} y={H-2} textAnchor="middle" fontSize="9" fill="#3c4f62" fontFamily="JetBrains Mono">{d.x}</text>;
       })}
       <path d={area} fill={`url(#${gid})`}/>
-      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      {pts.map((p,i) => <circle key={i} cx={p[0]} cy={p[1]} r="3" fill={color}/>)}
+      <path d={line} fill="none" stroke={color} strokeWidth={trendPath ? 1 : 2}
+            strokeOpacity={trendPath ? 0.28 : 1} strokeLinecap="round" strokeLinejoin="round"/>
+      {pts.map((p,i) => <circle key={i} cx={p[0]} cy={p[1]} r={trendPath ? 2 : 3}
+                                fill={color} fillOpacity={trendPath ? 0.4 : 1}/>)}
+      {trendPath && <path d={trendPath} fill="none" stroke={color} strokeWidth="2.5"
+                          strokeLinecap="round" strokeLinejoin="round"/>}
     </svg>
   );
 }
@@ -2629,7 +2656,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-19T1000';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-19T1130';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -5037,7 +5064,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   )}
                 </div>
                 <div className="chart-lbl" style={{marginTop:14}}>Recovery — last {Math.min(whoopHistory.length,30)} readings</div>
-                <SVGChart data={whoopHistory.slice(-30).map(h=>({x:h.date.slice(5),y:h.recovery,t:new Date(h.date).getTime()}))} height={120} color="#00e87a"/>
+                <SVGChart data={whoopHistory.slice(-30).map(h=>({x:h.date.slice(5),y:h.recovery,t:new Date(h.date).getTime()}))} height={120} color="#00e87a" trend={true}/>
                 {whoopHistory.filter(h=>h.hrv!=null).length>1 && (
                   <>
                     <div className="chart-lbl" style={{marginTop:12}}>HRV trend (ms)</div>
@@ -5361,7 +5388,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             )}
             {bodyMetrics.length>1&&(
               <div style={{marginBottom:10}}>
-                <SVGChart data={bodyMetrics.slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.weight,t:new Date(m.date).getTime()}))} height={120}/>
+                <SVGChart data={bodyMetrics.slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.weight,t:new Date(m.date).getTime()}))} height={120} trend={true} anchor={6}/>
               </div>
             )}
             <button className="add-toggle" onClick={()=>setShowAddBody(v=>!v)}>
@@ -5707,7 +5734,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {bpSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Systolic &#8212; last {Math.min(bpLog.length,21)} readings</div>
-                <SVGChart data={bpSeries} height={110} color="#ff6b6b" band={{lo:90,hi:120}} bandColor="#00e87a" bandLabel="normal systolic"/>
+                <SVGChart data={bpSeries} height={110} color="#ff6b6b" trend={true} anchor={40} band={{lo:90,hi:120}} bandColor="#00e87a" bandLabel="normal systolic"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddBP(v => !v)}>
@@ -5803,7 +5830,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {glSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Fasting glucose &#8212; last {Math.min(glucoseLog.length,21)} readings (mmol/L)</div>
-                <SVGChart data={glSeries} height={110} color="#f0a020" band={{lo:4.0,hi:5.5}} bandColor="#00e87a" bandLabel="fasting in-range"/>
+                <SVGChart data={glSeries} height={110} color="#f0a020" trend={true} anchor={3} band={{lo:4.0,hi:5.5}} bandColor="#00e87a" bandLabel="fasting in-range"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddGl(v => !v)}>
@@ -5843,7 +5870,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {tempChartSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Waking temp &#8212; last {Math.min(tempLogList.length,21)} readings (&deg;)</div>
-                <SVGChart data={tempChartSeries} height={110} color="#ff9f43" band={tempBand} bandColor="#00e87a" bandLabel="your baseline"/>
+                <SVGChart data={tempChartSeries} height={110} color="#ff9f43" trend={true} anchor={1.5} band={tempBand} bandColor="#00e87a" bandLabel="your baseline"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddTemp(v => !v)}>
