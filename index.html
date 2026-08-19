@@ -711,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-18T1915';
+  var BUILD='2026-08-19T1000';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1239,7 +1239,18 @@ function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00
   const minV = Math.min(...vals, hasBand ? band.lo : Infinity);
   const range = maxV - minV || 1;
   const W=320, H=height, PX=36, PY=14, iW=W-PX*2, iH=H-PY*2;
-  const tx = i => PX + (i/(data.length-1))*iW;
+  // Points were previously spaced purely by index, so a three-day gap between weigh-ins
+  // rendered identically to consecutive days and visually distorted the slope. When every
+  // point carries a real timestamp (t), space by elapsed time instead. Falls back to even
+  // spacing for series that have no dates, so charts without t are unaffected.
+  const ts = data.map(d => d.t).filter(v => Number.isFinite(v));
+  const timeScaled = ts.length === data.length && data.length > 1;
+  const tMin = timeScaled ? Math.min(...ts) : 0;
+  const tMax = timeScaled ? Math.max(...ts) : 1;
+  const tSpan = tMax - tMin;
+  const tx = i => timeScaled && tSpan > 0
+    ? PX + ((data[i].t - tMin) / tSpan) * iW
+    : PX + (i/(data.length-1))*iW;
   const ty = v => H-PY-((v-minV)/range)*iH;
   const pts = data.map((d,i) => [tx(i), ty(d.y)]);
   const line = pts.map((p,i) => `${i===0?'M':'L'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
@@ -2552,7 +2563,7 @@ function App() {
   }));
   const tempLogList = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null), [vitalsLog]);
   const woodLogList = useMemo(()=> vitalsLog.filter(v=>v&&v.wood!=null), [vitalsLog]);
-  const tempChartSeries = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null).slice(0,21).reverse().map(v=>({x:fmtShort(v.date),y:v.temp})), [vitalsLog]);
+  const tempChartSeries = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null).slice(0,21).reverse().map(v=>({x:fmtShort(v.date),y:v.temp,t:new Date(v.date).getTime()})), [vitalsLog]);
   // Waking temp has no universal target — what matters is drift from YOUR baseline. Band is
   // the median of the last 21 readings ±0.2. Needs >=7 readings before a baseline means anything.
   // WHOOP skin temp baseline. Wrist skin temp is absolute-inaccurate but drift-accurate,
@@ -2618,7 +2629,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-18T1915';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-19T1000';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3842,7 +3853,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   }, [bodyMetrics, measurements]);
   const KEY_SITES = ['Waist','Chest','Left Thigh','Right Thigh'];
   const measSeries=useMemo(()=>measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value})),[measurements,mViewSite]);
-  const protSeries=useMemo(()=>nutrition.slice(0,21).reverse().map(n=>({x:fmtShort(n.date),y:n.protein})),[nutrition]);
+  const protSeries=useMemo(()=>nutrition.slice(0,21).reverse().map(n=>({x:fmtShort(n.date),y:n.protein,t:new Date(n.date).getTime()})),[nutrition]);
   const recFuelRows = useMemo(() => {
     const nutByDate={}; nutrition.forEach(n=>{ const d=(n.date||'').slice(0,10); if(d) nutByDate[d]=n; });
     return whoopHistory.slice(-14).map(h=>{
@@ -3892,9 +3903,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const cardioMins = cardioMinsManual + whoopCardio.mins;
   const cardioSessions = cardioSessionsManual + whoopCardio.sessions;
   const latestBP=bpLog[0]||null;
-  const bpSeries=useMemo(()=>bpLog.slice(0,21).reverse().map(b=>({x:fmtShort(b.date),y:b.sys})),[bpLog]);
+  const bpSeries=useMemo(()=>bpLog.slice(0,21).reverse().map(b=>({x:fmtShort(b.date),y:b.sys,t:new Date(b.date).getTime()})),[bpLog]);
   const latestGl=glucoseLog[0]||null;
-  const glSeries=useMemo(()=>glucoseLog.slice(0,21).reverse().map(g=>({x:fmtShort(g.date),y:g.value})),[glucoseLog]);
+  const glSeries=useMemo(()=>glucoseLog.slice(0,21).reverse().map(g=>({x:fmtShort(g.date),y:g.value,t:new Date(g.date).getTime()})),[glucoseLog]);
   // --- Health-log headline stats (latest, 7-reading avg, in-range %) ---
   const bpStats = useMemo(() => {
     const l7 = bpLog.slice(0,7); if (!l7.length) return null;
@@ -5026,11 +5037,11 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   )}
                 </div>
                 <div className="chart-lbl" style={{marginTop:14}}>Recovery — last {Math.min(whoopHistory.length,30)} readings</div>
-                <SVGChart data={whoopHistory.slice(-30).map(h=>({x:h.date.slice(5),y:h.recovery}))} height={120} color="#00e87a"/>
+                <SVGChart data={whoopHistory.slice(-30).map(h=>({x:h.date.slice(5),y:h.recovery,t:new Date(h.date).getTime()}))} height={120} color="#00e87a"/>
                 {whoopHistory.filter(h=>h.hrv!=null).length>1 && (
                   <>
                     <div className="chart-lbl" style={{marginTop:12}}>HRV trend (ms)</div>
-                    <SVGChart data={whoopHistory.slice(-30).filter(h=>h.hrv!=null).map(h=>({x:h.date.slice(5),y:h.hrv}))} height={110} color="#4a9eff"/>
+                    <SVGChart data={whoopHistory.slice(-30).filter(h=>h.hrv!=null).map(h=>({x:h.date.slice(5),y:h.hrv,t:new Date(h.date).getTime()}))} height={110} color="#4a9eff"/>
                   </>
                 )}
                 {recFuelReady && (
@@ -5350,7 +5361,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             )}
             {bodyMetrics.length>1&&(
               <div style={{marginBottom:10}}>
-                <SVGChart data={bodyMetrics.slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.weight}))} height={120}/>
+                <SVGChart data={bodyMetrics.slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.weight,t:new Date(m.date).getTime()}))} height={120}/>
               </div>
             )}
             <button className="add-toggle" onClick={()=>setShowAddBody(v=>!v)}>
