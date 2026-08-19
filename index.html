@@ -711,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-19T1130';
+  var BUILD='2026-08-19T1230';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1220,7 +1220,7 @@ function Sparkline({ vals, color='#4a9eff', w=54, h=18 }) {
   return <svg width={w} height={h} style={{display:'block'}}><polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/></svg>;
 }
 function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00e87a', bandLabel=null,
-                    trend=false, trendAlpha=0.25, anchor=null }) {
+                    trend=false, trendAlpha=0.25, anchor=null, events=null }) {
   // Gradient id derived from the colour. Previously every instance emitted id="cg", so with
   // several charts on one page all area fills resolved to whichever gradient rendered first
   // and charts silently displayed the wrong colour. Deriving from colour is stable across
@@ -1270,6 +1270,24 @@ function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00
   // look identical to real tissue change - which is exactly how a flat three weeks read as
   // "-1.63 kg/wk". Drawing the raw values as faint dots and the EWMA as the bold line makes
   // the distinction visible without needing a paragraph underneath to explain it.
+  // Map events onto the same x scale as the data. Only possible when points carry real
+  // timestamps; on index-spaced charts an event has no meaningful position, so it is dropped
+  // rather than placed somewhere misleading.
+  const annos = [];
+  if (events && events.length && timeScaled && tSpan > 0) {
+    const xAt = t => PX + ((t - tMin) / tSpan) * iW;
+    for (const ev of events) {
+      if (!ev || !Number.isFinite(ev.t)) continue;
+      if (Number.isFinite(ev.tEnd)) {
+        const a = Math.max(tMin, ev.t), b = Math.min(tMax, ev.tEnd);
+        if (b < tMin || a > tMax) continue;
+        annos.push({ span:true, x1:xAt(a), x2:xAt(b), color:ev.color||'#7b90a8' });
+      } else {
+        if (ev.t < tMin || ev.t > tMax) continue;
+        annos.push({ span:false, x1:xAt(ev.t), color:ev.color||'#7b90a8', label:ev.label||'' });
+      }
+    }
+  }
   let trendPath = null;
   if (trend && data.length >= 4) {
     let e = data[0].y;
@@ -1311,6 +1329,21 @@ function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00
         const idx = data.indexOf(d);
         return <text key={i} x={tx(idx)} y={H-2} textAnchor="middle" fontSize="9" fill="#3c4f62" fontFamily="JetBrains Mono">{d.x}</text>;
       })}
+      {/* EVENT ANNOTATIONS. The app already records deloads, alcohol, illness, travel and
+          protocol doses, but none of it reached the charts, so every wobble needed
+          interpreting from memory. Markers are positioned on the same time scale as the
+          data and drawn beneath it, so they add context without obscuring the line. */}
+      {annos.map((a,i) => a.span ? (
+        <rect key={'a'+i} x={a.x1} y={PY} width={Math.max(1, a.x2-a.x1)} height={H-PY*2}
+              fill={a.color} opacity="0.10"/>
+      ) : (
+        <g key={'a'+i}>
+          <line x1={a.x1} y1={PY} x2={a.x1} y2={H-PY} stroke={a.color} strokeWidth="1"
+                strokeDasharray="3 3" opacity="0.5"/>
+          <text x={a.x1} y={PY-1} textAnchor="middle" fontSize="7.5" fill={a.color}
+                opacity="0.85" fontFamily="JetBrains Mono">{a.label}</text>
+        </g>
+      ))}
       <path d={area} fill={`url(#${gid})`}/>
       <path d={line} fill="none" stroke={color} strokeWidth={trendPath ? 1 : 2}
             strokeOpacity={trendPath ? 0.28 : 1} strokeLinecap="round" strokeLinejoin="round"/>
@@ -2656,7 +2689,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-19T1130';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-19T1230';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3832,6 +3865,35 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const actualVol=useMemo(()=>computeActualVolume(logs,block),[logs,block]);
   // Resolves the nearest logged bodyweight to a session date, so weighted pull-ups are
   // scored on total load rather than added load alone.
+  // Chart annotations assembled from data the app already records: alcohol days, illness /
+  // travel / bad nights, and deload weeks. Deloads render as a shaded span, one-off events
+  // as a dashed marker. Capped so a busy period cannot bury the chart it is annotating.
+  const chartEvents = useMemo(() => {
+    const evs = [];
+    for (const c of (contextLog||[])) {
+      if (!c || !c.date) continue;
+      const t = new Date(c.date).getTime();
+      if (isNaN(t)) continue;
+      if (c.units > 0) evs.push({ t, label:'\u{1F377}', color:'#a479e2' });
+      const tags = Array.isArray(c.tags) ? c.tags : [];
+      if (tags.includes('illness'))   evs.push({ t, label:'ill',   color:'#ff6b6b' });
+      if (tags.includes('travel'))    evs.push({ t, label:'trip',  color:'#4a9eff' });
+      if (tags.includes('poorsleep')) evs.push({ t, label:'sleep', color:'#f0a020' });
+    }
+    // Deload weeks, taken from logged sessions so a trained-through week is not shaded.
+    const dl = (logs||[]).filter(l => l && l.deload === true).map(l => new Date(l.date).getTime())
+      .filter(t => !isNaN(t)).sort((a,b) => a-b);
+    const dayMs = 86400000;
+    let i = 0;
+    while (i < dl.length) {
+      let j = i;
+      while (j+1 < dl.length && dl[j+1] - dl[j] <= 4*dayMs) j++;
+      evs.push({ t: dl[i] - dayMs, tEnd: dl[j] + dayMs, color:'#ff8c00' });
+      i = j + 1;
+    }
+    return evs.slice(0, 40);
+  }, [contextLog, logs]);
+
   const bwAt=useMemo(()=>makeBwResolver(bodyMetrics),[bodyMetrics]);
   const stalls=useMemo(()=>computeStalls(logs,3,bwAt),[logs,bwAt]);
   // Single source of truth for stalls. The Program card previously used its own detector
@@ -5064,7 +5126,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   )}
                 </div>
                 <div className="chart-lbl" style={{marginTop:14}}>Recovery — last {Math.min(whoopHistory.length,30)} readings</div>
-                <SVGChart data={whoopHistory.slice(-30).map(h=>({x:h.date.slice(5),y:h.recovery,t:new Date(h.date).getTime()}))} height={120} color="#00e87a" trend={true}/>
+                <SVGChart data={whoopHistory.slice(-30).map(h=>({x:h.date.slice(5),y:h.recovery,t:new Date(h.date).getTime()}))} height={120} color="#00e87a" trend={true} events={chartEvents}/>
                 {whoopHistory.filter(h=>h.hrv!=null).length>1 && (
                   <>
                     <div className="chart-lbl" style={{marginTop:12}}>HRV trend (ms)</div>
@@ -5388,7 +5450,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             )}
             {bodyMetrics.length>1&&(
               <div style={{marginBottom:10}}>
-                <SVGChart data={bodyMetrics.slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.weight,t:new Date(m.date).getTime()}))} height={120} trend={true} anchor={6}/>
+                <SVGChart data={bodyMetrics.slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.weight,t:new Date(m.date).getTime()}))} height={120} trend={true} anchor={6} events={chartEvents}/>
               </div>
             )}
             <button className="add-toggle" onClick={()=>setShowAddBody(v=>!v)}>
@@ -5734,7 +5796,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {bpSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Systolic &#8212; last {Math.min(bpLog.length,21)} readings</div>
-                <SVGChart data={bpSeries} height={110} color="#ff6b6b" trend={true} anchor={40} band={{lo:90,hi:120}} bandColor="#00e87a" bandLabel="normal systolic"/>
+                <SVGChart data={bpSeries} height={110} color="#ff6b6b" trend={true} anchor={40} events={chartEvents} band={{lo:90,hi:120}} bandColor="#00e87a" bandLabel="normal systolic"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddBP(v => !v)}>
@@ -5870,7 +5932,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {tempChartSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Waking temp &#8212; last {Math.min(tempLogList.length,21)} readings (&deg;)</div>
-                <SVGChart data={tempChartSeries} height={110} color="#ff9f43" trend={true} anchor={1.5} band={tempBand} bandColor="#00e87a" bandLabel="your baseline"/>
+                <SVGChart data={tempChartSeries} height={110} color="#ff9f43" trend={true} anchor={1.5} events={chartEvents} band={tempBand} bandColor="#00e87a" bandLabel="your baseline"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddTemp(v => !v)}>
