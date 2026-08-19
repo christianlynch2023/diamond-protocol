@@ -711,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-19T1230';
+  var BUILD='2026-08-19T1320';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2689,7 +2689,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-19T1230';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-19T1320';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -5573,19 +5573,20 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </label>
 
             {checkins.length>0&&(() => {
-              // group the SELECTED pose by week, newest week first
-              const posed = checkins.filter(c => c.pose === ciPose);
-              const byWeek = {};
-              posed.forEach(c => { (byWeek[c.week] = byWeek[c.week] || []).push(c); });
-              const weeks = Object.keys(byWeek).map(Number).sort((a,b)=>b-a);
+              // Ordered strictly by date, newest first. These were previously grouped by the
+              // TRAINING WEEK number captured at the time, which put photos from different
+              // blocks into the same heading (21 Jun and 13 Jul both landing under "Week 1")
+              // and sorted groups by week number, so a Week 12 photo from months ago could
+              // appear above a recent Week 3 one. Date order is what a progress gallery needs.
+              const posed = checkins.filter(c => c.pose === ciPose)
+                .slice()
+                .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
               if (!posed.length) return <div className="empty-msg">No {ciPose} photos yet.<br/>Add one above.</div>;
               return (
                 <div style={{marginTop:10}}>
-                  {weeks.map(wk => (
-                    <div key={wk} style={{marginBottom:10}}>
-                      <div className="dc-lbl" style={{marginBottom:5}}>Week {wk}</div>
+                  <div style={{marginBottom:10}}>
                       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
-                        {byWeek[wk].map(c=>{
+                        {posed.map(c=>{
                           const selA=ciCompareA===c.id, selB=ciCompareB===c.id;
                           return (
                             <div key={c.id} style={{position:'relative',borderRadius:8,overflow:'hidden',border:selA?'2px solid var(--acc)':selB?'2px solid var(--inf)':'1px solid var(--bdr)'}}>
@@ -5594,14 +5595,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                               <div style={{position:'absolute',top:0,left:0,right:0,padding:'3px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff',display:'flex',justifyContent:'flex-end'}}>
                                 {selA&&<span style={{color:'var(--acc)',fontWeight:700}}>A</span>}{selB&&<span style={{color:'var(--inf)',fontWeight:700}}>B</span>}
                               </div>
-                              <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'2px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff'}}>{fmtShort(c.date)}{c.weight?` · ${c.weight}kg`:''}</div>
-                              <button onClick={()=>delCheckin(c.id)} style={{position:'absolute',top:2,right:2,width:16,height:16,borderRadius:8,border:'none',background:'rgba(0,0,0,.6)',color:'#fff',fontSize:11,lineHeight:'14px',padding:0}}>&#215;</button>
+                              <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'2px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff'}}>{fmtShort(c.date)}{c.weight?` · ${c.weight}kg`:''}{c.week?` · W${c.week}`:''}</div>
+                              <button onClick={()=>delCheckin(c.id)} style={{position:'absolute',top:2,right:2,width:30,height:30,borderRadius:15,border:'none',background:'rgba(0,0,0,.6)',color:'#fff',fontSize:15,lineHeight:'28px',padding:0}}>&#215;</button>
                             </div>
                           );
                         })}
                       </div>
-                    </div>
-                  ))}
+                  </div>
                 </div>
               );
             })()}
