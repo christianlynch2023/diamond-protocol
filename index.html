@@ -712,7 +712,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-20T1720';
+  var BUILD='2026-08-20T1830';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1220,6 +1220,91 @@ function Sparkline({ vals, color='#4a9eff', w=54, h=18 }) {
   const pts=nums.map((v,i)=>`${(i/(nums.length-1))*w},${h-((v-min)/rng)*h}`).join(' ');
   return <svg width={w} height={h} style={{display:'block'}}><polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/></svg>;
 }
+// Scatter for RELATIONSHIP questions. Bucketed means answer "is A associated with B?" by
+// hiding the very thing that decides it: the spread. Three rows of averages look identical
+// whether the points are tightly clustered or all over the chart. A scatter shows the
+// spread, any single outlier carrying the result, and whether a line through it is honest.
+function SVGScatter({ points, color='#c4ff00', height=150, xLabel='', yLabel='', xMin=null, xMax=null, bands=null }) {
+  const pts = (points||[]).filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.y));
+  if (pts.length < 3) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12}}>Need at least 3 sessions to plot</div>;
+  const W = 320, H = height, PX = 30, PY = 14;
+  const iW = W - PX*2, iH = H - PY*2;
+  const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
+  const x0 = Number.isFinite(xMin) ? xMin : Math.min(...xs);
+  const x1 = Number.isFinite(xMax) ? xMax : Math.max(...xs);
+  const xr = (x1 - x0) || 1;
+  const yPad = Math.max(2, (Math.max(...ys) - Math.min(...ys)) * 0.15);
+  const y0 = Math.min(...ys) - yPad, y1 = Math.max(...ys) + yPad;
+  const yr = (y1 - y0) || 1;
+  const tx = v => PX + ((v - x0)/xr) * iW;
+  const ty = v => PY + iH - ((v - y0)/yr) * iH;
+  // Least-squares fit, drawn only with enough points to be worth showing.
+  let fit = null;
+  if (pts.length >= 6) {
+    const n = pts.length;
+    const mx = xs.reduce((a,b)=>a+b,0)/n, my = ys.reduce((a,b)=>a+b,0)/n;
+    let num=0, den=0;
+    for (const p of pts) { num += (p.x-mx)*(p.y-my); den += (p.x-mx)*(p.x-mx); }
+    if (den > 0) {
+      const m = num/den, c = my - m*mx;
+      fit = { x1:tx(x0), y1:ty(m*x0+c), x2:tx(x1), y2:ty(m*x1+c) };
+    }
+  }
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:'auto',display:'block'}}>
+      {bands && bands.map((b,i) => (
+        <rect key={'b'+i} x={tx(Math.max(x0,b.from))} y={PY}
+              width={Math.max(1, tx(Math.min(x1,b.to)) - tx(Math.max(x0,b.from)))}
+              height={iH} fill={b.color} opacity="0.08"/>
+      ))}
+      <line x1={PX} y1={ty(0)} x2={W-PX} y2={ty(0)} stroke="var(--bdr)" strokeWidth="1" strokeDasharray="3 3"/>
+      <text x={PX-4} y={ty(0)+3} textAnchor="end" fontSize="8" fill="var(--t3)" fontFamily="JetBrains Mono">0%</text>
+      {fit && <line x1={fit.x1} y1={fit.y1} x2={fit.x2} y2={fit.y2} stroke={color} strokeWidth="1.5" strokeOpacity="0.55" strokeDasharray="5 4"/>}
+      {pts.map((p,i) => (
+        <circle key={i} cx={tx(p.x)} cy={ty(p.y)} r="3.5" fill={color} fillOpacity="0.75" stroke={color} strokeWidth="0.5"/>
+      ))}
+      <text x={PX} y={H-2} fontSize="8" fill="var(--t3)" fontFamily="JetBrains Mono">{Math.round(x0)}</text>
+      <text x={W-PX} y={H-2} textAnchor="end" fontSize="8" fill="var(--t3)" fontFamily="JetBrains Mono">{Math.round(x1)}</text>
+      <text x={W/2} y={H-2} textAnchor="middle" fontSize="8" fill="var(--t3)" fontFamily="JetBrains Mono">{xLabel}</text>
+      <text x={2} y={PY+6} fontSize="8" fill="var(--t3)" fontFamily="JetBrains Mono">{yLabel}</text>
+    </svg>
+  );
+}
+
+// Bars for CATEGORICAL comparison. Session types alternate rather than progress, so a line
+// joining them implies a continuity that does not exist: Upper 3 at 72 min followed by Lower
+// at 95 min is not a downward trend, it is two different sessions.
+function SVGBars({ items, color='#4a9eff', height=130, unit='' }) {
+  const rows = (items||[]).filter(i => i && Number.isFinite(i.value));
+  if (!rows.length) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12}}>No data yet</div>;
+  const W = 320, H = height, PX = 8, PT = 12, PB = 26;
+  const iW = W - PX*2, iH = H - PT - PB;
+  const max = Math.max(...rows.map(r => Number.isFinite(r.hi) ? r.hi : r.value)) * 1.12 || 1;
+  const bw = iW / rows.length;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:'auto',display:'block'}}>
+      {rows.map((r,i) => {
+        const h = Math.max(1, (r.value/max) * iH);
+        const x = PX + i*bw + bw*0.18, w = bw*0.64;
+        const y = PT + iH - h;
+        return (
+          <g key={i}>
+            {Number.isFinite(r.lo) && Number.isFinite(r.hi) && (
+              <line x1={x+w/2} y1={PT+iH-(r.hi/max)*iH} x2={x+w/2} y2={PT+iH-(r.lo/max)*iH}
+                    stroke="var(--t3)" strokeWidth="1" opacity="0.7"/>
+            )}
+            <rect x={x} y={y} width={w} height={h} rx="3" fill={color} fillOpacity="0.85"/>
+            <text x={x+w/2} y={y-3} textAnchor="middle" fontSize="9" fill={color} fontFamily="JetBrains Mono" fontWeight="700">{r.value}</text>
+            <text x={x+w/2} y={H-14} textAnchor="middle" fontSize="8" fill="var(--t2)">{r.label}</text>
+            {r.sub && <text x={x+w/2} y={H-4} textAnchor="middle" fontSize="7.5" fill="var(--t3)" fontFamily="JetBrains Mono">{r.sub}</text>}
+          </g>
+        );
+      })}
+      {unit && <text x={W-2} y={PT-3} textAnchor="end" fontSize="8" fill="var(--t3)" fontFamily="JetBrains Mono">{unit}</text>}
+    </svg>
+  );
+}
+
 function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00e87a', bandLabel=null,
                     trend=false, trendAlpha=0.25, anchor=null, events=null }) {
   // Gradient id derived from the colour. Previously every instance emitted id="cg", so with
@@ -1667,6 +1752,25 @@ function computeRecoveryPerformance(logs, whoopHistory, bwAt = null) {
   if (rows.length < 8) return null;
   const r = relPerfByBucket(rows);
   if (!r) return null;
+  // One point PER SESSION for the scatter: mean relative e1RM across that session's lifts,
+  // paired with the day's recovery. Per-exercise points would cluster by session and
+  // overstate how much independent evidence there is.
+  const meanBy = {};
+  for (const x of rows) (meanBy[x.pid] = meanBy[x.pid] || []).push(x.e1rm);
+  for (const k in meanBy) { const a = meanBy[k]; meanBy[k] = a.reduce((p,q)=>p+q,0)/a.length; }
+  const bySession = {};
+  for (const x of rows) {
+    const m = meanBy[x.pid]; if (!m) continue;
+    const rel = (x.e1rm/m - 1) * 100;
+    (bySession[x.sid] = bySession[x.sid] || { rels: [], sdate: x.sdate }).rels.push(rel);
+  }
+  const points = [];
+  for (const sid in bySession) {
+    const rec = recByDate[(bySession[sid].sdate||'').slice(0,10)];
+    const rl = bySession[sid].rels;
+    if (rec == null || !rl.length) continue;
+    points.push({ x: rec, y: +(rl.reduce((p,q)=>p+q,0)/rl.length).toFixed(1) });
+  }
   const high = r.high && r.high.mean, mid = r.mid && r.mid.mean, low = r.low && r.low.mean;
   const usable = [high, mid, low].filter(v => v != null).length;
   if (usable < 2) return null;
@@ -1682,7 +1786,7 @@ function computeRecoveryPerformance(logs, whoopHistory, bwAt = null) {
     else provisional = true;
   }
   return {
-    high, mid, low, gap, verdict, provisional,
+    high, mid, low, gap, verdict, provisional, points,
     minVerdict: PERF_MIN_VERDICT,
     highN: r.high ? r.high.sessions : 0,
     midN:  r.mid  ? r.mid.sessions  : 0,
@@ -2691,7 +2795,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-20T1720';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-20T1830';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -4799,7 +4903,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           {durations && durations.series.length > 1 && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Session length</span><span className="hm-wk">last {durations.series.length} · avg {durations.overall} min</span></div>
-              <SVGChart data={durations.series} height={120} color="#4a9eff"/>
+              <SVGBars items={durations.types.map(t=>({label:t.name.replace('Upper','Up').replace('Lower','Low'),value:t.avg,lo:t.min,hi:t.max,sub:t.n+' sess'}))} color="#4a9eff" height={132} unit="min avg"/>
               {durations.types.map(t=>{
                 return (
                   <div key={t.key} className="dur-row">
@@ -4827,7 +4931,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           {recPerf && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Recovery vs performance</span><span className="hm-wk">{recPerf.totalSessions} lift-sessions</span></div>
-              <div className="av-note">Mean e1RM on each day, relative to that lift's own average. Deloads excluded. Does training on low recovery actually cost you?</div>
+              <div className="av-note">One point per session: WHOOP recovery that morning against mean e1RM relative to each lift's own average. Deloads excluded. Bands mark red / yellow / green.</div>
+              {recPerf.points && recPerf.points.length>=3 && (
+                <SVGScatter points={recPerf.points} color="#00e87a" height={155}
+                  xLabel="recovery %" yLabel="e1RM vs own avg" xMin={0} xMax={100}
+                  bands={[{from:0,to:34,color:'#ff4444'},{from:34,to:67,color:'#ffd24a'},{from:67,to:100,color:'#00e87a'}]}/>
+              )}
               {[['high','Green (67%+)',recPerf.high,recPerf.highN],['mid','Yellow (34-66%)',recPerf.mid,recPerf.midN],['low','Red (under 34%)',recPerf.low,recPerf.lowN]].map(([k,lbl,v,n])=>(
                 <div key={k} className="st-row">
                   <span className="st-name">{lbl}</span>
