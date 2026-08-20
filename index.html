@@ -711,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-19T1420';
+  var BUILD='2026-08-19T1510';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2692,7 +2692,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-19T1420';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-19T1510';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -4304,7 +4304,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         <div className="screen">
           <div className="topbar"><span className="logo">Diamond Protocol</span><span className="top-badge">B{block} · W{week}/12</span></div>
           <div className={`phase-bar ${bannerColor}`}>
-            <div><div className="ph-name">{bannerName}</div><div className="ph-sub">{isDeload?"~40-50% volume · 85% load · 3-4 RIR":showInt?"Intensifiers active, selective failure":"Straight sets only, no failure"}</div></div>
+            <div><div className="ph-name">{bannerName}</div><div className="ph-sub">{isDeload?"~40-50% volume · 85% load · 3-4 RIR":(scheduledDeload && !deloadActive)?"Base volume, full load \u2014 ramp resets this week":showInt?"Intensifiers active, selective failure":"Straight sets only, no failure"}</div></div>
             <div className="rir-val">{wr.rir}</div>
           </div>
           <div className="wksel">
@@ -4376,7 +4376,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <button className={`rc${deloadActive?' bt':''}`} onClick={()=>setDeloadSkips(m=>{const n={...m};delete n[block+'-'+week];return n;})}>Take deload</button>
                 <button className={`rc${!deloadActive?' nm':''}`} onClick={()=>setDeloadSkips(m=>({...m,[block+'-'+week]:true}))}>Train through</button>
               </div>
-              <div className="hv-sub">{deloadActive?'~40-50% volume · 85% load · 3-4 RIR':'Training through · full volume & progression'}</div>
+              <div className="hv-sub">{deloadActive?'~40-50% volume · 85% load · 3-4 RIR':'Training through · base volume, full load & 1-2 RIR · ramp resets'}</div>
             </div>
           )}
           {isDeload && <div className="info-banner warn">Deload week — sets auto-reduced to 50%</div>}
