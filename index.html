@@ -711,7 +711,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-19T1510';
+  var BUILD='2026-08-20T1600';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2261,6 +2261,29 @@ function glucoseCategory(g) {
   return { label: 'Normal', cls: 'green' };
 }
 
+const VOY_AUG_2026 = {
+  id:'bld_voy_aug2026', date:'2026-08-20', label:'Voy \u00b7 Aug 2026 (full blood count)',
+  groups:[
+    { g:'Red cells \u2014 supersedes May', m:[
+      {k:'Haemoglobin', disp:'173', unit:'g/L', ref:'130\u2013170', flag:'high'},
+      {k:'Haematocrit', disp:'51.4', unit:'%', ref:'38\u201350', flag:'high'},
+      {k:'Red blood cells', disp:'5.15', unit:'10\u00b9\u00b2/L', ref:'4.40\u20135.40', flag:'ok'},
+      {k:'MCV', disp:'105', unit:'fl', ref:'81\u2013100', flag:'high'},
+      {k:'MCH', disp:'33.6', unit:'pg', ref:'27\u201333', flag:'high'},
+      {k:'MCHC', disp:'320', unit:'g/L', ref:'300\u2013350', flag:'ok'} ]},
+    { g:'White cells & platelets \u2014 supersedes May', m:[
+      {k:'White blood cells', disp:'4.83', unit:'10\u2079/L', ref:'4.0\u201311.0', flag:'ok'},
+      {k:'Neutrophils', disp:'3.1', unit:'10\u2079/L', ref:'2.0\u20137.5', flag:'ok'},
+      {k:'Lymphocytes', disp:'1.33', unit:'10\u2079/L', ref:'1.0\u20133.5', flag:'ok'},
+      {k:'Monocytes', disp:'0.32', unit:'10\u2079/L', ref:'0.2\u20130.8', flag:'ok'},
+      {k:'Eosinophils', disp:'0.06', unit:'10\u2079/L', ref:'<0.41', flag:'ok'},
+      {k:'Basophils', disp:'0.02', unit:'10\u2079/L', ref:'0.021\u20130.101', flag:'low'},
+      {k:'Platelets', disp:'251', unit:'10\u2079/L', ref:'150\u2013400', flag:'ok'} ]}
+  ],
+  gaps:['Hormones, thyroid, lipids, glucose, iron, kidney/liver and PSA are NOT in this panel \u2014 the May figures below still stand for those'],
+  note:'Haematocrit and haemoglobin were both reported Normal in May and are now above range. MCV has risen 101 \u2192 105. Worth reviewing with whoever manages your protocol.'
+};
+
 const MAY_2026_BLOODS = {
   id:'bld_may2026', date:'2026-05-01', label:'Randox Health · May 2026',
   groups:[
@@ -2645,7 +2668,16 @@ function App() {
     const med = xs.length%2 ? xs[(xs.length-1)/2] : (xs[xs.length/2-1]+xs[xs.length/2])/2;
     return { lo:+(med-0.2).toFixed(2), hi:+(med+0.2).toFixed(2) };
   },[vitalsLog]);
-  const [bloodsLogRaw, setBloodsLog] = usePersistentState('bloods_log', [MAY_2026_BLOODS]);
+  const [bloodsLogRaw, setBloodsLog] = usePersistentState('bloods_log', [VOY_AUG_2026, MAY_2026_BLOODS]);
+  // One-time migration: a device that already stored the May panel would otherwise never
+  // receive later reference panels, since persisted state overrides the default.
+  useEffect(() => {
+    setBloodsLog(prev => {
+      const arr = Array.isArray(prev) ? prev : [];
+      if (arr.some(b => b && b.id === VOY_AUG_2026.id)) return prev;
+      return [VOY_AUG_2026, ...arr];
+    });
+  }, []);
   const bloodsLog = useMemo(()=>live(bloodsLogRaw),[bloodsLogRaw]);
   const tempStat = useMemo(()=>{
     const xs=vitalsLog.filter(v=>v&&v.temp!=null).slice(0,7).map(v=>v.temp);
@@ -2692,7 +2724,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-19T1510';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-20T1600';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -6044,23 +6076,30 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="sec-head" onClick={()=>toggleSec('bloods')}><div className="body-ttl">Bloods</div><span className={'sec-chev'+(secOpen('bloods')?' op':'')}>▾</span></div>
             {secOpen('bloods') && <>
             <div className="body-sub">Reference panel &#8212; the slow backdrop your daily markers read against</div>
-            {bloodsLog[0] ? (
+            {bloodsLog.length ? (
               <div>
-                <div className="bld-head"><span className="bld-date">{bloodsLog[0].label||fmtShort(bloodsLog[0].date)}</span></div>
-                {(bloodsLog[0].groups||[]).map((grp,gi)=>(
-                  <div key={gi} className="bld-group">
-                    <div className="bld-gname">{grp.g}</div>
-                    {(grp.m||[]).map((mk,mi)=>(
-                      <div key={mi} className="bld-row">
-                        <span className="bld-k">{mk.k}</span>
-                        <span className={'bld-v '+(mk.flag||'ok')}>{mk.disp}{mk.unit?' '+mk.unit:''}</span>
-                        <span className="bld-ref">{mk.ref||''}</span>
+                {/* All panels, newest first. A newer draw supersedes only the markers it
+                    actually contains, so older panels stay visible for everything they
+                    still own (hormones, lipids, iron and so on). */}
+                {bloodsLog.map((panel, pi) => (
+                  <div key={panel.id||pi} style={pi>0?{marginTop:16,paddingTop:14,borderTop:'1px solid var(--bdr)',opacity:0.82}:null}>
+                    <div className="bld-head"><span className="bld-date">{panel.label||fmtShort(panel.date)}</span></div>
+                    {(panel.groups||[]).map((grp,gi)=>(
+                      <div key={gi} className="bld-group">
+                        <div className="bld-gname">{grp.g}</div>
+                        {(grp.m||[]).map((mk,mi)=>(
+                          <div key={mi} className="bld-row">
+                            <span className="bld-k">{mk.k}</span>
+                            <span className={'bld-v '+(mk.flag||'ok')}>{mk.disp}{mk.unit?' '+mk.unit:''}</span>
+                            <span className="bld-ref">{mk.ref||''}</span>
+                          </div>
+                        ))}
                       </div>
                     ))}
+                    {panel.gaps && panel.gaps.length>0 && <div className="bld-gaps">{panel.gaps.join(' \u00b7 ')}</div>}
+                    {panel.note && <div className="bld-note">{panel.note}</div>}
                   </div>
                 ))}
-                {bloodsLog[0].gaps && bloodsLog[0].gaps.length>0 && <div className="bld-gaps">Not in this panel: {bloodsLog[0].gaps.join(' · ')} &#8212; worth adding next draw if morning-wood or HGH response is ever a question.</div>}
-                {bloodsLog[0].note && <div className="bld-note">{bloodsLog[0].note}</div>}
               </div>
             ) : <div className="empty-msg">No bloods stored.</div>}
             </>}
