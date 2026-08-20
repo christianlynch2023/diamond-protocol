@@ -636,7 +636,7 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .grp-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;padding:14px 15px 8px;border-top:1px solid var(--bdr);margin-top:6px}
 .grp-ttl{font-size:11px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--acc)}
 .wr-row{display:flex;align-items:baseline;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)}
-.wr-dot{width:7px;height:7px;border-radius:50%;flex:0 0 7px;position:relative;top:-1px}
+.wr-dot{width:15px;height:15px;border-radius:50%;flex:0 0 15px;position:relative;top:1px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#07090c;line-height:1}
 .wr-dot.good{background:var(--ok)}.wr-dot.ok{background:var(--warn)}.wr-dot.miss{background:var(--err)}
 .wr-k{flex:0 0 92px;font-size:12px;color:var(--t2)}
 .wr-v{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--t);min-width:74px}
@@ -663,6 +663,7 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .hm-wk{font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace;letter-spacing:.04em}
 .hm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .hm-cell{border:1px solid;border-radius:8px;padding:8px 6px;text-align:center}
+.hm-state{font-size:8px;letter-spacing:.08em;text-transform:uppercase;margin-top:2px;opacity:.9}
 .hm-mus{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;line-height:1.2;min-height:22px;display:flex;align-items:center;justify-content:center}
 .hm-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;margin:2px 0}
 .hm-rng{font-size:9px;color:var(--t3);font-family:'JetBrains Mono',monospace}
@@ -711,7 +712,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-20T1600';
+  var BUILD='2026-08-20T1720';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1999,40 +2000,6 @@ function computeRirDrift(logs, block) {
 // ---- BP vs training load ----
 // Assigns each BP reading to a training week by date range, then pairs weekly mean systolic
 // against weekly volume-load. On an enhanced protocol BP is the health marker most likely to
-// drift with training load, and nothing else in the app connects the two.
-function computeBpLoad(logs, bpLog, block) {
-  const wk = {};
-  for (const l of logs) {
-    if ((l.block||1) !== block) continue;
-    const t = new Date(l.date).getTime();
-    if (isNaN(t)) continue;
-    const w = (wk[l.week] = wk[l.week] || { week:l.week, vol:0, min:t, max:t, sys:[], n:0 });
-    w.vol += sessionVol(l);
-    if (t < w.min) w.min = t;
-    if (t > w.max) w.max = t;
-  }
-  const weeks = Object.values(wk);
-  if (weeks.length < 3) return null;
-  const DAY = 86400000;
-  for (const b of (bpLog||[])) {
-    const t = new Date(b.date).getTime();
-    if (isNaN(t) || b.sys == null) continue;
-    // pad the window by a day either side so a rest-day reading still lands in its week
-    const hit = weeks.find(w => t >= w.min - DAY && t <= w.max + DAY);
-    if (hit) { hit.sys.push(b.sys); hit.n++; }
-  }
-  const rows = weeks.filter(w => w.n > 0)
-    .map(w => ({ week:w.week, vol:Math.round(w.vol), sys:Math.round(w.sys.reduce((a,b)=>a+b,0)/w.sys.length), n:w.n }))
-    .sort((a,b)=>a.week-b.week);
-  if (rows.length < 3) return null;
-  // Pearson r between weekly volume-load and weekly mean systolic
-  const n = rows.length;
-  const mx = rows.reduce((s,r)=>s+r.vol,0)/n, my = rows.reduce((s,r)=>s+r.sys,0)/n;
-  let num=0, dx=0, dy=0;
-  for (const r of rows) { const a=r.vol-mx, b=r.sys-my; num+=a*b; dx+=a*a; dy+=b*b; }
-  const r = (dx>0 && dy>0) ? +(num/Math.sqrt(dx*dy)).toFixed(2) : null;
-  return { rows, r, weeks:n };
-}
 
 // ---- WHOOP burn cross-check ----
 // Compares WHOOP's measured daily expenditure (COMPLETED cycles only) against the empirical
@@ -2724,7 +2691,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-20T1600';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-20T1720';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -2925,7 +2892,6 @@ function App() {
     if (strengthRet) { p('Strength retention (21d vs prior): ' + (strengthRet.avgPct > 0 ? '+' : '') + strengthRet.avgPct + '% avg e1RM'); strengthRet.lifts.forEach(l => p('  ' + l.name + ': ' + (l.pct > 0 ? '+' : '') + l.pct + '% (' + l.prior + '→' + l.recent + 'kg)')); }
     if (deloadRebound) p('Deload rebound: ' + (deloadRebound.avg > 0 ? '+' : '') + deloadRebound.avg + '% avg (week after vs before)');
     if (rirDrift) p('RIR drift (recent): ' + (rirDrift.avg > 0 ? '+' : '') + rirDrift.avg + ' vs prescribed');
-    if (bpLoad && bpLoad.r != null) p('BP vs volume correlation: r=' + bpLoad.r + ' over ' + bpLoad.weeks + ' weeks');
     if (plateaus.length) p('Stalled lifts: ' + plateaus.map(x => x.name + ' (' + x.sessions + ' sessions)').join(', '));
     p('');
     p('== RECENT SESSIONS (last 12) ==');
@@ -3903,7 +3869,6 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const strengthRet=useMemo(()=>computeStrengthRetention(logs),[logs]);
   const deloadRebound=useMemo(()=>computeDeloadRebound(logs),[logs]);
   const rirDrift=useMemo(()=>computeRirDrift(logs,block),[logs,block]);
-  const bpLoad=useMemo(()=>computeBpLoad(logs,bpLog,block),[logs,bpLog,block]);
   const actualVol=useMemo(()=>computeActualVolume(logs,block),[logs,block]);
   // Resolves the nearest logged bodyweight to a session date, so weighted pull-ups are
   // scored on total load rather than added load alone.
@@ -4765,7 +4730,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               <div className="hm-head"><span className="hm-ttl">Week in review</span><span className="hm-wk">last 7 days</span></div>
               {weekReview.items.map((it,i)=>(
                 <div key={i} className="wr-row">
-                  <span className={'wr-dot '+it.verdict}/>
+                  {/* Glyph as well as colour. A coloured dot alone fails for red-green
+                      deficiency (~8% of men) and in bright sunlight mid-session. */}
+                  <span className={'wr-dot '+it.verdict}>{it.verdict==='good'?'\u2713':it.verdict==='ok'?'!':'\u2715'}</span>
                   <span className="wr-k">{it.k}</span>
                   <span className="wr-v">{it.v}</span>
                   <span className="wr-note">{it.note}</span>
@@ -4792,8 +4759,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 return (
                   <div key={key} className="hm-cell" style={{background:c.bg,borderColor:c.bd}}>
                     <div className="hm-mus">{mus.name}</div>
-                    <div className="hm-val" style={{color:c.fg}}>{dsets}</div>
-                    <div className="hm-rng">{mus.min}-{mus.max} · {sets} eff</div>
+                    <div className="hm-val" style={{color:c.fg}}>{dsets<mus.min?'\u25bc ':dsets>mus.max?'\u25b2 ':''}{dsets}</div>
+                    <div className="hm-rng">{mus.min}-{mus.max} \u00b7 {sets} eff</div>
+                    <div className="hm-state" style={{color:c.fg}}>{dsets<mus.min?'under':dsets>mus.max?'over':'in range'}</div>
                   </div>
                 );
               })}
@@ -4814,7 +4782,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div key={key} className="av-row">
                     <span className="av-mus">{mus.name}</span>
                     <div className="av-bar"><div className="av-fill" style={{width:Math.min(100,pctOfPlan)+'%',background:col}}/></div>
-                    <span className="av-val" style={{color:col}}>{act}</span>
+                    <span className="av-val" style={{color:col}}>{act<mus.min?'\u25bc':act>mus.max?'\u25b2':'\u2713'} {act}</span>
                     <span className="av-plan">/ {plan}</span>
                   </div>
                 );
@@ -4822,6 +4790,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
           )}
 
+          {!(durations && durations.series.length > 1) && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Session length</span><span className="hm-wk">not yet</span></div>
+              <div className="av-note" style={{marginBottom:0}}>Needs at least two completed sessions with a recorded duration.</div>
+            </div>
+          )}
           {durations && durations.series.length > 1 && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Session length</span><span className="hm-wk">last {durations.series.length} · avg {durations.overall} min</span></div>
@@ -4844,6 +4818,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="grp-head" onClick={()=>toggleGrp('recovery')}><span className="grp-ttl">Recovery & body</span><span className={'sec-chev'+(grpOpen('recovery')?' op':'')}>▾</span></div>
           {grpOpen('recovery') && <>
 
+          {!recPerf && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Recovery vs performance</span><span className="hm-wk">not yet</span></div>
+              <div className="av-note" style={{marginBottom:0}}>Needs logged sessions on days with a WHOOP recovery score, across at least two recovery bands. Keep training and syncing &#8212; this fills in on its own.</div>
+            </div>
+          )}
           {recPerf && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Recovery vs performance</span><span className="hm-wk">{recPerf.totalSessions} lift-sessions</span></div>
@@ -4865,6 +4845,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
           )}
 
+          {!timeOfDay && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Time of day</span><span className="hm-wk">not yet</span></div>
+              <div className="av-note" style={{marginBottom:0}}>Needs sessions logged across at least two time bands before start time can be compared.</div>
+            </div>
+          )}
           {timeOfDay && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Time of day</span><span className="hm-wk">{timeOfDay.total} sessions</span></div>
@@ -4885,6 +4871,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
           )}
 
+          {!alcoholImpact && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Alcohol vs lifting</span><span className="hm-wk">not yet</span></div>
+              <div className="av-note" style={{marginBottom:0}}>Needs alcohol units logged in Body &#8594; Context Flags, plus sessions on both drinking and clear days.</div>
+            </div>
+          )}
           {alcoholImpact && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Alcohol vs lifting</span><span className="hm-wk">{alcoholImpact.drinkDays} day{alcoholImpact.drinkDays===1?'':'s'} logged</span></div>
@@ -4973,34 +4965,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
             </div>
           )}
-          {bpLoad && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">BP vs training load</span><span className="hm-wk">weekly · block {block}</span></div>
-              {bpLoad.r != null && (
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,marginBottom:6,color:bpLoad.r>=0.5?'var(--warn)':bpLoad.r<=-0.5?'var(--inf)':'var(--ok)'}}>
-                  r = {bpLoad.r>0?'+':''}{bpLoad.r}
-                </div>
-              )}
-              <div style={{fontSize:12,lineHeight:1.5,color:'var(--t2)',marginBottom:8}}>
-                {bpLoad.r == null ? 'Not enough variation to correlate yet.'
-                 : bpLoad.r >= 0.5 ? 'Systolic is tracking UP with training volume. On your protocol that is worth acting on: keep the highest-volume weeks in check, prioritise zone-2 work, and re-measure on rest days.'
-                 : bpLoad.r <= -0.5 ? 'Systolic runs lower in your higher-volume weeks — most likely the training is helping, or your high-volume weeks coincide with better sleep and lower stress.'
-                 : 'No meaningful relationship between weekly volume and blood pressure. Your BP is being driven by something other than training load.'}
-              </div>
-              <div className="ar-list">
-                {bpLoad.rows.slice(-6).map((r,i)=>{
-                  const c=bpCategory(r.sys,0);
-                  return (
-                    <div key={i} className="ar-row">
-                      <span className="ar-mus" style={{textTransform:'none'}}>Week {r.week} <span style={{color:'var(--t3)'}}>({(r.vol/1000).toFixed(1)}k kg, {r.n} reading{r.n===1?'':'s'})</span></span>
-                      <span className={`ar-chip ${c.cls==='green'?'add':c.cls==='amber'?'hold':'back'}`}>{r.sys} sys</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="ar-note">Correlation is not causation and {bpLoad.weeks} weeks is a small sample — read it as a prompt to look, not a verdict. Morning readings taken consistently make this far more reliable.</div>
-            </div>
-          )}
+
           {burnCheck && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Burn cross-check</span><span className="hm-wk">WHOOP vs empirical</span></div>
@@ -6090,7 +6055,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                         {(grp.m||[]).map((mk,mi)=>(
                           <div key={mi} className="bld-row">
                             <span className="bld-k">{mk.k}</span>
-                            <span className={'bld-v '+(mk.flag||'ok')}>{mk.disp}{mk.unit?' '+mk.unit:''}</span>
+                            <span className={'bld-v '+(mk.flag||'ok')}>{mk.flag==='high'?'\u25b2 ':mk.flag==='low'?'\u25bc ':mk.flag==='watch'?'\u25c6 ':''}{mk.disp}{mk.unit?' '+mk.unit:''}</span>
                             <span className="bld-ref">{mk.ref||''}</span>
                           </div>
                         ))}
