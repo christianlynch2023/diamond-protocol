@@ -16,7 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden;touch-action:pan-x pan-y;-ms-touch-action:pan-x pan-y}
+html,body{height:100%;overflow:hidden}
 body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
 :root{--bg:#07090c;--sur:#0e1319;--crd:#141b22;--bdr:#1d2733;--acc:#c4ff00;--ag:rgba(196,255,0,.12);--ag2:rgba(196,255,0,.05);--ok:#00e87a;--warn:#ff8c00;--err:#ff4444;--inf:#4a9eff;--t:#dde5ee;--t2:#7b90a8;--t3:#6b8299}
 #root{height:100%;overflow:hidden}
@@ -177,6 +177,9 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .wnb{flex:1;padding:11px;background:none;border:1px solid var(--bdr);color:var(--t2);font-family:'Syne',sans-serif;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;transition:all .15s}
 .wnb.fin{color:var(--err)}
 .wnb:disabled{opacity:.4;cursor:default}
+.rest-flash{position:fixed;inset:0;z-index:500;pointer-events:none;display:flex;align-items:center;justify-content:center;background:rgba(196,255,0,.16);animation:restpulse .45s ease-in-out 4}
+.rest-flash-txt{font-size:34px;font-weight:800;letter-spacing:.12em;color:var(--acc);text-shadow:0 0 24px rgba(196,255,0,.7)}
+@keyframes restpulse{0%,100%{opacity:.15}50%{opacity:1}}
 .timer-ov{position:fixed;inset:0;background:rgba(7,9,12,.97);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:300}
 .t-lbl{font-size:10px;letter-spacing:.3em;color:var(--t2);margin-bottom:18px;text-transform:uppercase}
 .t-ring{position:relative;width:200px;height:200px}
@@ -721,7 +724,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-21T1710';
+  var BUILD='2026-08-21T1810';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -1167,17 +1170,25 @@ function vibrate(pattern) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch(e) {}
 }
 function playChime() {
-  // Haptic first - works even on silent / screen-off, most reliable on phone
-  vibrate([120, 80, 120, 80, 200]);
+  // NOTE ON iOS: Web Audio obeys the physical mute switch, and navigator.vibrate is not
+  // supported in Safari at all. With the ringer off, neither sound nor haptic can fire —
+  // no web app can override that. Hence the louder, longer, repeated pattern below plus a
+  // full-screen visual flash, so the end of a rest period is unmissable when audio does work
+  // and still obvious when it does not.
+  vibrate([200, 100, 200, 100, 400]);
   const ctx = getAudioCtx();
   if (!ctx) return;
   try {
     if (ctx.state === 'suspended') ctx.resume();
-    [[880,0],[1100,.15],[1320,.3]].forEach(([freq,delay]) => {
+    // Three rising triplets over ~1.6s, at roughly double the previous gain.
+    const seq = [[880,0],[1100,.15],[1320,.3],
+                 [880,.6],[1100,.75],[1320,.9],
+                 [880,1.2],[1100,1.35],[1320,1.5]];
+    seq.forEach(([freq,delay]) => {
       const o=ctx.createOscillator(), g=ctx.createGain();
       o.connect(g); g.connect(ctx.destination); o.frequency.value=freq; o.type='sine';
       g.gain.setValueAtTime(0, ctx.currentTime+delay);
-      g.gain.linearRampToValueAtTime(.18, ctx.currentTime+delay+.05);
+      g.gain.linearRampToValueAtTime(.34, ctx.currentTime+delay+.04);
       g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime+delay+.45);
       o.start(ctx.currentTime+delay); o.stop(ctx.currentTime+delay+.5);
     });
@@ -2804,7 +2815,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-21T1710';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-21T1810';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -2857,10 +2868,15 @@ function App() {
     return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
   }, [timerOn]);
 
+  const [restFlash, setRestFlash] = useState(false);
   useEffect(() => {
     if (!timerDone) return;
     setTimerDone(false);
     playChime();
+    // Visual alert as well as audible. On iOS the mute switch silences Web Audio and
+    // navigator.vibrate does nothing, so sound alone cannot be relied on mid-session.
+    setRestFlash(true);
+    setTimeout(() => setRestFlash(false), 1800);
     const cb = afterRef.current; afterRef.current = null;
     if (cb) cb();
   }, [timerDone]);
@@ -5682,7 +5698,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             {bwRate && (
               <div className="av-note" style={{margin:'0 15px 10px'}}>
                 {bwRate.weeksUsed>=3
-                  ? <>Trend across <b>{bwRate.weeksUsed} weekly averages</b>: {bwRate.prior.filter(x=>x!=null).reverse().join(' &#8594; ')} &#8594; <b>{bwRate.thisWeek.avg}kg</b>.</>
+                  ? <>Trend across <b>{bwRate.weeksUsed} weekly averages</b>: {bwRate.prior.filter(x=>x!=null).reverse().join(' \u2192 ')} \u2192 <b>{bwRate.thisWeek.avg}kg</b>.</>
                   : <>Last 7 days avg <b>{bwRate.thisWeek.avg}kg</b> ({bwRate.thisWeek.n} weigh-ins) vs prior 7 days <b>{bwRate.lastWeek.avg}kg</b> ({bwRate.lastWeek.n}).</>}
                 {' '}Week-over-week alone reads {bwRate.weekOverWeek>0?'+':''}{bwRate.weekOverWeek} kg/wk.
                 {bwRate.waterFlag && <> <span style={{color:'var(--warn)'}}>That is far from the multi-week trend &#8212; a water swing is sitting inside one week, so the week-over-week figure is not real tissue change. The multi-week number is the honest one.</span></>}
@@ -6395,6 +6411,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         </div>
       )}
 
+      {restFlash && <div className="rest-flash"><div className="rest-flash-txt">REST OVER</div></div>}
       {view !== 'workout' && view !== 'complete' && (
         <div className="bnav">
           {[['today','&#128197;','Today'],['home','&#127947;','Program'],['progress','&#128200;','Progress'],['history','&#128203;','History'],['body','&#9878;','Body'],['tools','&#128295;','Tools']].map(([v,icon,label]) => (
