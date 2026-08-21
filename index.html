@@ -574,6 +574,9 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .tl-v{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--t)}
 .tl-sub{font-size:10px;color:var(--t3);line-height:1.45;margin-top:2px}
 .tl-btn{width:100%;margin-top:10px;padding:10px;border:none;border-radius:8px;background:var(--acc);color:#0a0a0a;font-weight:700;font-size:12.5px}
+.tl-edit{display:flex;align-items:center;gap:8px;margin-top:11px}
+.tl-edit input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:9px 11px;color:var(--t);font-family:'JetBrains Mono',monospace;font-size:15px}
+.tl-tag{font-size:8.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin-left:6px;vertical-align:middle}
 .nc-hero{background:linear-gradient(180deg,rgba(196,255,0,.06),rgba(196,255,0,.02));border-color:rgba(196,255,0,.25)}
 .nc-eat{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--acc);font-weight:700;margin-bottom:2px}
 .nc-tgt-hero{font-size:34px!important;line-height:1}
@@ -718,7 +721,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-21T1000';
+  var BUILD='2026-08-21T1710';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2801,7 +2804,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-21T1000';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-21T1710';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -4074,16 +4077,57 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       reason: !meaningful ? 'stable' : raw > 0 ? 'up' : 'down',
     };
   }, [nutriCoach, activeTarget]);
-  const acceptTarget = () => {
+  // The engine proposes; the athlete decides. Its cut rate is deliberately conservative, so
+  // the proposed figure is often slower than someone with the protein intake and training to
+  // support a faster rate actually wants. Locking an explicit number keeps the weekly-hold
+  // discipline while leaving the decision where it belongs.
+  const [lockCals, setLockCals] = useState('');
+  const acceptTarget = (explicit) => {
     if (!targetLock || !targetLock.candidate) return;
     const c = targetLock.candidate;
-    const base = targetLock.active && targetLock.delta != null
-      ? { ...c, cals: targetLock.active.cals + targetLock.delta }
-      : c;
-    // Keep macros coherent with whatever calorie figure is actually adopted.
-    const carb = Math.max(0, Math.round((base.cals - base.protein*4 - base.fat*9)/4));
-    setActiveTarget({ ...base, carb, setAt: Date.now() });
+    const proposed = targetLock.active && targetLock.delta != null
+      ? targetLock.active.cals + targetLock.delta
+      : c.cals;
+    const raw = Number.isFinite(explicit) ? explicit : proposed;
+    // Never lock below the safety floor, however it was entered.
+    const floor = nutriCoach && nutriCoach.kcalFloor ? nutriCoach.kcalFloor : 0;
+    const cals = Math.max(floor, Math.round(raw));
+    // Macros stay coherent with whatever figure is adopted: protein and fat held, carbs absorb.
+    const carb = Math.max(0, Math.round((cals - c.protein*4 - c.fat*9)/4));
+    setActiveTarget({ cals, protein:c.protein, fat:c.fat, carb, tdee:c.tdee,
+                      manual: Number.isFinite(explicit), setAt: Date.now() });
+    setLockCals('');
   };
+
+  // Effective prescription. The locked target, when one exists, is what the athlete has
+  // actually committed to for the week — so it, not the live engine figure, must drive the
+  // daily card. It is a WEEKLY AVERAGE and gets cycled into training and rest days using the
+  // same rule as the engine: protein and fat fixed daily, carbs carrying the difference,
+  // rest days at 60% of the average carb figure.
+  const effTargets = useMemo(() => {
+    if (!nutriCoach || !nutriCoach.ok) return null;
+    const locked = activeTarget && Number.isFinite(activeTarget.cals) ? activeTarget : null;
+    if (!locked) return { source:'engine', weekly:nutriCoach.targetCals, cycle:nutriCoach.cycle,
+                          dayTargets:nutriCoach.dayTargets, protein:nutriCoach.proteinG,
+                          fat:nutriCoach.fatG, carb:nutriCoach.carbG };
+    const protein = locked.protein != null ? locked.protein : nutriCoach.proteinG;
+    const fat = locked.fat != null ? locked.fat : nutriCoach.fatG;
+    const carb = Math.max(0, Math.round((locked.cals - protein*4 - fat*9)/4));
+    const trainDays = (nutriCoach.cycle && nutriCoach.cycle.trainDays) || 4;
+    const restDays = 7 - trainDays;
+    const weeklyCarb = carb * 7;
+    const lowCarb = Math.max(0, Math.round(carb * 0.6));
+    const highCarb = restDays > 0 ? Math.max(0, Math.round((weeklyCarb - lowCarb*restDays)/trainDays)) : carb;
+    const base = protein*4 + fat*9;
+    return {
+      source:'locked', weekly:locked.cals, protein, fat, carb,
+      cycle:{ trainDays, restDays, lowCarb, highCarb },
+      dayTargets:{
+        train:{ cals:Math.round(base + highCarb*4), carb:highCarb, protein, fat },
+        rest: { cals:Math.round(base + lowCarb*4),  carb:lowCarb,  protein, fat },
+      },
+    };
+  }, [nutriCoach, activeTarget]);
 
   const bwAt=useMemo(()=>makeBwResolver(bodyMetrics),[bodyMetrics]);
   const stalls=useMemo(()=>computeStalls(logs,3,bwAt),[logs,bwAt]);
@@ -5877,8 +5921,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               {nutriCoach.ok && (
                 <div className="nc-body">
                   <div className="nc-tgt nc-hero">
-                    {nutriCoach.dayTargets ? (() => {
-                      const dt = nutriCoach.dayTargets[nutriDayType];
+                    {effTargets && effTargets.dayTargets ? (() => {
+                      const dt = effTargets.dayTargets[nutriDayType];
                       return (
                         <>
                           <div className="nc-daytoggle">
@@ -5888,8 +5932,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           <div className="nc-eat">Eat today</div>
                           <div className="nc-tgt-cal nc-tgt-hero">{dt.cals} <span>kcal</span></div>
                           <div className="nc-macros"><span className="nc-mac p">P {dt.protein}g</span><span className="nc-mac c">C {dt.carb}g</span><span className="nc-mac f">F {dt.fat}g</span></div>
-                          <div className="nc-tgt-avg">Weekly avg {nutriCoach.targetCals} kcal &#183; C {nutriCoach.carbG}g/day ({nutriCoach.cycle.trainDays} train / {nutriCoach.cycle.restDays} rest) &#183; {nutriCoach.phase==="cut"?(nutriCoach.floorLimited?("floor-limited \u2212"+nutriCoach.impliedRatePct+"%/wk"):("cut \u2212"+nutriCoach.targetRatePct+"%/wk")):nutriCoach.phase==="bulk"?("lean gain +"+nutriCoach.targetRatePct+"%/wk"):"maintenance"}</div>
-                          {nutriCoach.floorLimited && <div className="nc-tgt-avg" style={{color:"var(--warn)"}}>Held at the {nutriCoach.kcalFloor} kcal minimum ({Math.round(nutriCoach.trendW)}kg &#215; 22), so this prescribes about &#8722;{nutriCoach.impliedRatePct}%/wk rather than the &#8722;{nutriCoach.targetRatePct}%/wk selected. Losing faster would mean going below the floor.</div>}
+                          <div className="nc-tgt-avg">Weekly avg {effTargets.weekly} kcal{effTargets.source==='locked'?' (locked)':''} &#183; C {effTargets.carb}g/day ({effTargets.cycle.trainDays} train / {effTargets.cycle.restDays} rest) &#183; {nutriCoach.phase==="cut"?(nutriCoach.floorLimited?("floor-limited \u2212"+nutriCoach.impliedRatePct+"%/wk"):("cut \u2212"+nutriCoach.targetRatePct+"%/wk")):nutriCoach.phase==="bulk"?("lean gain +"+nutriCoach.targetRatePct+"%/wk"):"maintenance"}</div>
+                          {nutriCoach.floorLimited && effTargets.source!=='locked' && <div className="nc-tgt-avg" style={{color:"var(--warn)"}}>Held at the {nutriCoach.kcalFloor} kcal minimum ({Math.round(nutriCoach.trendW)}kg &#215; 22), so this prescribes about &#8722;{nutriCoach.impliedRatePct}%/wk rather than the &#8722;{nutriCoach.targetRatePct}%/wk selected. Losing faster would mean going below the floor.</div>}
                         </>
                       );
                     })() : (
@@ -5903,7 +5947,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   {targetLock && (
                     <div className="tl-box">
                       {targetLock.active ? (<>
-                        <div className="tl-row"><span className="tl-k">Active target</span><span className="tl-v">{targetLock.active.cals} kcal</span></div>
+                        <div className="tl-row"><span className="tl-k">Active target</span><span className="tl-v">{targetLock.active.cals} kcal{targetLock.active.manual?<span className="tl-tag">manual</span>:null}</span></div>
                         <div className="tl-sub">Locked {targetLock.ageDays===0?'today':targetLock.ageDays+'d ago'} &#183; {targetLock.due?'review due now':'review in '+(7-targetLock.ageDays)+'d'}</div>
                       </>) : (
                         <div className="tl-sub">No target locked yet &#8212; accept one to hold it for the week.</div>
@@ -5919,11 +5963,23 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           ? 'Difference is inside the noise of the estimate \u2014 holding.'
                           : (targetLock.delta>0?'+':'')+targetLock.delta+' kcal, capped at 100/week so one odd week cannot swing it.'}</div>
                       </>)}
-                      {(targetLock.due || !targetLock.active) && (
-                        <button className="tl-btn" onClick={acceptTarget}>
-                          {targetLock.active ? 'Accept for the coming week' : 'Lock this target for the week'}
+                      {(targetLock.due || !targetLock.active) && (<>
+                        <div className="tl-edit">
+                          <span className="tl-k" style={{whiteSpace:'nowrap'}}>Lock at</span>
+                          <input type="number" inputMode="numeric" step="10"
+                            placeholder={String(targetLock.active && targetLock.delta!=null ? targetLock.active.cals+targetLock.delta : targetLock.candidate.cals)}
+                            value={lockCals} onChange={e=>setLockCals(e.target.value)}/>
+                          <span className="tl-sub" style={{margin:0}}>kcal</span>
+                        </div>
+                        <button className="tl-btn" onClick={()=>{
+                          const v=parseFloat(lockCals);
+                          acceptTarget(isFinite(v)&&v>0 ? v : undefined);
+                        }}>
+                          {lockCals.trim() ? 'Lock '+lockCals.trim()+' kcal for the week'
+                            : (targetLock.active ? 'Accept the suggested target' : 'Lock the suggested target')}
                         </button>
-                      )}
+                        <div className="tl-sub">Leave blank to take the suggestion. Type a number to set your own &#8212; it will still hold for seven days.</div>
+                      </>)}
                     </div>
                   )}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='gap' && <div className="nc-adj down">You are averaging <b>{nutriCoach.adjust.over} kcal/day over target</b>. That gap explains the stall &#8212; the target itself is fine. Close it before changing anything.</div>}
