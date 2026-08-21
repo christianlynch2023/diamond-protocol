@@ -568,6 +568,12 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .nc-dtb{flex:1;padding:6px 4px;border-radius:7px;border:1px solid var(--bdr);background:var(--sur);color:var(--t3);font-size:11px;font-weight:600}
 .nc-dtb.on{border-color:var(--acc);background:rgba(196,255,0,.08);color:var(--acc)}
 .nc-tgt-avg{font-size:10.5px;color:var(--t3);margin-top:7px;line-height:1.4}
+.tl-box{margin-top:10px;padding:11px 12px;border:1px solid var(--bdr);border-radius:10px;background:rgba(255,255,255,.02)}
+.tl-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.tl-k{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--t2)}
+.tl-v{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--t)}
+.tl-sub{font-size:10px;color:var(--t3);line-height:1.45;margin-top:2px}
+.tl-btn{width:100%;margin-top:10px;padding:10px;border:none;border-radius:8px;background:var(--acc);color:#0a0a0a;font-weight:700;font-size:12.5px}
 .nc-hero{background:linear-gradient(180deg,rgba(196,255,0,.06),rgba(196,255,0,.02));border-color:rgba(196,255,0,.25)}
 .nc-eat{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--acc);font-weight:700;margin-bottom:2px}
 .nc-tgt-hero{font-size:34px!important;line-height:1}
@@ -712,7 +718,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-20T1830';
+  var BUILD='2026-08-21T1000';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2795,7 +2801,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-20T1830';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-21T1000';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3773,7 +3779,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       : Infinity;
     if (weightAgeDays > 10) return { ok:false, reason:'stale_weight', ageDays:isFinite(weightAgeDays)?weightAgeDays:null };
     const winStart=anchor-21*dayMs;   // 21d not 14d: more weigh-ins dilute day-to-day water swings
-    const nutWinRaw=(nutrition||[]).filter(e=>{const t=parse(e.date); return !isNaN(t)&&t>=winStart&&t<=nowTs&&e.calories>0;});
+    // Today's log is almost never finished when the card is read, so including it drags
+    // avgIntake down and inflates the maintenance estimate. Exclude the current date entirely;
+    // it re-enters the window tomorrow when it is complete.
+    const nutWinRaw=(nutrition||[]).filter(e=>{
+      const t=parse(e.date);
+      if(isNaN(t)||!(e.calories>0)) return false;
+      if((e.date||'').slice(0,10)===_todayStr) return false;
+      return t>=winStart&&t<=nowTs;
+    });
     // Partial-day guard: days logged well below the window median (e.g. 1335 vs ~2150) are
     // almost always incomplete logging, not genuine low-intake days. They deflate avgIntake,
     // which deflates the empirical TDEE — the one number everything else trusts. Exclude days
@@ -3841,7 +3855,11 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       return { ok:false, partial:true, foodDays:nutWin.length, weighIns:wWin.length };
     }
     tdee=Math.max(1400,Math.min(5500,tdee));
-    const W=latestW, proteinG=Math.round(2.2*W), fatG=Math.round(0.7*W);
+    // TREND WEIGHT, not the last reading. A single water-heavy morning previously shifted
+    // protein by ~2g and the calorie floor by ~22 kcal for no physiological reason.
+    const _recentW=(bodyMetrics||[]).filter(e=>e&&e.weight>0&&(nowTs-parse(e.date))<=7*dayMs).map(e=>e.weight);
+    const trendW=_recentW.length>=3 ? +(_recentW.reduce((a,b)=>a+b,0)/_recentW.length).toFixed(1) : latestW;
+    const W=trendW, proteinG=Math.round(2.2*W), fatG=Math.round(0.7*W);
     let targetRatePct, targetCals;
     // 0.35%/wk, not 0.5%. At ~90kg a 0.5% deficit is ~483 kcal/day, which on an enhanced
     // protocol with protein already at ~2.2g/kg is more aggressive than needed and risks
@@ -3849,16 +3867,31 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if(goalPhase==='cut'){ targetRatePct=0.35; targetCals=tdee-Math.round((0.35/100*W*7700)/7); }
     else if(goalPhase==='bulk'){ targetRatePct=0.25; targetCals=tdee+Math.round((0.25/100*W*7700)/7); }
     else { targetRatePct=0; targetCals=tdee; }
-    targetCals=Math.max(targetCals, Math.round(W*22));
+    // The 22 kcal/kg floor is a crude guardrail, not a validated threshold, and when it binds
+    // it silently replaces the goal the user selected: a "0.35%/wk cut" can actually prescribe
+    // ~0.20%/wk. Surface it rather than let the label lie.
+    const kcalFloor=Math.round(W*22);
+    const floorLimited=targetCals<kcalFloor;
+    if(floorLimited) targetCals=kcalFloor;
+    const actualDeficit=tdee-targetCals;
+    const impliedRatePct=+((actualDeficit*7/7700)/W*100).toFixed(2);
     const carbG=Math.max(0, Math.round((targetCals-proteinG*4-fatG*9)/4));
     let adjust=null;
     if(goalPhase==='cut'&&ratePerWk!=null){
       const actPct=ratePerWk/W*100;
-      // Bracket the 0.35%/wk goal: only flag if genuinely stalled (>-0.15) or dropping too
-      // fast (<-0.75). The old -0.25 threshold flagged a perfectly good 0.3%/wk loss as stalled.
-      if(actPct>-0.15){ const k=150; adjust={dir:'down',kcal:k,carb:Math.round(k*0.75/4),fat:Math.round(k*0.25/9)}; }
-      else if(actPct<-0.75){ const k=150; adjust={dir:'up',kcal:k,carb:Math.round(k/4),fat:0}; }
-      else adjust={dir:'hold'};
+      // ADHERENCE BEFORE PRESCRIPTION. targetCals is already derived from measured maintenance,
+      // so it fully accounts for a stall. Recommending a further cut on top double-counts and
+      // blames the target for what is usually an intake gap: stalling while eating 283 kcal
+      // OVER target is not evidence the target is too high. Only consider changing the
+      // prescription once intake is actually close to it.
+      const overBy = (avgIntake!=null) ? avgIntake-targetCals : null;
+      if(overBy!=null && overBy>75){
+        adjust={dir:'gap',over:Math.round(overBy)};
+      } else if(actPct>-0.15){
+        const k=150; adjust={dir:'down',kcal:k,carb:Math.round(k*0.75/4),fat:Math.round(k*0.25/9)};
+      } else if(actPct<-0.75){
+        const k=150; adjust={dir:'up',kcal:k,carb:Math.round(k/4),fat:0};
+      } else adjust={dir:'hold'};
     }
     let cycle=null, dayTargets=null;
     if(carbG>0){
@@ -3920,7 +3953,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                ratePerWk: ratePerWk!=null?+ratePerWk.toFixed(2):null,
                suggested: _sugg, proteinG, fatG, carbG: _suggCarb, cycle:_cyc, dayTargets:_dayT };
     }
-    return { ok:true, tdee, conf, avgIntake, ratePerWk, spanDays:Math.round(spanDays), targetCals, proteinG, fatG, carbG, targetRatePct, adjust, cycle, dayTargets, phase:goalPhase };
+    return { ok:true, tdee, conf, avgIntake, ratePerWk, spanDays:Math.round(spanDays), targetCals, proteinG, fatG, carbG, targetRatePct, adjust, cycle, dayTargets, phase:goalPhase,
+             floorLimited, kcalFloor, impliedRatePct, trendW:W };
   }, [logs, nutrition, bodyMetrics, goalPhase]);
   const sess=sel?SESSIONS[sel]:null;
   const baseEx=sess?sess.exercises[exIdx]:null;
@@ -4004,6 +4038,52 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     }
     return evs.slice(0, 40);
   }, [contextLog, logs]);
+
+  // WEEKLY LOCKED TARGET.
+  //
+  // The maintenance estimate should update continuously; the PRESCRIPTION should not. A single
+  // weigh-in moves for water, sodium, glycogen, bowel content and training inflammation, and
+  // none of those are reasons to eat differently tomorrow. Previously the target recalculated
+  // on every food log and every weigh-in, so it drifted (1826 -> 1830 -> 1927) with no check-in
+  // and no way to tell a real change from noise.
+  //
+  // Three separate numbers, as a coached system would: a live estimate (information), a
+  // candidate for the next check-in (projection), and an active target locked for the week
+  // (the actual instruction).
+  const [activeTarget, setActiveTarget] = usePersistentState('active_target', null);
+  const targetLock = useMemo(() => {
+    if (!nutriCoach || !nutriCoach.ok) return null;
+    const dayMs = 86400000, now = Date.now();
+    const cand = {
+      cals: nutriCoach.targetCals, protein: nutriCoach.proteinG,
+      fat: nutriCoach.fatG, carb: nutriCoach.carbG, tdee: nutriCoach.tdee,
+    };
+    if (!activeTarget || !Number.isFinite(activeTarget.cals)) {
+      return { active: null, candidate: cand, ageDays: null, due: true, delta: null, reason: 'first' };
+    }
+    const ageDays = Math.floor((now - (activeTarget.setAt || 0)) / dayMs);
+    const raw = cand.cals - activeTarget.cals;
+    // Hysteresis: below ~50 kcal the difference is inside the noise of the estimate itself.
+    // Cap a single weekly move at 100 kcal so one odd week cannot swing the prescription.
+    const meaningful = Math.abs(raw) >= 50;
+    const capped = Math.max(-100, Math.min(100, raw));
+    return {
+      active: activeTarget, candidate: cand, ageDays,
+      due: ageDays >= 7,
+      delta: meaningful ? Math.round(capped) : 0,
+      reason: !meaningful ? 'stable' : raw > 0 ? 'up' : 'down',
+    };
+  }, [nutriCoach, activeTarget]);
+  const acceptTarget = () => {
+    if (!targetLock || !targetLock.candidate) return;
+    const c = targetLock.candidate;
+    const base = targetLock.active && targetLock.delta != null
+      ? { ...c, cals: targetLock.active.cals + targetLock.delta }
+      : c;
+    // Keep macros coherent with whatever calorie figure is actually adopted.
+    const carb = Math.max(0, Math.round((base.cals - base.protein*4 - base.fat*9)/4));
+    setActiveTarget({ ...base, carb, setAt: Date.now() });
+  };
 
   const bwAt=useMemo(()=>makeBwResolver(bodyMetrics),[bodyMetrics]);
   const stalls=useMemo(()=>computeStalls(logs,3,bwAt),[logs,bwAt]);
@@ -5808,7 +5888,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           <div className="nc-eat">Eat today</div>
                           <div className="nc-tgt-cal nc-tgt-hero">{dt.cals} <span>kcal</span></div>
                           <div className="nc-macros"><span className="nc-mac p">P {dt.protein}g</span><span className="nc-mac c">C {dt.carb}g</span><span className="nc-mac f">F {dt.fat}g</span></div>
-                          <div className="nc-tgt-avg">Weekly avg {nutriCoach.targetCals} kcal &#183; C {nutriCoach.carbG}g/day ({nutriCoach.cycle.trainDays} train / {nutriCoach.cycle.restDays} rest) &#183; {nutriCoach.phase==="cut"?("cut \u2212"+nutriCoach.targetRatePct+"%/wk"):nutriCoach.phase==="bulk"?("lean gain +"+nutriCoach.targetRatePct+"%/wk"):"maintenance"}</div>
+                          <div className="nc-tgt-avg">Weekly avg {nutriCoach.targetCals} kcal &#183; C {nutriCoach.carbG}g/day ({nutriCoach.cycle.trainDays} train / {nutriCoach.cycle.restDays} rest) &#183; {nutriCoach.phase==="cut"?(nutriCoach.floorLimited?("floor-limited \u2212"+nutriCoach.impliedRatePct+"%/wk"):("cut \u2212"+nutriCoach.targetRatePct+"%/wk")):nutriCoach.phase==="bulk"?("lean gain +"+nutriCoach.targetRatePct+"%/wk"):"maintenance"}</div>
+                          {nutriCoach.floorLimited && <div className="nc-tgt-avg" style={{color:"var(--warn)"}}>Held at the {nutriCoach.kcalFloor} kcal minimum ({Math.round(nutriCoach.trendW)}kg &#215; 22), so this prescribes about &#8722;{nutriCoach.impliedRatePct}%/wk rather than the &#8722;{nutriCoach.targetRatePct}%/wk selected. Losing faster would mean going below the floor.</div>}
                         </>
                       );
                     })() : (
@@ -5819,7 +5900,34 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                       </>
                     )}
                   </div>
-                  {nutriCoach.adjust && nutriCoach.adjust.dir==='down' && <div className="nc-adj down">Loss has stalled versus target. Drop ~{nutriCoach.adjust.kcal} kcal/day: -{nutriCoach.adjust.carb}g carb and -{nutriCoach.adjust.fat}g fat, protein held.</div>}
+                  {targetLock && (
+                    <div className="tl-box">
+                      {targetLock.active ? (<>
+                        <div className="tl-row"><span className="tl-k">Active target</span><span className="tl-v">{targetLock.active.cals} kcal</span></div>
+                        <div className="tl-sub">Locked {targetLock.ageDays===0?'today':targetLock.ageDays+'d ago'} &#183; {targetLock.due?'review due now':'review in '+(7-targetLock.ageDays)+'d'}</div>
+                      </>) : (
+                        <div className="tl-sub">No target locked yet &#8212; accept one to hold it for the week.</div>
+                      )}
+                      <div className="tl-row" style={{marginTop:7}}><span className="tl-k">Live maintenance</span><span className="tl-v" style={{color:'var(--t2)'}}>{nutriCoach.tdee} kcal</span></div>
+                      <div className="tl-sub">Updates daily as information. Does not change what you eat.</div>
+                      {targetLock.active && (<>
+                        <div className="tl-row" style={{marginTop:7}}><span className="tl-k">Next target</span>
+                          <span className="tl-v" style={{color: targetLock.delta===0?'var(--t2)':'var(--acc)'}}>
+                            {targetLock.delta===0 ? 'no change' : (targetLock.active.cals+targetLock.delta)+' kcal'}
+                          </span></div>
+                        <div className="tl-sub">{targetLock.delta===0
+                          ? 'Difference is inside the noise of the estimate \u2014 holding.'
+                          : (targetLock.delta>0?'+':'')+targetLock.delta+' kcal, capped at 100/week so one odd week cannot swing it.'}</div>
+                      </>)}
+                      {(targetLock.due || !targetLock.active) && (
+                        <button className="tl-btn" onClick={acceptTarget}>
+                          {targetLock.active ? 'Accept for the coming week' : 'Lock this target for the week'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {nutriCoach.adjust && nutriCoach.adjust.dir==='gap' && <div className="nc-adj down">You are averaging <b>{nutriCoach.adjust.over} kcal/day over target</b>. That gap explains the stall &#8212; the target itself is fine. Close it before changing anything.</div>}
+                  {nutriCoach.adjust && nutriCoach.adjust.dir==='down' && <div className="nc-adj down">Intake is on target but loss has stalled. Drop ~{nutriCoach.adjust.kcal} kcal/day: -{nutriCoach.adjust.carb}g carb and -{nutriCoach.adjust.fat}g fat, protein held.</div>}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='up' && <div className="nc-adj up">Dropping faster than 1%/wk. Add ~{nutriCoach.adjust.kcal} kcal/day (+{nutriCoach.adjust.carb}g carb) to protect muscle.</div>}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='hold' && <div className="nc-adj hold">On track. Loss rate is in the target range, hold these numbers.</div>}
                   <div className="nc-ctx">est. maintenance ~{nutriCoach.tdee} kcal ({nutriCoach.conf} confidence) &#183; logging ~{nutriCoach.avgIntake}/day &#183; {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk.toFixed(2)} kg/wk over {nutriCoach.spanDays}d</div>
