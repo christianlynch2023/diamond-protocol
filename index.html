@@ -588,6 +588,16 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .nc-tgt-cal{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--t)}
 .nc-tgt-cal span{font-size:12px;color:var(--t3);font-weight:400}
 .nc-macros{display:flex;gap:6px;margin-top:8px}
+.mp-box{margin-top:10px;padding:11px 12px;border:1px solid var(--bdr);border-radius:10px;background:rgba(255,255,255,.02)}
+.mp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;gap:8px}
+.mp-ttl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--t2)}
+.mp-slot{display:flex;gap:4px}
+.mp-slot button{padding:3px 9px;font-size:10px;border-radius:6px;border:1px solid var(--bdr);background:var(--bg);color:var(--t3);font-weight:700}
+.mp-slot button.on{background:var(--acc);color:#0a0a0a;border-color:var(--acc)}
+.mp-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.mp-name{flex:1;font-size:12px;color:var(--t)}
+.mp-cals{font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;color:var(--acc);min-width:42px;text-align:right}
+.mp-macros{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:96px;text-align:right}
 .nc-mac{flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;padding:6px 4px;border-radius:6px;background:var(--crd)}
 .nc-mac.p{color:#4a9eff}.nc-mac.c{color:var(--acc)}.nc-mac.f{color:#ff9f43}
 .nc-dayrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
@@ -724,7 +734,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-21T1810';
+  var BUILD='2026-08-21T2115';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2815,7 +2825,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-21T1810';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-21T2115';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -4144,6 +4154,79 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       },
     };
   }, [nutriCoach, activeTarget]);
+
+  // MEAL DISTRIBUTION. Reference, not tracking: the daily card says eat 2597 kcal with 319g
+  // of carbs, and the obvious next question is when. Derived from whichever target is in
+  // force so it can never disagree with the number above it.
+  //
+  // Distribution rules: protein spread near-evenly across four feeds, since per-meal protein
+  // matters more than daily total for muscle protein synthesis; fat kept away from the
+  // pre-workout window because it slows gastric emptying; carbohydrate concentrated around
+  // training on training days, where it does the most for performance and partitioning.
+  const [mealSlot, setMealSlot] = usePersistentState('meal_slot', 'pm');
+  const mealPlan = useMemo(() => {
+    if (!effTargets || !effTargets.dayTargets) return null;
+    const build = (dt, isTrain) => {
+      const P = dt.protein, C = dt.carb, F = dt.fat;
+      // Fractions per meal: [protein, carb, fat]
+      const layout = !isTrain
+        ? [ ['Breakfast',        .28, .25, .30],
+            ['Lunch',            .28, .30, .35],
+            ['Snack',            .16, .15, .10],
+            ['Dinner',           .28, .30, .25] ]
+        : (mealSlot === 'am'
+          // 5am session: little runway before training, so carbs land after it.
+          ? [ ['Pre (5am, small)', .10, .12, .00],
+              ['Post-workout',     .30, .33, .10],
+              ['Lunch',            .30, .28, .40],
+              ['Dinner',           .30, .27, .50] ]
+          // 8pm session: fuel across the day, biggest carb feed pre-training.
+          : [ ['Breakfast',        .25, .18, .35],
+              ['Lunch',            .25, .22, .40],
+              ['Pre-workout',      .20, .30, .05],
+              ['Post / dinner',    .30, .30, .20] ]);
+      return layout.map(([name, p, c, f]) => {
+        const prot = Math.round(P*p), carb = Math.round(C*c), fat = Math.round(F*f);
+        return { name, protein:prot, carb, fat, cals: prot*4 + carb*4 + fat*9 };
+      });
+    };
+    return { train: build(effTargets.dayTargets.train, true),
+             rest:  build(effTargets.dayTargets.rest,  false) };
+  }, [effTargets, mealSlot]);
+
+  // HYDRATION + ELECTROLYTE REFERENCE.
+  //
+  // Water is held near 4 L on BOTH days: a constant habit is easier to keep than a variable
+  // one, and total intake is not the lever that matters here. What changes is the electrolyte
+  // load, for two different reasons. Training days lose roughly a litre of sweat carrying
+  // ~1 g of sodium. Rest days lose none — but drinking 4 L without sweating dilutes plasma
+  // sodium, so rest-day sodium is REDUCED relative to training yet kept well above zero
+  // rather than dropped proportionally.
+  //
+  // Potassium is deliberately food-led and the supplemental dose is conservative. Renal
+  // clearance is what protects against hyperkalaemia, and this user's cystatin C was flagged
+  // above range (1.08 vs 0.58-1.05) even with a satisfactory eGFR. UK/EU potassium tablets
+  // are capped at 99 mg for exactly this reason, so grams of citrate powder deserve caution.
+  //
+  // Elemental yields: sodium citrate (trisodium dihydrate) 235 mg Na/g, pink salt ~381 mg
+  // Na/g, potassium citrate (tripotassium monohydrate) 362 mg K/g.
+  const hydration = useMemo(() => {
+    const w = (nutriCoach && nutriCoach.trendW) ? nutriCoach.trendW
+            : (bodyMetrics && bodyMetrics[0] && bodyMetrics[0].weight) ? bodyMetrics[0].weight : null;
+    if (!w) return null;
+    const NA_CIT = 235, SALT = 381, K_CIT = 362;
+    const mk = (naCit, salt, kCit, tau, vol) => ({
+      naCit, salt, kCit, tau, vol,
+      na: Math.round(naCit*NA_CIT + salt*SALT),
+      k:  Math.round(kCit*K_CIT),
+    });
+    return {
+      litres: 4,
+      train: mk(2.0, 2.2, 1.5, 2, '1 L pre + intra'),
+      rest:  mk(1.4, 1.4, 1.0, 1, 'across the day'),
+      foodNa: 2200, foodK: 2800,
+    };
+  }, [nutriCoach, bodyMetrics]);
 
   const bwAt=useMemo(()=>makeBwResolver(bodyMetrics),[bodyMetrics]);
   const stalls=useMemo(()=>computeStalls(logs,3,bwAt),[logs,bwAt]);
@@ -5948,7 +6031,63 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           <div className="nc-eat">Eat today</div>
                           <div className="nc-tgt-cal nc-tgt-hero">{dt.cals} <span>kcal</span></div>
                           <div className="nc-macros"><span className="nc-mac p">P {dt.protein}g</span><span className="nc-mac c">C {dt.carb}g</span><span className="nc-mac f">F {dt.fat}g</span></div>
-                          <div className="nc-tgt-avg">Weekly avg {effTargets.weekly} kcal{effTargets.source==='locked'?' (locked)':''} &#183; C {effTargets.carb}g/day ({effTargets.cycle.trainDays} train / {effTargets.cycle.restDays} rest) &#183; {nutriCoach.phase==="cut"?(nutriCoach.floorLimited?("floor-limited \u2212"+nutriCoach.impliedRatePct+"%/wk"):("cut \u2212"+nutriCoach.targetRatePct+"%/wk")):nutriCoach.phase==="bulk"?("lean gain +"+nutriCoach.targetRatePct+"%/wk"):"maintenance"}</div>
+                          {hydration && (() => {
+                    const isT = nutriDayType==='train';
+                    const h = isT ? hydration.train : hydration.rest;
+                    return (
+                      <div className="mp-box">
+                        <div className="mp-head">
+                          <span className="mp-ttl">Hydration &amp; electrolytes &#183; {isT?'training day':'rest day'}</span>
+                          <span className="mp-cals">~{hydration.litres} L</span>
+                        </div>
+                        <div className="mp-row"><span className="mp-name">Sodium citrate</span><span className="mp-cals">{h.naCit} g</span><span className="mp-macros">{h.vol}</span></div>
+                        <div className="mp-row"><span className="mp-name">Pink salt</span><span className="mp-cals">{h.salt} g</span><span className="mp-macros">&#8594; {h.na} mg Na</span></div>
+                        <div className="mp-row"><span className="mp-name">Potassium citrate</span><span className="mp-cals">{h.kCit} g</span><span className="mp-macros">&#8594; {h.k} mg K</span></div>
+                        <div className="mp-row"><span className="mp-name">Taurine</span><span className="mp-cals">{h.tau} g</span><span className="mp-macros">{isT?'pre + intra':'through the day'}</span></div>
+                        <div className="mp-row" style={{borderBottom:'none'}}><span className="mp-name" style={{color:'var(--t2)'}}>With food (~{hydration.foodNa}/{hydration.foodK})</span><span className="mp-cals" style={{color:'var(--t2)'}}>{h.na+hydration.foodNa}</span><span className="mp-macros">mg Na &#183; {h.k+hydration.foodK} mg K</span></div>
+                        <div className="av-note" style={{marginTop:8,marginBottom:0}}>
+                          Water stays near 4 L both days &#8212; a constant habit is easier to keep. The <b>electrolytes</b> change:
+                          training replaces ~1 g of sodium lost in sweat; rest days need less, but not none, because 4 L without
+                          sweating dilutes plasma sodium.
+                          Judge by thirst, cramp and urine colour &#8212; pale straw is right, clear all day means you are over-drinking.
+                          Magnesium glycinate 300&ndash;400 mg at night, <b>not</b> in the drink.
+                        </div>
+                        <div className="av-note" style={{marginTop:6,marginBottom:0,color:'var(--warn)'}}>
+                          Potassium is kept deliberately low and food-led. Your cystatin C was flagged above range, and renal
+                          clearance is what protects against potassium building up &#8212; worth confirming this dose with whoever
+                          manages your protocol before making it routine.
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {mealPlan && (
+                    <div className="mp-box">
+                      <div className="mp-head">
+                        <span className="mp-ttl">Meal split &#183; {nutriDayType==='train'?'training day':'rest day'}</span>
+                        {nutriDayType==='train' && (
+                          <span className="mp-slot">
+                            {[['am','5am'],['pm','8pm']].map(([k,l])=>(
+                              <button key={k} className={mealSlot===k?'on':''} onClick={()=>setMealSlot(k)}>{l}</button>
+                            ))}
+                          </span>
+                        )}
+                      </div>
+                      {(nutriDayType==='train'?mealPlan.train:mealPlan.rest).map((m,i)=>(
+                        <div key={i} className="mp-row">
+                          <span className="mp-name">{m.name}</span>
+                          <span className="mp-cals">{m.cals}</span>
+                          <span className="mp-macros">P{m.protein} C{m.carb} F{m.fat}</span>
+                        </div>
+                      ))}
+                      <div className="av-note" style={{marginTop:8,marginBottom:0}}>
+                        Protein spread evenly &#8212; per-meal protein drives synthesis more than the daily total.
+                        Fat kept out of the pre-workout feed so it does not slow digestion.
+                        {nutriDayType==='train' && ' Carbs concentrated around training.'}
+                        {' '}A guide, not a rule: hit the daily totals however suits the day.
+                      </div>
+                    </div>
+                  )}
+                  <div className="nc-tgt-avg">Weekly avg {effTargets.weekly} kcal{effTargets.source==='locked'?' (locked)':''} &#183; C {effTargets.carb}g/day ({effTargets.cycle.trainDays} train / {effTargets.cycle.restDays} rest) &#183; {nutriCoach.phase==="cut"?(nutriCoach.floorLimited?("floor-limited \u2212"+nutriCoach.impliedRatePct+"%/wk"):("cut \u2212"+nutriCoach.targetRatePct+"%/wk")):nutriCoach.phase==="bulk"?("lean gain +"+nutriCoach.targetRatePct+"%/wk"):"maintenance"}</div>
                           {nutriCoach.floorLimited && effTargets.source!=='locked' && <div className="nc-tgt-avg" style={{color:"var(--warn)"}}>Held at the {nutriCoach.kcalFloor} kcal minimum ({Math.round(nutriCoach.trendW)}kg &#215; 22), so this prescribes about &#8722;{nutriCoach.impliedRatePct}%/wk rather than the &#8722;{nutriCoach.targetRatePct}%/wk selected. Losing faster would mean going below the floor.</div>}
                         </>
                       );
