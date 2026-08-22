@@ -598,6 +598,14 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .mp-name{flex:1;font-size:12px;color:var(--t)}
 .mp-cals{font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;color:var(--acc);min-width:42px;text-align:right}
 .mp-macros{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:96px;text-align:right}
+.ph-grid{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr;gap:1px 4px;align-items:center;margin:2px 0 4px}
+.ph-hd{font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--t2);text-align:center;padding-bottom:4px;line-height:1.25}
+.ph-hd span{display:block;font-family:'JetBrains Mono',monospace;font-size:7.5px;color:var(--t3);text-transform:none;letter-spacing:0}
+.ph-lbl{font-size:10.5px;color:var(--t);padding:4px 0;border-top:1px solid rgba(255,255,255,.04)}
+.ph-v{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--acc);text-align:center;padding:4px 0;border-top:1px solid rgba(255,255,255,.04)}
+.ph-v.nil{color:var(--t3);font-weight:400}
+.ph-lbl.tot,.ph-v.tot{color:var(--t2);font-size:9.5px;font-weight:700}
+.ph-v.tot span{font-size:7.5px;color:var(--t3);margin-left:1px}
 .nc-mac{flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;padding:6px 4px;border-radius:6px;background:var(--crd)}
 .nc-mac.p{color:#4a9eff}.nc-mac.c{color:var(--acc)}.nc-mac.f{color:#ff9f43}
 .nc-dayrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
@@ -734,7 +742,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-22T1130';
+  var BUILD='2026-08-22T1240';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2825,7 +2833,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-22T1130';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-22T1240';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -4220,10 +4228,22 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       na: Math.round(naCit*NA_CIT + salt*SALT),
       k:  Math.round(kCit*K_CIT),
     });
+    // Training-day phases. Taurine loads entirely pre-workout because it peaks roughly
+    // 60-90 min after ingestion, so taking it beforehand covers the session. Sodium is
+    // weighted intra, where the sweat loss actually happens. Potassium is weighted to the
+    // rest of the day: it is intracellular, there is no acute intra-session requirement,
+    // and spreading it is easier on both gut and kidney. The three phases sum to exactly
+    // the same totals as the single-figure version.
+    const phases = [
+      { k:'pre',   label:'Pre',        vol:'500 ml',  ...mk(0.6, 0.6, 0.3, 2, '') },
+      { k:'intra', label:'Intra',      vol:'750 ml',  ...mk(0.9, 1.0, 0.4, 0, '') },
+      { k:'rest',  label:'Rest of day',vol:'~2.75 L', ...mk(0.5, 0.6, 0.8, 0, '') },
+    ];
     return {
       litres: 4,
       train: mk(2.0, 2.2, 1.5, 2, '1 L pre + intra'),
       rest:  mk(1.4, 1.4, 1.0, 1, 'across the day'),
+      phases,
       foodNa: 2200, foodK: 2800,
     };
   }, [nutriCoach, bodyMetrics]);
@@ -6040,10 +6060,29 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           <span className="mp-ttl">Hydration &amp; electrolytes &#183; {isT?'training day':'rest day'}</span>
                           <span className="mp-cals">~{hydration.litres} L</span>
                         </div>
-                        <div className="mp-row"><span className="mp-name">Sodium citrate</span><span className="mp-cals">{h.naCit} g</span><span className="mp-macros">{h.vol}</span></div>
-                        <div className="mp-row"><span className="mp-name">Pink salt</span><span className="mp-cals">{h.salt} g</span><span className="mp-macros">&#8594; {h.na} mg Na</span></div>
-                        <div className="mp-row"><span className="mp-name">Potassium citrate</span><span className="mp-cals">{h.kCit} g</span><span className="mp-macros">&#8594; {h.k} mg K</span></div>
-                        <div className="mp-row"><span className="mp-name">Taurine</span><span className="mp-cals">{h.tau} g</span><span className="mp-macros">{isT?'pre + intra':'through the day'}</span></div>
+                        {isT && hydration.phases ? (
+                          <div className="ph-grid">
+                            <div className="ph-hd"/>
+                            {hydration.phases.map(p=>(<div key={'h'+p.k} className="ph-hd">{p.label}<span>{p.vol}</span></div>))}
+                            {[['Sodium citrate','naCit','g'],['Pink salt','salt','g'],['Potassium citrate','kCit','g'],['Taurine','tau','g']].map(([lbl,fld,u])=>(
+                              <React.Fragment key={fld}>
+                                <div className="ph-lbl">{lbl}</div>
+                                {hydration.phases.map(p=>(
+                                  <div key={p.k+fld} className={'ph-v'+(p[fld]?'':' nil')}>{p[fld]?p[fld]+u:'\u2014'}</div>
+                                ))}
+                              </React.Fragment>
+                            ))}
+                            <div className="ph-lbl tot">&#8594; sodium</div>
+                            {hydration.phases.map(p=>(<div key={p.k+'na'} className="ph-v tot">{p.na}<span>mg</span></div>))}
+                            <div className="ph-lbl tot">&#8594; potassium</div>
+                            {hydration.phases.map(p=>(<div key={p.k+'k'} className="ph-v tot">{p.k}<span>mg</span></div>))}
+                          </div>
+                        ) : (<>
+                          <div className="mp-row"><span className="mp-name">Sodium citrate</span><span className="mp-cals">{h.naCit} g</span><span className="mp-macros">{h.vol}</span></div>
+                          <div className="mp-row"><span className="mp-name">Pink salt</span><span className="mp-cals">{h.salt} g</span><span className="mp-macros">&#8594; {h.na} mg Na</span></div>
+                          <div className="mp-row"><span className="mp-name">Potassium citrate</span><span className="mp-cals">{h.kCit} g</span><span className="mp-macros">&#8594; {h.k} mg K</span></div>
+                          <div className="mp-row"><span className="mp-name">Taurine</span><span className="mp-cals">{h.tau} g</span><span className="mp-macros">through the day</span></div>
+                        </>)}
                         <div className="mp-row" style={{borderBottom:'none'}}><span className="mp-name" style={{color:'var(--t2)'}}>With food (~{hydration.foodNa}/{hydration.foodK})</span><span className="mp-cals" style={{color:'var(--t2)'}}>{h.na+hydration.foodNa}</span><span className="mp-macros">mg Na &#183; {h.k+hydration.foodK} mg K</span></div>
                         <div className="av-note" style={{marginTop:8,marginBottom:0}}>
                           Water stays near 4 L both days &#8212; a constant habit is easier to keep. The <b>electrolytes</b> change:
