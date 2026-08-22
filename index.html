@@ -17,16 +17,6 @@
   <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
-/* Text scale. Small print is scaled hardest because that is what is actually unreadable;
-   headline numbers barely move so layout does not break. */
-.app.fs-l{--fs1:1.12;--fs2:1.08}
-.app.fs-xl{--fs1:1.26;--fs2:1.16}
-.app{--fs1:1;--fs2:1}
-.app .av-note,.app .tl-sub,.app .bld-ref,.app .bld-note,.app .mp-macros,.app .hm-rng,
-.app .td-sub,.app .dur-plan,.app .wr-note,.app .nc-tgt-avg,.app .bld-gaps,.app .st-u,
-.app .hm-state,.app .av-plan{font-size:calc(var(--fs1) * 1em)}
-.app .bld-k,.app .mp-name,.app .st-name,.app .wr-k,.app .tl-k,.app .av-mus,
-.app .body-sub,.app .nc-note{font-size:calc(var(--fs2) * 1em)}
 body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
 :root{--bg:#07090c;--sur:#0e1319;--crd:#141b22;--bdr:#1d2733;--acc:#c4ff00;--ag:rgba(196,255,0,.12);--ag2:rgba(196,255,0,.05);--ok:#00e87a;--warn:#ff8c00;--err:#ff4444;--inf:#4a9eff;--t:#dde5ee;--t2:#7b90a8;--t3:#6b8299}
 #root{height:100%;overflow:hidden}
@@ -744,7 +734,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-22T0900';
+  var BUILD='2026-08-22T1130';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2835,7 +2825,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-22T0900';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-22T1130';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -4238,11 +4228,6 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     };
   }, [nutriCoach, bodyMetrics]);
 
-  // Browser pinch-zoom cannot work in a 100dvh / overflow:hidden PWA with a fixed nav:
-  // there is no document flow to pan or scroll back within, so zooming out strands you.
-  // A fixed-viewport app needs its own text control.
-  const [textSize, setTextSize] = usePersistentState('text_size', 'm');
-
   const bwAt=useMemo(()=>makeBwResolver(bodyMetrics),[bodyMetrics]);
   const stalls=useMemo(()=>computeStalls(logs,3,bwAt),[logs,bwAt]);
   // Single source of truth for stalls. The Program card previously used its own detector
@@ -4447,7 +4432,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const warmups=calcWarmups(warmWt);
 
   return (
-    <div className={"app"+(textSize==="l"?" fs-l":textSize==="xl"?" fs-xl":"")}>
+    <div className="app">
       {timerOn && (
         <div className="timer-ov">
           <div className="t-lbl">Rest Period</div>
@@ -5623,16 +5608,6 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       {view === 'tools' && (
         <div className="screen">
           <div className="topbar"><span className="logo">Tools</span></div>
-          <div className="tool-sec">
-            <div className="tool-ttl">Text Size</div>
-            <div className="tool-sub">Pinch-zoom cannot restore properly in a full-screen app &#8212; use this instead</div>
-            <div className="mp-slot" style={{marginTop:8}}>
-              {[['m','Normal'],['l','Large'],['xl','Larger']].map(([k,lab])=>(
-                <button key={k} className={textSize===k?'on':''} onClick={()=>setTextSize(k)}
-                  style={{flex:1,padding:'9px 0',fontSize:12}}>{lab}</button>
-              ))}
-            </div>
-          </div>
           <div className="tool-sec">
             <div className="tool-ttl">Plate Calculator</div>
             <div className="tool-sub">20kg bar · standard plates</div>
