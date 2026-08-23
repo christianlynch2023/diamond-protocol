@@ -4089,13 +4089,23 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   // (the actual instruction).
   const [activeTarget, setActiveTarget] = usePersistentState('active_target', null);
   const targetLock = useMemo(() => {
-    if (!nutriCoach || !nutriCoach.ok) return null;
+    if (!nutriCoach) return null;
     const dayMs = 86400000, now = Date.now();
+    const hasLock = activeTarget && Number.isFinite(activeTarget.cals);
+    // A locked target is a committed weekly instruction and must survive the engine losing
+    // confidence — that is precisely when it matters most. When !ok there is no trustworthy
+    // candidate to propose, so surface the active lock alone (no auto-suggestion, no delta)
+    // rather than returning null and wiping the whole prescription.
+    if (!nutriCoach.ok) {
+      if (!hasLock) return null;
+      const ageDays = Math.floor((now - (activeTarget.setAt || 0)) / dayMs);
+      return { active: activeTarget, candidate: null, ageDays, due: ageDays >= 7, delta: null, reason: 'nocand' };
+    }
     const cand = {
       cals: nutriCoach.targetCals, protein: nutriCoach.proteinG,
       fat: nutriCoach.fatG, carb: nutriCoach.carbG, tdee: nutriCoach.tdee,
     };
-    if (!activeTarget || !Number.isFinite(activeTarget.cals)) {
+    if (!hasLock) {
       return { active: null, candidate: cand, ageDays: null, due: true, delta: null, reason: 'first' };
     }
     const ageDays = Math.floor((now - (activeTarget.setAt || 0)) / dayMs);
@@ -4117,8 +4127,11 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   // discipline while leaving the decision where it belongs.
   const [lockCals, setLockCals] = useState('');
   const acceptTarget = (explicit) => {
-    if (!targetLock || !targetLock.candidate) return;
-    const c = targetLock.candidate;
+    if (!targetLock) return;
+    // When the engine is unconfident there is no candidate, but the athlete may still re-lock a
+    // manual figure. Fall back to the active lock's macros in that case.
+    const c = targetLock.candidate || targetLock.active;
+    if (!c) return;
     const proposed = targetLock.active && targetLock.delta != null
       ? targetLock.active.cals + targetLock.delta
       : c.cals;
@@ -4139,15 +4152,22 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   // same rule as the engine: protein and fat fixed daily, carbs carrying the difference,
   // rest days at 60% of the average carb figure.
   const effTargets = useMemo(() => {
-    if (!nutriCoach || !nutriCoach.ok) return null;
+    if (!nutriCoach) return null;
     const locked = activeTarget && Number.isFinite(activeTarget.cals) ? activeTarget : null;
-    if (!locked) return { source:'engine', weekly:nutriCoach.targetCals, cycle:nutriCoach.cycle,
-                          dayTargets:nutriCoach.dayTargets, protein:nutriCoach.proteinG,
-                          fat:nutriCoach.fatG, carb:nutriCoach.carbG };
+    // Without a committed lock, only a confident live estimate can drive the card.
+    if (!locked) {
+      if (!nutriCoach.ok) return null;
+      return { source:'engine', weekly:nutriCoach.targetCals, cycle:nutriCoach.cycle,
+               dayTargets:nutriCoach.dayTargets, protein:nutriCoach.proteinG,
+               fat:nutriCoach.fatG, carb:nutriCoach.carbG };
+    }
+    // A target IS locked: it drives the daily card whether or not the live estimate is
+    // confident this week. When the engine is unconfident nutriCoach.cycle can be absent, so
+    // the train/rest split falls back to the scheduled session count below.
     const protein = locked.protein != null ? locked.protein : nutriCoach.proteinG;
     const fat = locked.fat != null ? locked.fat : nutriCoach.fatG;
     const carb = Math.max(0, Math.round((locked.cals - protein*4 - fat*9)/4));
-    const trainDays = (nutriCoach.cycle && nutriCoach.cycle.trainDays) || 4;
+    const trainDays = (nutriCoach.cycle && nutriCoach.cycle.trainDays) || (Object.keys(SESSIONS).length || 4);
     const restDays = 7 - trainDays;
     const weeklyCarb = carb * 7;
     const lowCarb = Math.max(0, Math.round(carb * 0.6));
@@ -6024,8 +6044,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               <div className="nc-hd"><span className="nc-ttl">Smart targets</span>{nutriCoach.ok && <span className={'nc-conf '+nutriCoach.conf}>{nutriCoach.conf} confidence</span>}</div>
               {!nutriCoach.ok && nutriCoach.reason==='stale' && <div className="nc-note">Your most recent food/weight log is {nutriCoach.ageDays} days old, so these targets have expired. Log a few days of food and a weigh-in to recalculate.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='stale_weight' && <div className="nc-note">Your most recent weigh-in is {nutriCoach.ageDays!=null?nutriCoach.ageDays+' days old':'missing'}, so targets can't be calculated from it. Log a fresh weigh-in.</div>}
-              {!nutriCoach.ok && nutriCoach.reason==='implausible' && <div className="nc-note">Your weight is holding roughly steady on ~{nutriCoach.avgIntake} kcal/day, so that's close to your maintenance. The short-term trend ({nutriCoach.ratePerWk!=null?(nutriCoach.ratePerWk>0?'+':'')+nutriCoach.ratePerWk+' kg/wk':'unclear'}) is too water-noisy to auto-lock a precise target &#8212; but to {goalPhase==='cut'?'lose':goalPhase==='bulk'?'gain':'hold'}, {goalPhase==='cut'?'drop to':goalPhase==='bulk'?'push to':'stay around'} <b>{nutriCoach.suggested} kcal/day</b> and keep weighing in daily. A precise target locks in once the trend clears.</div>}
-              {!nutriCoach.ok && nutriCoach.reason==='implausible' && nutriCoach.carbG!=null && (nutriCoach.dayTargets ? (
+              {!nutriCoach.ok && nutriCoach.reason==='implausible' && !(activeTarget && Number.isFinite(activeTarget.cals)) && <div className="nc-note">Your weight is holding roughly steady on ~{nutriCoach.avgIntake} kcal/day, so that's close to your maintenance. The short-term trend ({nutriCoach.ratePerWk!=null?(nutriCoach.ratePerWk>0?'+':'')+nutriCoach.ratePerWk+' kg/wk':'unclear'}) is too water-noisy to auto-lock a precise target &#8212; but to {goalPhase==='cut'?'lose':goalPhase==='bulk'?'gain':'hold'}, {goalPhase==='cut'?'drop to':goalPhase==='bulk'?'push to':'stay around'} <b>{nutriCoach.suggested} kcal/day</b> and keep weighing in daily. A precise target locks in once the trend clears.</div>}
+              {!nutriCoach.ok && nutriCoach.reason==='implausible' && !(activeTarget && Number.isFinite(activeTarget.cals)) && nutriCoach.carbG!=null && (nutriCoach.dayTargets ? (
                 <div style={{marginTop:8}}>
                   <div className="nc-dayrow"><span className="nc-daylbl">Training day</span><span className="nc-daykcal">{nutriCoach.dayTargets.train.cals} kcal</span><span className="nc-macros"><span className="nc-mac p">P {nutriCoach.dayTargets.train.protein}g</span><span className="nc-mac c">C {nutriCoach.dayTargets.train.carb}g</span><span className="nc-mac f">F {nutriCoach.dayTargets.train.fat}g</span></span></div>
                   <div className="nc-dayrow"><span className="nc-daylbl">Rest day</span><span className="nc-daykcal">{nutriCoach.dayTargets.rest.cals} kcal</span><span className="nc-macros"><span className="nc-mac p">P {nutriCoach.dayTargets.rest.protein}g</span><span className="nc-mac c">C {nutriCoach.dayTargets.rest.carb}g</span><span className="nc-mac f">F {nutriCoach.dayTargets.rest.fat}g</span></span></div>
@@ -6037,7 +6057,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               {!nutriCoach.ok && nutriCoach.reason && nutriCoach.reason!=='stale' && nutriCoach.reason!=='stale_weight' && nutriCoach.reason!=='implausible' && <div className="nc-note">{nutriCoach.reason}</div>}
               {!nutriCoach.ok && nutriCoach.partial && <div className="nc-note">Need ~1-2 weeks of consistent logging to estimate your maintenance. So far: {nutriCoach.foodDays} food day{nutriCoach.foodDays===1?'':'s'} and {nutriCoach.weighIns} weigh-in{nutriCoach.weighIns===1?'':'s'} in the last 14 days.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='noisy' && <div className="nc-note">Your weight trend is too noisy right now to set a reliable target (reading {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk} kg/wk, which is water not tissue). You are logging ~{nutriCoach.avgIntake} kcal/day &#8212; hold there and keep weighing in daily; the trend will settle within a few days.</div>}
-              {nutriCoach.ok && (
+              {(nutriCoach.ok || (effTargets && effTargets.source==='locked')) && (
                 <div className="nc-body">
                   <div className="nc-tgt nc-hero">
                     {effTargets && effTargets.dayTargets ? (() => {
@@ -6126,7 +6146,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                       </div>
                     </div>
                   )}
-                  <div className="nc-tgt-avg">Weekly avg {effTargets.weekly} kcal{effTargets.source==='locked'?' (locked)':''} &#183; C {effTargets.carb}g/day ({effTargets.cycle.trainDays} train / {effTargets.cycle.restDays} rest) &#183; {nutriCoach.phase==="cut"?(nutriCoach.floorLimited?("floor-limited \u2212"+nutriCoach.impliedRatePct+"%/wk"):("cut \u2212"+nutriCoach.targetRatePct+"%/wk")):nutriCoach.phase==="bulk"?("lean gain +"+nutriCoach.targetRatePct+"%/wk"):"maintenance"}</div>
+                  <div className="nc-tgt-avg">Weekly avg {effTargets.weekly} kcal{effTargets.source==='locked'?' (locked)':''} &#183; C {effTargets.carb}g/day ({effTargets.cycle.trainDays} train / {effTargets.cycle.restDays} rest) &#183; {nutriCoach.ok?(nutriCoach.phase==="cut"?(nutriCoach.floorLimited?("floor-limited \u2212"+nutriCoach.impliedRatePct+"%/wk"):("cut \u2212"+nutriCoach.targetRatePct+"%/wk")):nutriCoach.phase==="bulk"?("lean gain +"+nutriCoach.targetRatePct+"%/wk"):"maintenance"):(goalPhase==='cut'?"cut \u2014 held":goalPhase==='bulk'?"lean gain \u2014 held":"maintenance \u2014 held")}</div>
                           {nutriCoach.floorLimited && effTargets.source!=='locked' && <div className="nc-tgt-avg" style={{color:"var(--warn)"}}>Held at the {nutriCoach.kcalFloor} kcal minimum ({Math.round(nutriCoach.trendW)}kg &#215; 22), so this prescribes about &#8722;{nutriCoach.impliedRatePct}%/wk rather than the &#8722;{nutriCoach.targetRatePct}%/wk selected. Losing faster would mean going below the floor.</div>}
                         </>
                       );
@@ -6146,9 +6166,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                       </>) : (
                         <div className="tl-sub">No target locked yet &#8212; accept one to hold it for the week.</div>
                       )}
-                      <div className="tl-row" style={{marginTop:7}}><span className="tl-k">Live maintenance</span><span className="tl-v" style={{color:'var(--t2)'}}>{nutriCoach.tdee} kcal</span></div>
+                      <div className="tl-row" style={{marginTop:7}}><span className="tl-k">Live maintenance</span><span className="tl-v" style={{color:'var(--t2)'}}>{nutriCoach.ok && nutriCoach.tdee!=null ? nutriCoach.tdee+' kcal' : 'unsettled'}</span></div>
                       <div className="tl-sub">Updates daily as information. Does not change what you eat.</div>
-                      {targetLock.active && (<>
+                      {targetLock.active && targetLock.candidate && targetLock.delta!=null && (<>
                         <div className="tl-row" style={{marginTop:7}}><span className="tl-k">Next target</span>
                           <span className="tl-v" style={{color: targetLock.delta===0?'var(--t2)':'var(--acc)'}}>
                             {targetLock.delta===0 ? 'no change' : (targetLock.active.cals+targetLock.delta)+' kcal'}
@@ -6157,11 +6177,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           ? 'Difference is inside the noise of the estimate \u2014 holding.'
                           : (targetLock.delta>0?'+':'')+targetLock.delta+' kcal, capped at 100/week so one odd week cannot swing it.'}</div>
                       </>)}
+                      {targetLock.active && !targetLock.candidate && (
+                        <div className="tl-sub" style={{marginTop:7,color:'var(--warn)'}}>Estimate is unsettled this week &#8212; no reliable adjustment to suggest, so your locked target holds. Keep weighing in; it resumes once the trend clears.</div>
+                      )}
                       {(targetLock.due || !targetLock.active) && (<>
                         <div className="tl-edit">
                           <span className="tl-k" style={{whiteSpace:'nowrap'}}>Lock at</span>
                           <input type="number" inputMode="numeric" step="10"
-                            placeholder={String(targetLock.active && targetLock.delta!=null ? targetLock.active.cals+targetLock.delta : targetLock.candidate.cals)}
+                            placeholder={String(targetLock.active && targetLock.delta!=null ? targetLock.active.cals+targetLock.delta : (targetLock.candidate ? targetLock.candidate.cals : (targetLock.active ? targetLock.active.cals : '')))}
                             value={lockCals} onChange={e=>setLockCals(e.target.value)}/>
                           <span className="tl-sub" style={{margin:0}}>kcal</span>
                         </div>
@@ -6170,9 +6193,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           acceptTarget(isFinite(v)&&v>0 ? v : undefined);
                         }}>
                           {lockCals.trim() ? 'Lock '+lockCals.trim()+' kcal for the week'
-                            : (targetLock.active ? 'Accept the suggested target' : 'Lock the suggested target')}
+                            : (targetLock.candidate ? (targetLock.active ? 'Accept the suggested target' : 'Lock the suggested target') : 'Hold '+targetLock.active.cals+' kcal for another week')}
                         </button>
-                        <div className="tl-sub">Leave blank to take the suggestion. Type a number to set your own &#8212; it will still hold for seven days.</div>
+                        <div className="tl-sub">{targetLock.candidate ? 'Leave blank to take the suggestion. Type a number to set your own \u2014 it will still hold for seven days.' : 'Type a number to change it, or hold to keep your current target for another week.'}</div>
                       </>)}
                     </div>
                   )}
@@ -6180,7 +6203,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='down' && <div className="nc-adj down">Intake is on target but loss has stalled. Drop ~{nutriCoach.adjust.kcal} kcal/day: -{nutriCoach.adjust.carb}g carb and -{nutriCoach.adjust.fat}g fat, protein held.</div>}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='up' && <div className="nc-adj up">Dropping faster than 1%/wk. Add ~{nutriCoach.adjust.kcal} kcal/day (+{nutriCoach.adjust.carb}g carb) to protect muscle.</div>}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='hold' && <div className="nc-adj hold">On track. Loss rate is in the target range, hold these numbers.</div>}
-                  <div className="nc-ctx">est. maintenance ~{nutriCoach.tdee} kcal ({nutriCoach.conf} confidence) &#183; logging ~{nutriCoach.avgIntake}/day &#183; {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk.toFixed(2)} kg/wk over {nutriCoach.spanDays}d</div>
+                  {nutriCoach.ok
+                    ? <div className="nc-ctx">est. maintenance ~{nutriCoach.tdee} kcal ({nutriCoach.conf} confidence) &#183; logging ~{nutriCoach.avgIntake}/day &#183; {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk.toFixed(2)} kg/wk over {nutriCoach.spanDays}d</div>
+                    : <div className="nc-ctx">engine can't verify maintenance this week &#8212; trend {nutriCoach.ratePerWk!=null?(nutriCoach.ratePerWk>0?'+':'')+nutriCoach.ratePerWk+' kg/wk':'unclear'} is too water-noisy{nutriCoach.avgIntake!=null?' at ~'+nutriCoach.avgIntake+' kcal/day logged':''}{nutriCoach.suggested!=null?'; it would otherwise suggest ~'+nutriCoach.suggested+' kcal':''}. Holding your locked target.</div>}
                 </div>
               )}
             </div>
