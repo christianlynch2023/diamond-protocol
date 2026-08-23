@@ -4110,6 +4110,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const dashOff=CIRC*(1-(timerTotal>0?timerSecs/timerTotal:0));
   const totalSets=Object.values(setData).reduce((a,s)=>a+s.length,0);
   const dur=startRef.current?Math.round((Date.now()-startRef.current)/60000):0;
+  // bwAt must be declared BEFORE ormHL: ormHL's e1 passes bwAt into totalLoad during render, and a
+  // const referenced before its declaration throws a TDZ ReferenceError. ormHL only reduces once a
+  // set is logged, which is why the crash surfaced after logging set 1, not on first paint.
+  const bwAt=useMemo(()=>makeBwResolver(bodyMetrics),[bodyMetrics]);
   // Sets for a swapped exercise are stored under the substitute id, so the base id finds
   // nothing and the e1RM highlight silently vanishes for substituted compounds.
   const ormHL=sess?sess.exercises.filter(ex=>ex.orm).map(ex=>{
@@ -4360,7 +4364,6 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     };
   }, [nutriCoach, bodyMetrics]);
 
-  const bwAt=useMemo(()=>makeBwResolver(bodyMetrics),[bodyMetrics]);
   const stalls=useMemo(()=>computeStalls(logs,3,bwAt),[logs,bwAt]);
   // Single source of truth for stalls. The Program card previously used its own detector
   // (detectPlateaus) with different rules — deloads included, ORM-only, 4-session minimum —
