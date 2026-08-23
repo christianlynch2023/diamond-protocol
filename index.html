@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,7 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden}
+html,body{height:100%;overflow:hidden;touch-action:pan-x pan-y;-ms-touch-action:pan-x pan-y}
 body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
 :root{--bg:#07090c;--sur:#0e1319;--crd:#141b22;--bdr:#1d2733;--acc:#c4ff00;--ag:rgba(196,255,0,.12);--ag2:rgba(196,255,0,.05);--ok:#00e87a;--warn:#ff8c00;--err:#ff4444;--inf:#4a9eff;--t:#dde5ee;--t2:#7b90a8;--t3:#6b8299}
 #root{height:100%;overflow:hidden}
@@ -742,7 +742,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-22T1240';
+  var BUILD='2026-08-23T0700';
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -2833,7 +2833,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-22T1240';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = '2026-08-23T0700';   // shown in Tools so the running build is always identifiable
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
