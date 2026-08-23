@@ -752,7 +752,11 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
 // unregister the old service worker, then reload once. This is the only reliable way to escape
 // a wedged PWA cache on iOS, where a stale bundle can otherwise persist across reopens.
 (function(){
-  var BUILD='2026-08-23T0700';
+  // Single source of truth for the build stamp. Bump this ONE value on every ship; the Tools
+  // screen reads it via window.DP_BUILD so the displayed build can never drift from the SW-bust
+  // value again. (No deploy-time injection in a static single file, so this stays manual.)
+  var BUILD='2026-08-23T2210';
+  try { window.DP_BUILD = BUILD; } catch(e) {}
   try {
     var prev = localStorage.getItem('dp_build');
     if (prev !== BUILD) {
@@ -957,17 +961,24 @@ function buildIntensifier(kind, { partials, myoStr, fail }) {
   if (!kind) return null;
   if (kind === 'partials') { const v = parseInt(partials) || 0; return v > 0 ? { kind:'partials', partialReps:v } : null; }
   if (kind === 'failure')  { return fail ? { kind:'failure' } : null; }
-  if (kind === 'myo')      { const a = String(myoStr||'').split(/[^0-9]+/).map(n=>parseInt(n)).filter(n=>n>0); return a.length ? { kind:'myo', myoReps:a } : null; }
+  if (kind === 'myo')      {
+    // Split on commas/whitespace (NOT every non-digit — that turned "-3" into "3"). Reject
+    // negatives, zero and implausible clusters so junk input can't be stored as reps.
+    const a = String(myoStr||'').split(/[,\s]+/).map(t=>parseInt(t,10)).filter(n=>Number.isFinite(n) && n>0 && n<=30);
+    return a.length ? { kind:'myo', myoReps:a } : null;
+  }
   if (kind === 'partials_failure') {
+    // If BOTH were entered, keep both — partials as its own field, failure as a flag on the
+    // same event — instead of silently dropping the failure.
     const v = parseInt(partials) || 0;
-    if (v > 0) return { kind:'partials', partialReps:v };
+    if (v > 0) return fail ? { kind:'partials', partialReps:v, failure:true } : { kind:'partials', partialReps:v };
     return fail ? { kind:'failure' } : null;
   }
   return null;
 }
 function intBadge(it) {
   if (!it) return null;
-  if (it.kind === 'partials') return '+' + it.partialReps + 'p';
+  if (it.kind === 'partials') return '+' + it.partialReps + 'p' + (it.failure ? '\u00b7F' : '');
   if (it.kind === 'failure')  return 'F';
   if (it.kind === 'myo')      return 'myo ' + (it.myoReps||[]).join('/');
   return '\u00b7';
@@ -2711,6 +2722,19 @@ function App() {
   const [intMyoStr, setIntMyoStr]     = useState('');
   const [intFail, setIntFail]         = useState(false);
   const clearIntInputs = () => { setIntPartials(''); setIntMyoStr(''); setIntFail(false); };
+  // Persistence-failure surface. usePersistentState and saveWip both dispatch 'dp-storage-fail'
+  // on a failed write (quota / private mode); without a listener the failure was invisible and
+  // the UI implied data was saved when it was not.
+  const [storageFail, setStorageFail] = useState(null);
+  useEffect(() => {
+    const h = (e) => setStorageFail((e && e.detail && e.detail.key) || 'storage');
+    window.addEventListener('dp-storage-fail', h);
+    return () => window.removeEventListener('dp-storage-fail', h);
+  }, []);
+  // Locked weekly calorie target. Declared here (early) rather than beside targetLock/effTargets
+  // because the cloud-sync effect and Clear/export/import all reference it, and the sync effect's
+  // dependency array — which is evaluated during render — sits above those definitions.
+  const [activeTarget, setActiveTarget] = usePersistentState('active_target', null);
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const startRef = useRef(null);
@@ -2904,7 +2928,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = '2026-08-23T0700';   // shown in Tools so the running build is always identifiable
+  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-23T2210';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -2974,7 +2998,7 @@ function App() {
   const skipTimer = () => { setTimerOn(false); setTimerDone(false); const cb=afterRef.current; afterRef.current=null; if(cb)cb(); };
 
   const getLastWt = exId => { for(const l of logs){const e=l.exercises?.find(x=>x.id===exId);if(e?.sets?.length)return e.sets[e.sets.length-1].weight||0;} return 0; };
-  const saveWip = (sid, data, ei, cs) => { const d={sessionId:sid,week,startTime:startRef.current,exIdx:ei,curSet:cs,setData:data,painData:painRef.current,subMap}; LS.set('dp_wip',JSON.stringify(d)); setWipData(d); };
+  const saveWip = (sid, data, ei, cs) => { const d={sessionId:sid,week,startTime:startRef.current,exIdx:ei,curSet:cs,setData:data,painData:painRef.current,subMap}; const ok=LS.set('dp_wip',JSON.stringify(d)); setWipData(d); if(!ok){ try{ window.dispatchEvent(new CustomEvent('dp-storage-fail',{detail:{key:'dp_wip'}})); }catch(_){} } };
   const clearWip = () => { LS.del('dp_wip'); setWipData(null); };
 
   const startWorkout = sid => {
@@ -3021,7 +3045,7 @@ function App() {
     // int.kind so they are naturally excluded.
     const _slot = editIdx !== null ? editIdx : (setData[ex.id]||[]).length;
     const _intKind = (ex.int && ex.int.kind) ? ex.int.kind : null;
-    const _intOK = showInt && activeInts.has(baseEx2.id) && _intKind && _slot === effSets-1 && !DLW.has(week);
+    const _intOK = showInt && !subMap[baseEx2.id] && activeInts.has(baseEx2.id) && _intKind && _slot === effSets-1 && !DLW.has(week);
     const intensifier = _intOK ? buildIntensifier(_intKind, { partials:intPartials, myoStr:intMyoStr, fail:intFail }) : null;
     const newSet={weight:parseFloat(wt)||0, reps:parseInt(rp)||0, rir, ...(intensifier?{intensifier}:{})};
     if (editIdx !== null) {
@@ -3084,7 +3108,7 @@ function App() {
   };
 
   const exportData = () => {
-    const data={version:'2.2',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,glucoseLog,protocolLog,contextLog,vitalsLog,bloodsLog};
+    const data={version:'2.3',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},activeTarget,bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,glucoseLog,protocolLog,contextLog,vitalsLog,bloodsLog};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`diamond-${new Date().toISOString().split('T')[0]}.json`;
@@ -3164,6 +3188,7 @@ function App() {
           if (Array.isArray(data.vitalsLog)) setVitalsLog(desc(data.vitalsLog));
           if (Array.isArray(data.bloodsLog)) setBloodsLog(desc(data.bloodsLog));
           if (data.config) { if(data.config.week!=null)setWeek(data.config.week); if(data.config.recovery!=null)setRecovery(data.config.recovery); if(data.config.block!=null)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase!=null)setGoalPhase(data.config.phase); touchCfg(); }  // explicit user restore = a config edit
+          if (data.activeTarget && Number.isFinite(data.activeTarget.cals)) setActiveTarget(data.activeTarget);   // restore the locked calorie target
           alert(`Restored ${data.logs?.length||0} sessions plus body, nutrition, BP, cardio and protocol history.`);
         } catch(err) { alert('Could not read file. Make sure it is a valid Diamond Protocol backup.'); }
       };
@@ -3186,8 +3211,9 @@ function App() {
     // sync_code MUST be cleared: otherwise the mount effect calls pullFromCloud() on next
     // load and resurrects everything the user just deleted.
     setSyncCode(''); setCloudStatus('idle');
+    setActiveTarget(null);
     ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','glucose_log','protocol_log','context_log','vitals_log','bloods_log',
-     'checkin_photos','whoop_history','whoop_workouts','whoop_cache','whoop_access_token','whoop_refresh_token','whoop_expires_at','sync_code'].forEach(k=>LS.del(k));
+     'active_target','checkin_photos','whoop_history','whoop_workouts','whoop_cache','whoop_access_token','whoop_refresh_token','whoop_expires_at','sync_code'].forEach(k=>LS.del(k));
   };
 
 
@@ -3624,8 +3650,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           if (data.config.phase != null) setGoalPhase(data.config.phase);
           setCfgUpdatedAt(cloudCfgAt);
         }
+        // Locked calorie target: newer setAt wins, same as config. Adopted under skipPush so it
+        // does not immediately re-trigger the auto-push effect.
+        const cloudTgtAt = data.activeTarget && data.activeTarget.setAt != null ? data.activeTarget.setAt : -1;
+        const localTgtAt = activeTarget && activeTarget.setAt != null ? activeTarget.setAt : -1;
+        const cloudTgtNewer = !!(data.activeTarget && Number.isFinite(data.activeTarget.cals) && cloudTgtAt > localTgtAt);
+        const mergedTarget = cloudTgtNewer ? data.activeTarget : activeTarget;
+        if (cloudTgtNewer) setActiveTarget(data.activeTarget);
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: cloudCfgNewer ? { week: data.config.week, recovery: data.config.recovery, block: data.config.block, highVol: data.config.highVol, phase: data.config.phase, updatedAt: cloudCfgAt } : { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt||Date.now()) }, bodyMetrics: pruneTombstones(mergedBody), protocolLog: pruneTombstones(mergedProt), measurements: pruneTombstones(mergedMeas), nutrition: pruneTombstones(mergedNutri), cardioLog: pruneTombstones(mergedCardio), bpLog: pruneTombstones(mergedBP), glucoseLog: pruneTombstones(mergedGl), contextLog: pruneTombstones(mergedCtx), vitalsLog: pruneTombstones(mergedVit), bloodsLog: pruneTombstones(mergedBld), whoopHistory: mergedWhoop, deloadSkips: mergedSkips, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: cloudCfgNewer ? { week: data.config.week, recovery: data.config.recovery, block: data.config.block, highVol: data.config.highVol, phase: data.config.phase, updatedAt: cloudCfgAt } : { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt||Date.now()) }, activeTarget: mergedTarget, bodyMetrics: pruneTombstones(mergedBody), protocolLog: pruneTombstones(mergedProt), measurements: pruneTombstones(mergedMeas), nutrition: pruneTombstones(mergedNutri), cardioLog: pruneTombstones(mergedCardio), bpLog: pruneTombstones(mergedBP), glucoseLog: pruneTombstones(mergedGl), contextLog: pruneTombstones(mergedCtx), vitalsLog: pruneTombstones(mergedVit), bloodsLog: pruneTombstones(mergedBld), whoopHistory: mergedWhoop, deloadSkips: mergedSkips, updatedAt: Date.now() });
         // Must await and check: an un-awaited, unchecked POST let the UI report 'synced'
         // while the merged superset was never actually written to the cloud.
         try {
@@ -3645,7 +3678,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), vitalsLog: pruneTombstones(vitalsLogRaw), bloodsLog: pruneTombstones(bloodsLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, activeTarget, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), vitalsLog: pruneTombstones(vitalsLogRaw), bloodsLog: pruneTombstones(bloodsLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
       const r = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       if (!r.ok) { setCloudStatus('error'); return; }
       setCloudStatus('synced');
@@ -3671,7 +3704,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), vitalsLog: pruneTombstones(vitalsLogRaw), bloodsLog: pruneTombstones(bloodsLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, activeTarget, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), vitalsLog: pruneTombstones(vitalsLogRaw), bloodsLog: pruneTombstones(bloodsLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -3683,7 +3716,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         setCloudStatus('synced');
       } catch (e) { setCloudStatus('error'); }
     }, 3000);
-  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, contextLog, vitalsLog, bloodsLog, whoopHistory, week, recovery, block, highVol, goalPhase, syncCode, deloadSkips]);
+  }, [logs, bodyMetrics, protocolLog, measurements, nutrition, cardioLog, bpLog, glucoseLog, contextLog, vitalsLog, bloodsLog, whoopHistory, week, recovery, block, highVol, goalPhase, syncCode, deloadSkips, activeTarget]);
 
   const applySwap = o => {
     const base = SESSIONS[sel]?.exercises[exIdx];
@@ -4105,7 +4138,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   // (activeInts, keyed by base id) + typed kind + FINAL slot. Never touches readiness.
   const intKind = (curEx && curEx.int && curEx.int.kind) ? curEx.int.kind : null;
   const intTargetSlot = editIdx !== null ? editIdx : loggedSetsArr.length;
-  const intEligible = !!(showInt && baseEx && activeInts.has(baseEx.id) && intKind && intTargetSlot === effSets-1 && !DLW.has(week));
+  // A swap stores only {id,name}, so curEx keeps the BASE exercise's int object. Exclude
+  // substituted lifts — the base's partials/myo method may be wrong for a different movement.
+  const intEligible = !!(showInt && baseEx && !subMap[baseEx.id] && activeInts.has(baseEx.id) && intKind && intTargetSlot === effSets-1 && !DLW.has(week));
   const R=88, CIRC=2*Math.PI*R;
   const dashOff=CIRC*(1-(timerTotal>0?timerSecs/timerTotal:0));
   const totalSets=Object.values(setData).reduce((a,s)=>a+s.length,0);
@@ -4182,8 +4217,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   //
   // Three separate numbers, as a coached system would: a live estimate (information), a
   // candidate for the next check-in (projection), and an active target locked for the week
-  // (the actual instruction).
-  const [activeTarget, setActiveTarget] = usePersistentState('active_target', null);
+  // (the actual instruction). NOTE: activeTarget is declared far earlier — the cloud-sync
+  // effect lists it as a dependency, and a deps array is evaluated during render.
   const targetLock = useMemo(() => {
     if (!nutriCoach) return null;
     const dayMs = 86400000, now = Date.now();
@@ -4571,6 +4606,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
 
   return (
     <div className="app">
+      {storageFail && (
+        <div style={{position:'sticky',top:0,zIndex:9999,background:'rgba(255,68,68,0.14)',borderBottom:'1px solid rgba(255,68,68,0.5)',color:'#ff9a9a',fontFamily:"'JetBrains Mono',monospace",fontSize:11,padding:'8px 12px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
+          <span>Storage write failed ({storageFail}). Your device storage may be full or blocked — recent changes might not survive a reload. Export a backup, then free space.</span>
+          <button onClick={()=>setStorageFail(null)} style={{background:'none',border:'1px solid rgba(255,68,68,0.5)',color:'#ff9a9a',borderRadius:6,padding:'3px 8px',cursor:'pointer',flexShrink:0}}>Dismiss</button>
+        </div>
+      )}
       {timerOn && (
         <div className="timer-ov">
           <div className="t-lbl">Rest Period</div>
