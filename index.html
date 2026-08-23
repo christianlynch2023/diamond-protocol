@@ -1111,21 +1111,53 @@ function weeklyVolumeSeries(logs, muscle, block) {
   return weeks.map(w => ({ x: 'W' + w, y: Math.round(byWeek[w] * 10) / 10 }));
 }
 
-function getProgRec(exId, rMax, logs, phase) {
+// Accepts either the exercise OBJECT (preferred — carries setPlan) or a bare rMax number
+// (backward compatible). Two corrections vs the old version:
+//  C1: deload sessions are skipped, so the week after a deload does not learn its ~85% loads
+//      as the new working weight (mirrors computeStalls / computeActualVolume).
+//  C2: top-set/back-off lifts are judged PER SLOT against each slot's own rMax. With a single
+//      envelope rMax, a correctly capped top set (e.g. 6-8 under an envelope of 10) could never
+//      satisfy "every set hit rMax", so the engine only rewarded breaking the prescription.
+function getProgRec(exId, exOrRMax, logs, phase) {
+  const isObj = exOrRMax && typeof exOrRMax === 'object';
+  const rMax = isObj ? exOrRMax.rMax : exOrRMax;
+  const setPlan = isObj ? exOrRMax.setPlan : null;
+  // Expand setPlan into a per-set cap array; extra logged sets (e.g. HV +1) inherit the last cap.
+  const capsFor = (nSets) => {
+    if (!setPlan || !setPlan.length) return null;
+    const caps = [];
+    for (const sp of setPlan) for (let i = 0; i < sp.sets; i++) caps.push(sp.rMax);
+    while (caps.length < nSets) caps.push(caps.length ? caps[caps.length - 1] : rMax);
+    return caps;
+  };
   for (const s of logs) {
+    if (s.deload === true) continue;                       // C1
+    if (s.deload == null && DLW.has(s.week)) continue;     // C1 (flag missing on older logs)
     const ex = s.exercises?.find(e => e.id === exId);
     if (!ex?.sets?.length) continue;
-    const top = Math.max(...ex.sets.map(s => s.weight));
-    if (ex.sets.every(s => s.reps >= rMax)) return phase==='cut' ? {type:"hold", msg:"Cut — hold load, keep the reps", wt:top} : {type:"inc", msg:`All sets hit ${rMax} reps — increase weight`, wt:top};
-    if (ex.sets.some(s => s.reps >= rMax)) return {type:"beat", msg:"Beat weaker sets, keep weight", wt:top};
-    return {type:"keep", msg:"Keep weight, beat reps", wt:top};
+    const top = Math.max(...ex.sets.map(x => x.weight));
+    const caps = capsFor(ex.sets.length);
+    const hit = caps ? ex.sets.map((x, i) => x.reps >= caps[i]) : ex.sets.map(x => x.reps >= rMax);
+    if (hit.every(Boolean)) {
+      // Cut progresses on PERFORMANCE (all slots capped), never on a readiness reading. It fires
+      // rarely on a deficit, which is the intended "take it when the reps are there" behaviour.
+      return phase === 'cut'
+        ? { type: "inc", msg: "All slots hit their cap — take the load if it's there", wt: top }
+        : { type: "inc", msg: "All slots hit their rep cap — increase weight", wt: top };
+    }
+    if (hit.some(Boolean)) return { type: "beat", msg: "Beat the slots that fell short, keep weight", wt: top };
+    return { type: "keep", msg: "Keep weight, beat reps", wt: top };
   }
-  return {type:"first", msg:"First time — establish your working weight"};
+  return { type: "first", msg: "First time — establish your working weight" };
 }
 
 function getPrevHist(exId, logs, limit=3) {
   const res = [];
   for (const s of logs) {
+    // C1: skip deload sessions. getTarget reads getPrevHist(...,1)[0] as "last working set",
+    // so including a deload made the week after a deload prescribe ~85% loads as the new baseline.
+    if (s.deload === true) continue;
+    if (s.deload == null && DLW.has(s.week)) continue;
     // Match either the exercise actually logged under this ID, or one that was
     // swapped FROM this ID (origId) — so a substitution doesn't create a blind
     // spot in "previous sessions" for the originally-planned exercise.
@@ -1149,7 +1181,7 @@ function getTarget(ex, logs, week, phase, histId, dl = (_deloadNow == null ? DLW
   const prev = getPrevHist(_hid, logs, 1)[0];
   if (!prev) return { weight: 0, reps: ex.rMin, note: 'First time — establish a working weight', first: true };
   const topWeight = Math.max(...prev.sets.map(s => s.weight));
-  const rec = getProgRec(_hid, ex.rMax, logs, phase);
+  const rec = getProgRec(_hid, ex, logs, phase);
   const incr = getIncrement(ex);
   if (dl) {
     return { weight: Math.round((topWeight * 0.85) / 2.5) * 2.5, reps: Math.round((ex.rMin + ex.rMax) / 2), note: 'Deload — keep several reps in reserve' };
@@ -2645,7 +2677,7 @@ function App() {
   const startRef = useRef(null);
   const painRef = useRef({});
   const [timerOn, setTimerOn]   = useState(false);
-  const [pushOverride, setPushOverride] = useState(false);
+
   const [timerSecs, setTimerSecs] = useState(0);
   const [timerTotal, setTimerTotal] = useState(0);
   const [timerDone, setTimerDone] = useState(false);
@@ -3031,7 +3063,7 @@ function App() {
     if (nutriCoach.ok) {
       p('Est. maintenance: ~' + nutriCoach.tdee + ' kcal/day (' + nutriCoach.conf + ' confidence, from intake vs weight over ' + nutriCoach.spanDays + 'd)');
       p('Logging: ~' + nutriCoach.avgIntake + ' kcal/day · trend ' + (nutriCoach.ratePerWk > 0 ? '+' : '') + nutriCoach.ratePerWk.toFixed(2) + ' kg/wk');
-      p('Target (' + goalPhase + '): ' + nutriCoach.targetCals + ' kcal · P' + nutriCoach.proteinG + ' C' + nutriCoach.carbG + ' F' + nutriCoach.fatG);
+      p('Target (' + goalPhase + '): ' + ((activeTarget&&Number.isFinite(activeTarget.cals))?activeTarget.cals+' kcal (locked)':nutriCoach.targetCals+' kcal') + ' · P' + nutriCoach.proteinG + ' C' + nutriCoach.carbG + ' F' + nutriCoach.fatG);
     } else p('Smart targets: not ready (' + (nutriCoach.reason || 'insufficient data') + ')');
     if (burnCheck) p('WHOOP burn cross-check: ' + burnCheck.avg + ' vs empirical ' + burnCheck.tdee + ' (' + (burnCheck.agree ? 'agree' : 'gap ' + burnCheck.gap) + ', ' + burnCheck.days + 'd)');
     p('');
@@ -3119,7 +3151,7 @@ function App() {
     const sess = SESSIONS[sessionId]; const wr = effWR(week); const ph = getPhase(week);
     setBriefingLoading(true); setBriefing(null);
     const progLines = sess.exercises.map(ex=>{
-      const rec=getProgRec(ex.id,ex.rMax,logs,effPhase);
+      const rec=getProgRec(ex.id,ex,logs,effPhase);
       const prev=getPrevHist(ex.id,logs,1)[0];
       const ps=prev?prev.sets.map(s=>`${s.weight}kg x${s.reps}`).join(', '):'first time';
       return `- ${ex.name}: ${rec.msg} (last: ${ps})`;
@@ -3326,7 +3358,7 @@ function App() {
     const bpLine = latestBP ? `${latestBP.sys}/${latestBP.dia} (${bpCategory(latestBP.sys,latestBP.dia).label})` : 'not logged';
     const ebLine = (nutriCoach.ok && nutriCoach.avgIntake!=null) ? `intake ~${nutriCoach.avgIntake} kcal/day vs est. maintenance ~${nutriCoach.tdee} (empirical) = ${nutriCoach.avgIntake-nutriCoach.tdee>=0?'+':''}${nutriCoach.avgIntake-nutriCoach.tdee} kcal/day net` : 'not available';
     const coachLine = nutriCoach.ok
-      ? `est. maintenance ~${nutriCoach.tdee} kcal/day (${nutriCoach.conf} confidence, derived from logged intake vs weight trend); recent intake ~${nutriCoach.avgIntake} kcal/day; weight trend ${nutriCoach.ratePerWk>0?'+':''}${nutriCoach.ratePerWk.toFixed(2)} kg/wk; current ${goalPhase} target ${nutriCoach.targetCals} kcal/day (P ${nutriCoach.proteinG} / C ${nutriCoach.carbG} / F ${nutriCoach.fatG} g)${nutriCoach.adjust&&nutriCoach.adjust.dir==='down'?'; app flags loss stalled vs target, suggests trimming ~'+nutriCoach.adjust.kcal+' kcal/day':nutriCoach.adjust&&nutriCoach.adjust.dir==='up'?'; app flags loss faster than 1%/wk, suggests adding ~'+nutriCoach.adjust.kcal+' kcal/day to protect muscle':nutriCoach.adjust?'; loss rate on target':''}`
+      ? `est. maintenance ~${nutriCoach.tdee} kcal/day (${nutriCoach.conf} confidence, derived from logged intake vs weight trend); recent intake ~${nutriCoach.avgIntake} kcal/day; weight trend ${nutriCoach.ratePerWk>0?'+':''}${nutriCoach.ratePerWk.toFixed(2)} kg/wk; current ${goalPhase} target ${(activeTarget&&Number.isFinite(activeTarget.cals))?activeTarget.cals+' kcal/day (locked)':nutriCoach.targetCals+' kcal/day'} (P ${nutriCoach.proteinG} / C ${nutriCoach.carbG} / F ${nutriCoach.fatG} g)${nutriCoach.adjust&&nutriCoach.adjust.dir==='down'?'; app flags loss stalled vs target, suggests trimming ~'+nutriCoach.adjust.kcal+' kcal/day':nutriCoach.adjust&&nutriCoach.adjust.dir==='up'?'; app flags loss faster than 1%/wk, suggests adding ~'+nutriCoach.adjust.kcal+' kcal/day to protect muscle':nutriCoach.adjust?'; loss rate on target':''}`
       : 'not enough recent food + weigh-in data to estimate maintenance yet';
     let prompt;
     if (scope === 'week') {
@@ -3648,8 +3680,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const deloadInfo=computeDeloadReadiness(whoopHistory,week);
   const ctxReasons=useMemo(()=>recentCtx(contextLog),[contextLog]);
   const readiness=computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, bpLog[0]||null, deloadActive, ctxReasons);
-  const hvActive = highVol && (readiness.cls === 'green' || pushOverride) && goalPhase !== 'cut';
-  const effPhase = (goalPhase==='cut' && (readiness.cls==='green' || pushOverride)) ? 'maintain' : goalPhase;
+  // POLICY: readiness is advisory only. It must never change sets, reps, RIR, load or phase —
+  // it only informs the banner. High-volume is the athlete's explicit toggle (still paused on a
+  // cut by design and on deloads inside getEffSets); phase is whatever the athlete selected.
+  // Cut progression is handled on performance inside getProgRec, not by a readiness flip.
+  const hvActive = highVol && goalPhase !== 'cut';
+  const effPhase = goalPhase;
   const volParts = useMemo(() => {
     const dir={}, carry={};
     for (const k of Object.keys(SESSIONS)) for (const e of SESSIONS[k].exercises) {
@@ -4000,7 +4036,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const _curHistId = (curEx && baseEx && subMap[baseEx.id]) ? subMap[baseEx.id].id : (curEx?curEx.id:null);
   const loggedSetsArr=curEx?(setData[_curHistId]||setData[curEx.id]||[]):[];
   const prevHist=curEx?getPrevHist(_curHistId,logs,3):[];
-  const progRec=curEx?getProgRec(_curHistId,curEx.rMax,logs,effPhase):null;
+  const progRec=curEx?getProgRec(_curHistId,curEx,logs,effPhase):null;
   const curTarget=curEx?getTarget(curEx,logs,week,effPhase,_curHistId):null;
   // Resolve which phase of the set plan the CURRENT set belongs to, so the live screen shows
   // "Set 2 of 4 - Back-off, 8-10 reps, ~180kg" instead of a generic 6-10 envelope and one load.
@@ -4392,12 +4428,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // Compare the 7-day average (which blends training + rest days) against the BLENDED weekly
     // target from Smart targets (~1990), NOT the training-day-only 2250 — otherwise it always
     // reads ~250 under even when eating exactly to plan. Fall back to 1990 if Smart isn't ready.
-    const calTgt = (nutriCoach && nutriCoach.ok && nutriCoach.targetCals) ? nutriCoach.targetCals
+    // Single source of truth: a committed lock is what the athlete is eating to, so the delta is
+    // measured against it. Only fall back to the live engine / suggestion when nothing is locked.
+    const calTgt = (activeTarget && Number.isFinite(activeTarget.cals)) ? activeTarget.cals
+                 : (nutriCoach && nutriCoach.ok && nutriCoach.targetCals) ? nutriCoach.targetCals
                  : (nutriCoach && nutriCoach.suggested) ? nutriCoach.suggested
                  : 1990;
     const pTgt = (nutriCoach && nutriCoach.proteinG) ? nutriCoach.proteinG : 210;
     return { avgCal, avgP, calTgt, pTgt, calDelta: avgCal-calTgt, pDelta: avgP-pTgt, n:l7.length };
-  }, [nutrition, nutriCoach]);
+  }, [nutrition, nutriCoach, activeTarget]);
 
   // Week in review: assembles the analytics that already exist into one decision-shaped summary.
   // Deliberately no composite score — each line carries its own verdict so the inputs stay visible.
@@ -4619,7 +4658,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
 
           <div className="td-card">
             <div className="td-row"><span className="td-lbl">Fuel target</span>
-              <span className="td-val">{(nutriCoach && nutriCoach.ok && nutriCoach.targetCals)?nutriCoach.targetCals:(nutriCoach && nutriCoach.suggested)?nutriCoach.suggested:'—'}{((nutriCoach&&nutriCoach.ok&&nutriCoach.targetCals)||(nutriCoach&&nutriCoach.suggested))?<span className="td-muted" style={{fontSize:13}}> kcal</span>:null}</span></div>
+              <span className="td-val">{effTargets ? effTargets.weekly : (nutriCoach && nutriCoach.suggested) ? nutriCoach.suggested : '—'}{(effTargets || (nutriCoach && nutriCoach.suggested)) ? <span className="td-muted" style={{fontSize:13}}> kcal{effTargets && effTargets.source==='locked' ? ' \u00b7 locked' : ''}</span> : null}</span></div>
             {nutriCoach && nutriCoach.proteinG && <div className="td-sub">P {nutriCoach.proteinG}g{nutriCoach.carbG!=null?' · C '+nutriCoach.carbG+'g':''}{nutriCoach.fatG!=null?' · F '+nutriCoach.fatG+'g':''}</div>}
           </div>
 
@@ -4713,7 +4752,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               <button className={`rc${!highVol?' nm':''}`} onClick={()=>userSetHighVol(false)}>Off</button>
               <button className={`rc${highVol?' nm':''}`} onClick={()=>userSetHighVol(true)}>On</button>
             </div>
-            <div className="hv-sub">{!highVol ? 'Standard volume' : DLW.has(week) ? 'Paused \u00b7 deload week' : goalPhase==='cut' ? 'Paused \u00b7 cut phase' : (readiness.cls==='green'||pushOverride) ? 'Active today \u00b7 +1 set on priority muscles' : 'Paused \u00b7 readiness not green'}</div>
+            <div className="hv-sub">{!highVol ? 'Standard volume' : DLW.has(week) ? 'Paused \u00b7 deload week' : goalPhase==='cut' ? 'Paused \u00b7 cut phase' : 'Active \u00b7 +1 set on priority muscles'}</div>
           </div>
           {wipData && (
             <div className="resume-box">
@@ -4784,9 +4823,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="rd-mode">{readiness.title}</div>
             <div className="rd-action">{readiness.action}</div>
             {readiness.factors.length > 0 && <div className="rd-factors">{readiness.factors.join(' \u00b7 ')}</div>}
-            {(readiness.cls !== 'green' || pushOverride) && (pushOverride
-              ? <button className="rd-push on" onClick={()=>setPushOverride(false)}>Pushing anyway - tap to respect readiness</button>
-              : <button className="rd-push" onClick={()=>setPushOverride(true)}>Push anyway - train at full prescription</button>)}
+            <div className="rd-factors" style={{marginTop:6,opacity:0.7}}>Guidance only — this never changes your sets, targets or logged loads. You decide.</div>
           </div>
           <div className="sec-lbl" style={{padding:'0 15px 6px'}}>This week</div>
           <div className="wk-strip">
@@ -4838,7 +4875,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="ex-list">
             {sess.exercises.map((ex, i) => {
               const adj = getEffSets(ex, week, hvActive);
-              const rec = getProgRec(ex.id, ex.rMax, logs, effPhase);
+              const rec = getProgRec(ex.id, ex, logs, effPhase);
               return (
                 <div key={ex.id} className={`ex-row${condensed && !CORE_EX[sess.id]?.has(ex.id) ? ' ex-dim' : ''}`}>
                   <div className="ex-n">{i+1}</div>
