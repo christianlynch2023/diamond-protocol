@@ -755,7 +755,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
   // Single source of truth for the build stamp. Bump this ONE value on every ship; the Tools
   // screen reads it via window.DP_BUILD so the displayed build can never drift from the SW-bust
   // value again. (No deploy-time injection in a static single file, so this stays manual.)
-  var BUILD='2026-08-23T2210';
+  var BUILD='2026-08-23T2240';
   try { window.DP_BUILD = BUILD; } catch(e) {}
   try {
     var prev = localStorage.getItem('dp_build');
@@ -1195,17 +1195,20 @@ function getProgRec(exId, exOrRMax, logs, phase) {
   return { type: "first", msg: "First time — establish your working weight" };
 }
 
-function getPrevHist(exId, logs, limit=3) {
+function getPrevHist(exId, logs, limit=3, exactOnly=false) {
   const res = [];
   for (const s of logs) {
     // C1: skip deload sessions. getTarget reads getPrevHist(...,1)[0] as "last working set",
     // so including a deload made the week after a deload prescribe ~85% loads as the new baseline.
     if (s.deload === true) continue;
     if (s.deload == null && DLW.has(s.week)) continue;
-    // Match either the exercise actually logged under this ID, or one that was
-    // swapped FROM this ID (origId) — so a substitution doesn't create a blind
-    // spot in "previous sessions" for the originally-planned exercise.
-    const ex = s.exercises?.find(e => e.id === exId || e.origId === exId);
+    // exactOnly (progression): match ONLY this exact stream. The default (display) also matches a
+    // lift swapped FROM this ID (origId) so the "previous sessions" list has no blind spot — but
+    // that must NOT feed progression: a 60 kg substitute logged under origId would otherwise
+    // become the baseline for the 100 kg base lift and prescribe ~62.5 kg on return (PROG-02).
+    const ex = exactOnly
+      ? s.exercises?.find(e => e.id === exId)
+      : s.exercises?.find(e => e.id === exId || e.origId === exId);
     if (ex?.sets?.length) { res.push({date:s.date, sets:ex.sets, week:s.week, swapped: ex.id!==exId ? ex.name : null}); if(res.length>=limit) break; }
   }
   return res;
@@ -1222,7 +1225,10 @@ function getTarget(ex, logs, week, phase, histId, dl = (_deloadNow == null ? DLW
   // histId lets a substituted exercise read its own logged history. Without it, a swap
   // inherited the base exercise's loads (e.g. machine press targeted at RO-T8 weights).
   const _hid = histId || ex.id;
-  const prev = getPrevHist(_hid, logs, 1)[0];
+  // Exact-stream match here (not id||origId): getProgRec already matches exact id, so prev must
+  // too — otherwise a substitute logged under origId sets topWeight while the base's own session
+  // drives the verdict, prescribing e.g. 62.5 kg on returning to a 100 kg lift (PROG-02).
+  const prev = getPrevHist(_hid, logs, 1, true)[0];
   if (!prev) return { weight: 0, reps: ex.rMin, note: 'First time — establish a working weight', first: true };
   const topWeight = Math.max(...prev.sets.map(s => s.weight));
   const rec = getProgRec(_hid, ex, logs, phase);
@@ -2928,7 +2934,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-23T2210';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
+  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-23T2240';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -5196,7 +5202,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               {curEx.orm && parseInt(rp)>0 && parseFloat(wt)>0 && (
                 <div className="onerm-box">
                   <span className="orm-lbl">Est. 1RM</span>
-                  <span className="orm-val">{epley(parseFloat(wt),parseInt(rp))}kg</span>
+                  <span className="orm-val">{epley(totalLoad(curEx.id, parseFloat(wt), bwAt, new Date().toISOString()), parseInt(rp))}kg</span>
                 </div>
               )}
               <div className="log-area">
