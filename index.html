@@ -755,7 +755,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
   // Single source of truth for the build stamp. Bump this ONE value on every ship; the Tools
   // screen reads it via window.DP_BUILD so the displayed build can never drift from the SW-bust
   // value again. (No deploy-time injection in a static single file, so this stays manual.)
-  var BUILD='2026-08-23T2240';
+  var BUILD='2026-08-23T2320';
   try { window.DP_BUILD = BUILD; } catch(e) {}
   try {
     var prev = localStorage.getItem('dp_build');
@@ -2934,7 +2934,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-23T2240';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
+  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-23T2320';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -4373,7 +4373,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   // above range (1.08 vs 0.58-1.05) even with a satisfactory eGFR. UK/EU potassium tablets
   // are capped at 99 mg for exactly this reason, so grams of citrate powder deserve caution.
   //
-  // Elemental yields: sodium citrate (trisodium dihydrate) 235 mg Na/g, pink salt ~381 mg
+  // Elemental yields: sodium citrate (trisodium dihydrate) 235 mg Na/g, grey/pink sea salt ~381 mg
   // Na/g, potassium citrate (tripotassium monohydrate) 362 mg K/g.
   const hydration = useMemo(() => {
     const w = (nutriCoach && nutriCoach.trendW) ? nutriCoach.trendW
@@ -4392,14 +4392,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // and spreading it is easier on both gut and kidney. The three phases sum to exactly
     // the same totals as the single-figure version.
     const phases = [
-      { k:'pre',   label:'Pre',        vol:'500 ml',  ...mk(0.6, 0.6, 0.3, 2, '') },
-      { k:'intra', label:'Intra',      vol:'750 ml',  ...mk(0.9, 1.0, 0.4, 0, '') },
-      { k:'rest',  label:'Rest of day',vol:'~2.75 L', ...mk(0.5, 0.6, 0.8, 0, '') },
+      { k:'pre',   label:'Pre',        vol:'500 ml',  ...mk(0.6, 0.6, 0,   2, '') },
+      { k:'intra', label:'Intra',      vol:'750 ml',  ...mk(0.8, 0.8, 0.4, 0, '') },
+      { k:'rest',  label:'Rest of day',vol:'~2.75 L', ...mk(0.6, 0.5, 0,   0, '') },
     ];
     return {
       litres: 4,
-      train: mk(2.0, 2.2, 1.5, 2, '1 L pre + intra'),
-      rest:  mk(1.4, 1.4, 1.0, 1, 'across the day'),
+      train: mk(2.0, 1.9, 0.4, 2, '1 L pre + intra'),
+      rest:  mk(0.8, 0.7, 0,   1, 'across the day'),
       phases,
       foodNa: 2200, foodK: 2800,
     };
@@ -6254,7 +6254,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           <div className="ph-grid">
                             <div className="ph-hd"/>
                             {hydration.phases.map(p=>(<div key={'h'+p.k} className="ph-hd">{p.label}<span>{p.vol}</span></div>))}
-                            {[['Sodium citrate','naCit','g'],['Pink salt','salt','g'],['Potassium citrate','kCit','g'],['Taurine','tau','g']].map(([lbl,fld,u])=>(
+                            {[['Sodium citrate','naCit','g'],['Grey salt','salt','g'],['Potassium citrate','kCit','g'],['Taurine','tau','g']].map(([lbl,fld,u])=>(
                               <React.Fragment key={fld}>
                                 <div className="ph-lbl">{lbl}</div>
                                 {hydration.phases.map(p=>(
@@ -6269,8 +6269,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           </div>
                         ) : (<>
                           <div className="mp-row"><span className="mp-name">Sodium citrate</span><span className="mp-cals">{h.naCit} g</span><span className="mp-macros">{h.vol}</span></div>
-                          <div className="mp-row"><span className="mp-name">Pink salt</span><span className="mp-cals">{h.salt} g</span><span className="mp-macros">&#8594; {h.na} mg Na</span></div>
-                          <div className="mp-row"><span className="mp-name">Potassium citrate</span><span className="mp-cals">{h.kCit} g</span><span className="mp-macros">&#8594; {h.k} mg K</span></div>
+                          <div className="mp-row"><span className="mp-name">Grey salt</span><span className="mp-cals">{h.salt} g</span><span className="mp-macros">&#8594; {h.na} mg Na</span></div>
+                          <div className="mp-row">{h.kCit>0
+                            ? <><span className="mp-name">Potassium citrate</span><span className="mp-cals">{h.kCit} g</span><span className="mp-macros">&#8594; {h.k} mg K</span></>
+                            : <><span className="mp-name">Potassium</span><span className="mp-cals" style={{color:'var(--t2)'}}>food-led</span><span className="mp-macros">greens, potato, yoghurt</span></>}</div>
                           <div className="mp-row"><span className="mp-name">Taurine</span><span className="mp-cals">{h.tau} g</span><span className="mp-macros">through the day</span></div>
                         </>)}
                         <div className="mp-row" style={{borderBottom:'none'}}><span className="mp-name" style={{color:'var(--t2)'}}>With food (~{hydration.foodNa}/{hydration.foodK})</span><span className="mp-cals" style={{color:'var(--t2)'}}>{h.na+hydration.foodNa}</span><span className="mp-macros">mg Na &#183; {h.k+hydration.foodK} mg K</span></div>
@@ -6279,7 +6281,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           training replaces ~1 g of sodium lost in sweat; rest days need less, but not none, because 4 L without
                           sweating dilutes plasma sodium.
                           Judge by thirst, cramp and urine colour &#8212; pale straw is right, clear all day means you are over-drinking.
-                          Magnesium glycinate 300&ndash;400 mg at night, <b>not</b> in the drink.
+                          Magnesium malate at night to ~200&ndash;300 mg elemental Mg (check your label &#8212; roughly 1.5&ndash;2 g), <b>not</b> in the drink.
+                          Creatine monohydrate 5 g every day, both training and rest, any time &#8212; not part of the drink.
+                          Dextrose is optional: 15&ndash;25 g intra only on a long or heavy session, and it counts toward your carbs.
                         </div>
                         <div className="av-note" style={{marginTop:6,marginBottom:0,color:'var(--warn)'}}>
                           Potassium is kept deliberately low and food-led. Your cystatin C was flagged above range, and renal
