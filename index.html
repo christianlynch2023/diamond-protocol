@@ -755,7 +755,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
   // Single source of truth for the build stamp. Bump this ONE value on every ship; the Tools
   // screen reads it via window.DP_BUILD so the displayed build can never drift from the SW-bust
   // value again. (No deploy-time injection in a static single file, so this stays manual.)
-  var BUILD='2026-08-24T0010';
+  var BUILD='2026-08-24T1430';
   try { window.DP_BUILD = BUILD; } catch(e) {}
   try {
     var prev = localStorage.getItem('dp_build');
@@ -2533,19 +2533,27 @@ const MAY_2026_BLOODS = {
 // release-limited (flip-flop) kinetics; real serum levels depend on absorption and the individual.
 // Every ester carries a source + confidence; unknown compounds are skipped, never fabricated.
 const PK_ESTERS = [
-  { match:['test enanth','testosterone enanth','test e','sustanon'], name:'Testosterone enanthate',            hl:4.5, conf:'moderate', src:'~4.5 d terminal (lit. 4.5\u20137 d)' },
-  { match:['test cyp','testosterone cyp'],                            name:'Testosterone cypionate',           hl:5.0, conf:'moderate', src:'~5 d (lit. 5\u20138 d)' },
-  { match:['primobolan','methenolone','primo'],                      name:'Methenolone enanthate (Primobolan)', hl:6.0, conf:'low',      src:'sparse data; ~5\u20137 d cited' },
-  { match:['test prop','testosterone prop'],                         name:'Testosterone propionate',          hl:0.8, conf:'moderate', src:'~0.8 d' },
-  { match:['nandrolone dec','deca-durabolin','deca'],                name:'Nandrolone decanoate',             hl:7.0, conf:'low',      src:'~6\u201312 d cited' },
-  { match:['npp','nandrolone phenyl'],                               name:'Nandrolone phenylpropionate',      hl:2.7, conf:'low',      src:'~2.7 d cited' },
-  { match:['tren enanth','trenbolone enanth','tren e'],              name:'Trenbolone enanthate',             hl:5.0, conf:'low',      src:'~5 d cited (sparse)' },
-  { match:['tren acet','trenbolone acet','tren a'],                  name:'Trenbolone acetate',               hl:1.0, conf:'low',      src:'~1 d (short ester)' },
-  { match:['masteron enanth','drostanolone enanth'],                 name:'Drostanolone enanthate',           hl:5.0, conf:'low',      src:'~5 d cited (sparse)' },
-  { match:['masteron prop','drostanolone prop'],                     name:'Drostanolone propionate',          hl:1.5, conf:'low',      src:'~1\u20132 d cited' },
+  // label = picker/display name · match = substrings resolved from the logged compound · hl in days.
+  // conf: moderate = human PK exists; low = sparse/cited; v.low = no compound-specific human PK,
+  // half-life INFERRED from the ester class only. Nothing here is a target or a recommendation.
+  { label:'Test enanthate',      match:['test enanth','test e'],                    name:'Testosterone enanthate',              hl:4.5, conf:'moderate', src:'~4.5 d terminal (lit. 4.5\u20137 d)' },
+  { label:'Test cypionate',      match:['test cyp'],                                name:'Testosterone cypionate',              hl:5.0, conf:'moderate', src:'~5 d (lit. 5\u20138 d)' },
+  { label:'Test propionate',     match:['test prop'],                               name:'Testosterone propionate',             hl:0.8, conf:'moderate', src:'~0.8 d' },
+  { label:'Test undecanoate',    match:['test undec','nebido'],                     name:'Testosterone undecanoate',            hl:20,  conf:'moderate', src:'~20\u201334 d (oil depot)' },
+  { label:'Primobolan',          match:['primobolan','methenolone','primo'],        name:'Methenolone enanthate (Primobolan)',  hl:6.0, conf:'low',      src:'sparse; ~5\u20137 d cited' },
+  { label:'Masteron enanthate',  match:['masteron enanth','drostanolone enanth','mast e'], name:'Drostanolone enanthate',       hl:5.0, conf:'low',      src:'~5 d cited (sparse)' },
+  { label:'Masteron propionate', match:['masteron prop','drostanolone prop','mast p'],     name:'Drostanolone propionate',      hl:1.5, conf:'low',      src:'~1\u20132 d cited' },
+  { label:'NPP',                 match:['npp','nandrolone phenyl'],                 name:'Nandrolone phenylpropionate (NPP)',   hl:2.7, conf:'low',      src:'~2.7 d cited' },
+  { label:'Deca',                match:['deca','nandrolone dec'],                   name:'Nandrolone decanoate (Deca)',         hl:7.0, conf:'low',      src:'~6\u201312 d cited' },
+  { label:'Tren acetate',        match:['tren acet','tren a'],                      name:'Trenbolone acetate',                  hl:1.0, conf:'low',      src:'~1 d (short ester)' },
+  { label:'Tren enanthate',      match:['tren enanth','tren e'],                    name:'Trenbolone enanthate',                hl:5.0, conf:'low',      src:'~5 d cited (sparse)' },
+  { label:'Tren hex',            match:['tren hex','parabolan','hexahydro'],        name:'Trenbolone hexahydrobenzylcarbonate', hl:7.0, conf:'v.low',    src:'sparse/anecdotal; long ester' },
+  { label:'EQ (boldenone)',      match:['boldenone','equipoise','eq '],             name:'Boldenone undecylenate (EQ)',         hl:14,  conf:'low',      src:'~14 d (long undecylenate ester)' },
+  { label:'DHB cypionate',       match:['dhb cyp','1-test cyp','dihydroboldenone cyp'], name:'DHB / 1-testosterone cypionate',   hl:5.0, conf:'v.low',    src:'NO human PK \u2014 inferred from cypionate ester' },
+  { label:'DHB propionate',      match:['dhb prop','1-test prop','dihydroboldenone prop'], name:'DHB / 1-testosterone propionate', hl:1.5, conf:'v.low',    src:'NO human PK \u2014 inferred from propionate ester' },
 ];
 function pkFor(compound){ const c=String(compound||'').toLowerCase(); return PK_ESTERS.find(p=>p.match.some(m=>c.includes(m)))||null; }
-const DECAY_COLORS = ['#c4ff00','#4a9eff','#ff8c00','#00e87a','#ff4444','#a479e2'];
+const DECAY_COLORS = ['#c4ff00','#4a9eff','#ff8c00','#00e87a','#ff4444','#a479e2','#f691b2','#43d692'];
 
 
 function App() {
@@ -2991,7 +2999,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-24T0010';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
+  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-24T1430';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -6806,7 +6814,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="bf-grp">
                     <div className="bf-lbl">Compound</div>
                     <select className="bf-sel" value={pCmp} onChange={e=>setPCmp(e.target.value)}>
-                      {['TRT','Test enanthate','Test cypionate','Primobolan','HCG','Other'].map(c=><option key={c} value={c}>{c}</option>)}
+                      {['TRT', ...PK_ESTERS.map(p=>p.label), 'HCG', 'Other'].map(c=><option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="bf-grp">
