@@ -755,7 +755,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
   // Single source of truth for the build stamp. Bump this ONE value on every ship; the Tools
   // screen reads it via window.DP_BUILD so the displayed build can never drift from the SW-bust
   // value again. (No deploy-time injection in a static single file, so this stays manual.)
-  var BUILD='2026-08-23T2320';
+  var BUILD='2026-08-24T0010';
   try { window.DP_BUILD = BUILD; } catch(e) {}
   try {
     var prev = localStorage.getItem('dp_build');
@@ -2524,6 +2524,30 @@ const MAY_2026_BLOODS = {
   note:'Transcribed from your Randox report — exact figures where the gauge was legible, otherwise the lab\u2019s own band.'
 };
 
+// ---------------------------------------------------------------------------------------------
+// RETROSPECTIVE INJECTION-DECAY MODEL (descriptive only).
+// This models the decline of injections the user has ALREADY LOGGED in the Protocol Log. It is
+// NOT a dosing tool: there is no scenario input, no ester/frequency picker, no comparison, and no
+// recommendation. It reads logged events and draws each ester's first-order decay using a
+// published release half-life. Half-lives are approximate literature figures for the ester's
+// release-limited (flip-flop) kinetics; real serum levels depend on absorption and the individual.
+// Every ester carries a source + confidence; unknown compounds are skipped, never fabricated.
+const PK_ESTERS = [
+  { match:['test enanth','testosterone enanth','test e','sustanon'], name:'Testosterone enanthate',            hl:4.5, conf:'moderate', src:'~4.5 d terminal (lit. 4.5\u20137 d)' },
+  { match:['test cyp','testosterone cyp'],                            name:'Testosterone cypionate',           hl:5.0, conf:'moderate', src:'~5 d (lit. 5\u20138 d)' },
+  { match:['primobolan','methenolone','primo'],                      name:'Methenolone enanthate (Primobolan)', hl:6.0, conf:'low',      src:'sparse data; ~5\u20137 d cited' },
+  { match:['test prop','testosterone prop'],                         name:'Testosterone propionate',          hl:0.8, conf:'moderate', src:'~0.8 d' },
+  { match:['nandrolone dec','deca-durabolin','deca'],                name:'Nandrolone decanoate',             hl:7.0, conf:'low',      src:'~6\u201312 d cited' },
+  { match:['npp','nandrolone phenyl'],                               name:'Nandrolone phenylpropionate',      hl:2.7, conf:'low',      src:'~2.7 d cited' },
+  { match:['tren enanth','trenbolone enanth','tren e'],              name:'Trenbolone enanthate',             hl:5.0, conf:'low',      src:'~5 d cited (sparse)' },
+  { match:['tren acet','trenbolone acet','tren a'],                  name:'Trenbolone acetate',               hl:1.0, conf:'low',      src:'~1 d (short ester)' },
+  { match:['masteron enanth','drostanolone enanth'],                 name:'Drostanolone enanthate',           hl:5.0, conf:'low',      src:'~5 d cited (sparse)' },
+  { match:['masteron prop','drostanolone prop'],                     name:'Drostanolone propionate',          hl:1.5, conf:'low',      src:'~1\u20132 d cited' },
+];
+function pkFor(compound){ const c=String(compound||'').toLowerCase(); return PK_ESTERS.find(p=>p.match.some(m=>c.includes(m)))||null; }
+const DECAY_COLORS = ['#c4ff00','#4a9eff','#ff8c00','#00e87a','#ff4444','#a479e2'];
+
+
 function App() {
 
   // ── WHOOP INTEGRATION ─────────────────────────────────
@@ -2858,6 +2882,39 @@ function App() {
     return {...v, [field]:null, updatedAt:Date.now()};
   }));
   const tempLogList = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null), [vitalsLog]);
+  // Retrospective decay of LOGGED injections only. Each logged mg dose declines by first-order
+  // elimination at its ester's half-life; same-compound doses sum into one accumulation curve.
+  // No scenario input — this is purely a picture of what has already been administered.
+  const decayModel = useMemo(() => {
+    const events = protocolLog.map(e => {
+      const pk = pkFor(e.compound); const dose = parseFloat(e.dose);
+      const t = e && e.date ? new Date(e.date).getTime() : NaN;
+      const u = String(e && e.unit || '').toLowerCase();
+      if (!pk || !Number.isFinite(dose) || dose <= 0 || !Number.isFinite(t)) return null;
+      if (u && !u.includes('mg')) return null;              // only decay mg doses (skip iu/ml etc.)
+      return { name: pk.name, hl: pk.hl, conf: pk.conf, src: pk.src, dose, t };
+    }).filter(Boolean);
+    if (!events.length) return null;
+    const names = [...new Set(events.map(e => e.name))];
+    const t0 = Math.min(...events.map(e => e.t));
+    const tEnd = Date.now();
+    const days = Math.max(1, Math.ceil((tEnd - t0) / 86400000));
+    const step = days > 180 ? Math.ceil(days / 180) : 1;
+    const series = names.map((name, idx) => {
+      const evs = events.filter(e => e.name === name); const hl = evs[0].hl;
+      const pts = [];
+      for (let d = 0; d <= days; d += step) {
+        const t = t0 + d * 86400000; let amt = 0;
+        for (const e of evs) { if (t >= e.t) amt += e.dose * Math.pow(0.5, (t - e.t) / 86400000 / hl); }
+        pts.push({ d, amt });
+      }
+      const cur = pts.length ? pts[pts.length - 1].amt : 0;
+      const peak = pts.reduce((m, p) => Math.max(m, p.amt), 0);
+      return { name, hl, conf: evs[0].conf, src: evs[0].src, n: evs.length, evs, pts, cur, peak, color: DECAY_COLORS[idx % DECAY_COLORS.length] };
+    });
+    const maxAmt = Math.max(1, ...series.flatMap(s => s.pts.map(p => p.amt)));
+    return { series, t0, tEnd, days, step, maxAmt };
+  }, [protocolLog]);
   const woodLogList = useMemo(()=> vitalsLog.filter(v=>v&&v.wood!=null), [vitalsLog]);
   const tempChartSeries = useMemo(()=> vitalsLog.filter(v=>v&&v.temp!=null).slice(0,21).reverse().map(v=>({x:fmtShort(v.date),y:v.temp,t:new Date(v.date).getTime()})), [vitalsLog]);
   // Waking temp has no universal target — what matters is drift from YOUR baseline. Band is
@@ -2934,7 +2991,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-23T2320';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
+  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-24T0010';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -6749,7 +6806,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="bf-grp">
                     <div className="bf-lbl">Compound</div>
                     <select className="bf-sel" value={pCmp} onChange={e=>setPCmp(e.target.value)}>
-                      {['TRT','HCG','Compound A','Compound B','Other'].map(c=><option key={c} value={c}>{c}</option>)}
+                      {['TRT','Test enanthate','Test cypionate','Primobolan','HCG','Other'].map(c=><option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="bf-grp">
@@ -6783,6 +6840,45 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               ))}
               {protocolLog.length===0&&<div className="empty-msg">No entries yet — log your first dose above.</div>}
             </div>
+            {decayModel && (() => {
+              const W=340,H=150,PX=34,PY=14, dm=decayModel;
+              const xf=d=> PX + (dm.days?d/dm.days:0)*(W-2*PX);
+              const yf=a=> (H-PY) - (a/dm.maxAmt)*(H-2*PY);
+              return (
+                <div style={{marginTop:12}}>
+                  <div className="mp-hd" style={{marginBottom:6}}>
+                    <span className="mp-ttl">Injection exposure &#183; modelled</span>
+                    <span className="mp-cals">{dm.days} d</span>
+                  </div>
+                  <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',display:'block'}}>
+                    {[0,0.5,1].map((f,i)=>{const y=(H-PY)-f*(H-2*PY);return(<g key={i}><line x1={PX} y1={y} x2={W-PX} y2={y} stroke="#1d2733" strokeWidth="1" strokeDasharray="3 3"/><text x={PX-4} y={y+3} textAnchor="end" fontSize="8" fill="#3c4f62" fontFamily="JetBrains Mono">{Math.round(f*dm.maxAmt)}</text></g>);})}
+                    {dm.series.map((s,si)=>{const line=s.pts.map((p,i)=>`${i===0?'M':'L'}${xf(p.d).toFixed(1)} ${yf(p.amt).toFixed(1)}`).join(' ');return <path key={si} d={line} fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>;})}
+                    {dm.series.flatMap((s,si)=> s.evs.map((e,ei)=>{const d=(e.t-dm.t0)/86400000;return <circle key={si+'-'+ei} cx={xf(d)} cy={H-PY} r="1.6" fill={s.color} fillOpacity="0.6"/>;}))}
+                    <text x={PX} y={H-2} textAnchor="start" fontSize="8" fill="#3c4f62" fontFamily="JetBrains Mono">{fmtShort(new Date(dm.t0).toISOString())}</text>
+                    <text x={W-PX} y={H-2} textAnchor="end" fontSize="8" fill="#3c4f62" fontFamily="JetBrains Mono">today</text>
+                    <text x={PX-4} y={PY-5} fontSize="7.5" fill="#3c4f62" fontFamily="JetBrains Mono">mg-eq</text>
+                  </svg>
+                  <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:5}}>
+                    {dm.series.map((s,si)=>(
+                      <div key={si} style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                        <span style={{width:8,height:8,borderRadius:2,background:s.color,flexShrink:0}}/>
+                        <span style={{fontSize:11,color:'var(--t)',fontWeight:600}}>{s.name}</span>
+                        <span style={{fontSize:10,color:'var(--t2)',fontFamily:"'JetBrains Mono',monospace"}}>t&#189; ~{s.hl}d ({s.conf}) &#183; {s.n} logged &#183; now ~{Math.round(s.cur)} (peak ~{Math.round(s.peak)}) mg-eq</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="av-note" style={{marginTop:8,marginBottom:0}}>
+                    Modelled decline of the injections <b>you have logged</b>, using each ester&#8217;s published half-life. This is <b>relative modelled exposure, not your serum level</b>, and not advice. It sums repeated doses to show accumulation and decay, but ignores the slow oil-depot release phase, so the days just after an injection are approximate. Real levels depend on absorption and your own physiology.
+                  </div>
+                  <div className="av-note" style={{marginTop:6,marginBottom:0,color:'var(--t3)'}}>
+                    Half-life sources: {dm.series.map(s=>`${s.name} ${s.src}`).join(' \u00b7 ')}. Log doses in mg with a date; iu/ml entries (e.g. HCG) are not modelled.
+                  </div>
+                </div>
+              );
+            })()}
+            {!decayModel && protocolLog.length>0 && (
+              <div className="av-note" style={{marginTop:10}}>Log an injection in <b>mg</b> with a recognised compound (Test enanthate, Test cypionate, Primobolan&#8230;) to see its modelled decline here.</div>
+            )}
             </>}
           </div>
         </div>
