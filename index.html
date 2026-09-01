@@ -664,6 +664,22 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .bm-ref{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--t3);text-align:right}
 .bm-gap{font-size:11px;color:var(--warn);margin-top:10px;line-height:1.5;background:rgba(255,140,0,.08);padding:8px 10px;border-radius:8px}
 .bm-note{font-size:10px;color:var(--t3);margin-top:9px;line-height:1.45;font-style:italic}
+.td-act{margin:0 0 12px;padding:14px;border-radius:12px;background:var(--crd);border:1px solid var(--bdr);border-left:3px solid var(--t3)}
+.td-act.green{border-left-color:var(--ok)}.td-act.amber{border-left-color:#ffd24a}.td-act.red{border-left-color:var(--err)}
+.ta-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.ta-mode{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.ta-mode.green{color:var(--ok)}.ta-mode.amber{color:#ffd24a}.ta-mode.red{color:var(--err)}
+.ta-prov{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);border:1px solid var(--bdr);border-radius:4px;padding:1px 5px}
+.ta-action{font-size:12px;color:var(--t2);line-height:1.45;margin-bottom:10px}
+.ta-sess{font-size:19px;font-weight:800;color:var(--t);letter-spacing:-.02em}
+.ta-sub{font-size:11px;color:var(--t3);margin-top:2px}
+.ta-first{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:10px;padding-top:9px;border-top:1px solid var(--bdr)}
+.ta-ex{font-size:13px;color:var(--t2)}
+.ta-tgt{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--acc);white-space:nowrap}
+.ta-note{font-size:10.5px;color:var(--t3);margin-top:4px}
+.ta-warn{margin-top:9px;padding:7px 9px;border-radius:7px;background:rgba(255,140,0,.09);border:1px solid rgba(255,140,0,.28);font-size:11px;color:var(--warn);line-height:1.4}
+.ta-go{width:100%;margin-top:12px;padding:13px;border:none;border-radius:9px;background:var(--acc);color:#0b0d10;font-weight:800;font-size:14px;letter-spacing:.01em;cursor:pointer}
+.td-prov{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin-left:6px;font-weight:500}
 .av-note{font-size:11px;color:var(--t3);line-height:1.5;margin:2px 0 11px}
 .av-row{display:flex;align-items:center;gap:8px;padding:4px 0}
 .av-mus{flex:0 0 96px;font-size:11.5px;color:var(--t)}
@@ -767,7 +783,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
   // Single source of truth for the build stamp. Bump this ONE value on every ship; the Tools
   // screen reads it via window.DP_BUILD so the displayed build can never drift from the SW-bust
   // value again. (No deploy-time injection in a static single file, so this stays manual.)
-  var BUILD='2026-08-24T1600';
+  var BUILD='2026-08-24T1720';
   try { window.DP_BUILD = BUILD; } catch(e) {}
   try {
     var prev = localStorage.getItem('dp_build');
@@ -923,7 +939,6 @@ const SESSIONS = {
   ]},
   lowerA:{id:"lowerA",name:"Lower",focus:"Complete Legs",day:"Sunday",time:"80-90 min",maxInt:2,exercises:[
     {id:"la1",name:"Leg Press",sets:4,tempo:"3-0-1",struct:"1 top set 6-8, back-offs 8-10, final 10-15",setPlan:[{label:"Top set",sets:1,rMin:6,rMax:8,pct:1.0},{label:"Back-off",sets:2,rMin:8,rMax:10,pct:0.90},{label:"Final",sets:1,rMin:10,rMax:15,pct:0.80}],rMin:6,rMax:10,rirMin:1,rirMax:1,rest:180,handle:"Machine",cues:["Feet mid-platform, shoulder-width, toes out 20","Knees track over toes","Descend to just before pelvic tuck","No true failure - knees complain -> feet higher"],avoidFail:true,avoidReason:"No true failure - stable but heavy",int:null,orm:true},
-    {id:"la2",name:"Leg Press Back-Off",sets:1,tempo:"3-0-1",rMin:10,rMax:15,rirMin:0,rirMax:1,rest:150,handle:"Machine",cues:["Same setup, -15-20% load","Can push 0 RIR - spine supported"],avoidFail:false,int:null,orm:false},
     {id:"la3",name:"Romanian Deadlift",sets:3,tempo:"3-1-1",rMin:8,rMax:10,rirMin:1,rirMax:1,rest:180,handle:"Short bar",cues:["Soft knees, hips travel back not down","Bar drags close to legs","Spine dead neutral","Never to failure"],avoidFail:true,avoidReason:"Connective tissue - stay 1-2 RIR",int:null,orm:true},
     {id:"la5",name:"Leg Extension",sets:3,tempo:"2-1-2",rMin:12,rMax:20,rirMin:0,rirMax:1,rest:90,handle:"Machine",cues:["Back pad upright, quad at length","1-sec pause at full extension","Failure/partials OK"],avoidFail:false,int:{label:"FAILURE",desc:"Final set to failure or partials - spine safe",kind:'failure'},orm:false},
     {id:"la6",name:"Seated Leg Curl",sets:3,tempo:"2-1-2",rMin:10,rMax:15,rirMin:0,rirMax:1,rest:90,handle:"Machine",cues:["Seated for lengthened ham bias","Full stretch at top","Controlled curl, squeeze"],avoidFail:false,int:{label:"PARTIALS",desc:"+10 stretch partials final set",kind:'partials'},orm:false},
@@ -1015,7 +1030,7 @@ const MUSCLES = {
 const EX_MUSCLE = {
   ua1:{p:'chest',s:'triceps'}, ua2:{p:'midBack',s:'biceps'}, ua3:{p:'chest',s:'triceps'},
   ua4:{p:'midBack',s:['rearDelt','biceps']}, ua5:{p:'sideDelt'}, ua6:{p:'triceps'}, ua7:{p:'calves'}, ua8:{p:'rearDelt'},
-  la1:{p:'quads',s:['glutes','adductors']}, la2:{p:'quads',s:['glutes','adductors']}, la3:{p:'hams',s:'glutes'}, la4:{p:'quads',s:['glutes','adductors']},
+  la1:{p:'quads',s:['glutes','adductors']}, la2:{p:'quads',s:['glutes','adductors']}, // la2 retired from the programme but kept here so historical logs keep their muscle attribution la3:{p:'hams',s:'glutes'}, la4:{p:'quads',s:['glutes','adductors']},
   la5:{p:'quads'}, la6:{p:'hams'},
   la10:{p:'glutes',s:'hams'}, la7:{p:'calves'},
   ub1:{p:'lats',s:'biceps'}, ub2:{p:'chest',s:['sideDelt','triceps']}, ub3:{p:'chest'},
@@ -1103,7 +1118,7 @@ const parseNum = (raw) => {
   return Number.isFinite(n) ? n : null;
 };
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
-const RAMP_EX = new Set(['ua3','ua4','ua5','ub3','ub1','ub4','ub5']);
+const RAMP_EX = new Set(['ua3','ua4','ua5','ub3','ub4','ub5']);   // accessories only — ub1 (weighted pull-up) removed: ramping a heavy compound contradicts the ramp's purpose and stacks elbow/biceps tendon load
 const RAMP_P1 = new Set([2,6]);
 const RAMP_P2 = new Set([3,7]);
 const HIGHVOL_EX = new Set(['ua5','ub4','ua8','ub5','ub7','ua6','ub8','la6','lb5','la7','lb7','ua7','lb6']);
@@ -3068,7 +3083,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-24T1600';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
+  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-24T1720';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -4872,8 +4887,57 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         <div className="screen">
           <div className="topbar"><span className="logo">Today</span><span className="top-badge">B{block} · W{week}/12</span></div>
           <div className="today-date">{new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div>
+
+          {/* ACTION FIRST. Today used to open on a recovery dashboard, so the thing you actually
+              need — what to train and what to load — sat below the fold. This card answers it:
+              readiness call (advice), the session, the first lift's exact prescription, any
+              warnings, and Start. Everything below stays as the supporting detail. */}
+          {(() => {
+            const inProg = wipData && SESSIONS[wipData.sessionId];
+            const sid = inProg ? wipData.sessionId : sel;
+            const sess = sid ? SESSIONS[sid] : null;
+            const ex0 = sess ? sess.exercises[0] : null;
+            const t0 = ex0 ? getTarget(ex0, logs, week, effPhase) : null;
+            const warns = [];
+            if (latestBP) { const c = bpCategory(latestBP.sys, latestBP.dia); if (c.cls==='high'||c.cls==='warn') warns.push('BP '+latestBP.sys+'/'+latestBP.dia+' — '+(c.label||'elevated')); }
+            if (whoopData && whoopData.cachedAt && (Date.now()-new Date(whoopData.cachedAt).getTime())>30*3600000) warns.push('WHOOP data stale');
+            if (isDeload) warns.push('Deload week — ~50% sets, 85% load');
+            if (ctxReasons && ctxReasons.length) warns.push(ctxReasons.join(' · '));
+            return (
+              <div className={`td-act ${readiness.cls}`}>
+                <div className="ta-top">
+                  <span className={`ta-mode ${readiness.cls}`}>{readiness.title}</span>
+                  <span className="ta-prov">guidance</span>
+                </div>
+                <div className="ta-action">{readiness.action}</div>
+                {sess ? (
+                  <>
+                    <div className="ta-sess">{sess.name}{inProg && <span className="td-chip">in progress</span>}</div>
+                    <div className="ta-sub">{sess.focus} · {getPhase(week).name} · target {wr.rir} RIR</div>
+                    {ex0 && t0 && (
+                      <div className="ta-first">
+                        <span className="ta-ex">{ex0.name}</span>
+                        <span className="ta-tgt">{t0.weight ? t0.weight+'kg' : 'establish'} {t0.reps?'× '+t0.reps:''}</span>
+                      </div>
+                    )}
+                    {ex0 && t0 && t0.note && <div className="ta-note">{t0.note}</div>}
+                    {warns.length > 0 && <div className="ta-warn">{warns.join(' · ')}</div>}
+                    <button className="ta-go" onClick={()=> inProg ? resumeWorkout() : startWorkout(sid)}>
+                      {inProg ? 'Resume session' : 'Start '+sess.name}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {warns.length > 0 && <div className="ta-warn">{warns.join(' · ')}</div>}
+                    <button className="ta-go" onClick={()=>setView('home')}>Choose a session</button>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="td-hero">
-            <div className="th-lbl">Recovery</div>
+            <div className="th-lbl">Recovery <span className="td-prov">measured · WHOOP</span></div>
             {whoopData && whoopData.recovery!=null ? (
               <>
                 <div className="th-val"><span className={'wcls '+getWhoopCls(whoopData.recovery)}>{whoopData.recovery}<span style={{fontSize:26}}>%</span></span>
@@ -4884,26 +4948,19 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           </div>
 
           <div className="td-card">
-            <div className="td-row"><span className="td-lbl">Session</span>
-              <span className="td-val" style={{fontSize:16}}>{(wipData && SESSIONS[wipData.sessionId]) ? SESSIONS[wipData.sessionId].name : (sel && SESSIONS[sel] ? SESSIONS[sel].name : '—')}{wipData && SESSIONS[wipData.sessionId] ? <span className="td-chip">in progress</span> : null}</span></div>
-            <div className="td-sub">{getPhase(week).name} · {isDeload?'Deload':showInt?'Intensifiers on':'Straight sets'}</div>
-          </div>
-
-
-          <div className="td-card">
-            <div className="td-row"><span className="td-lbl">Weight</span>
+            <div className="td-row"><span className="td-lbl">Weight <span className="td-prov">measured</span></span>
               <span className="td-val">{bodyMetrics[0]?bodyMetrics[0].weight+'kg':'—'}{bwRate?<span className={'td-arrow '+(bwRate.perWeek<-0.02?'good':bwRate.perWeek>0.02?'warn':'')}>{bwRate.perWeek>0.02?'▲':bwRate.perWeek<-0.02?'▼':'→'} {Math.abs(bwRate.perWeek).toFixed(2)}/wk</span>:null}</span></div>
             {bpStats||bwRate?<div className="td-sub">{bwRate?('trend '+(bwRate.pctWeek>0?'+':'')+bwRate.pctWeek.toFixed(2)+'%/wk'):''}</div>:null}
           </div>
 
           <div className="td-card">
-            <div className="td-row"><span className="td-lbl">Fuel target</span>
+            <div className="td-row"><span className="td-lbl">Fuel target <span className="td-prov">estimated</span></span>
               <span className="td-val">{effTargets ? effTargets.weekly : (nutriCoach && nutriCoach.suggested) ? nutriCoach.suggested : '—'}{(effTargets || (nutriCoach && nutriCoach.suggested)) ? <span className="td-muted" style={{fontSize:13}}> kcal{effTargets && effTargets.source==='locked' ? ' \u00b7 locked' : ''}</span> : null}</span></div>
             {nutriCoach && nutriCoach.proteinG && <div className="td-sub">P {nutriCoach.proteinG}g{nutriCoach.carbG!=null?' · C '+nutriCoach.carbG+'g':''}{nutriCoach.fatG!=null?' · F '+nutriCoach.fatG+'g':''}</div>}
           </div>
 
           <div className="td-card">
-            <div className="td-row"><span className="td-lbl">Blood pressure</span>
+            <div className="td-row"><span className="td-lbl">Blood pressure <span className="td-prov">measured</span></span>
               {latestBP
                 ? <span className="td-val"><span className={'bpc '+bpCategory(latestBP.sys,latestBP.dia).cls}>{latestBP.sys}/{latestBP.dia}</span></span>
                 : <span className="td-val td-muted">not logged</span>}</div>
@@ -4911,13 +4968,13 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           </div>
 
           {latestGl && <div className="td-card">
-            <div className="td-row"><span className="td-lbl">Glucose</span>
+            <div className="td-row"><span className="td-lbl">Glucose <span className="td-prov">measured</span></span>
               <span className="td-val"><span className={'bpc '+glucoseCategory(latestGl.value).cls}>{latestGl.value}</span><span className="td-muted" style={{fontSize:13}}> mmol/L</span></span></div>
             {glStats && <div className="td-sub">7-day avg {glStats.avg} · {glStats.inRange}% in range{latestGl.value>glStats.avg?' · ▲ up':latestGl.value<glStats.avg?' · ▼ down':' · → level'}</div>}
           </div>}
 
           <div className="td-card">
-            <div className="td-row"><span className="td-lbl">Waking temp</span>
+            <div className="td-row"><span className="td-lbl">Waking temp <span className="td-prov">measured</span></span>
               <span className="td-val">{todayVitals && todayVitals.temp!=null
                 ? todayVitals.temp+'°'
                 : (whoopData && whoopData.skinTemp!=null
