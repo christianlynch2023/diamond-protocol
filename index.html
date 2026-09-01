@@ -652,6 +652,18 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .bld-ref{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);min-width:64px;text-align:right}
 .bld-gaps{font-size:11.5px;color:var(--warn);margin-top:10px;line-height:1.5;background:rgba(255,140,0,.08);padding:9px 11px;border-radius:8px}
 .bld-note{font-size:10.5px;color:var(--t3);margin-top:8px;line-height:1.4;font-style:italic}
+.bm-mon{margin:10px 0 14px;padding:12px;background:var(--crd);border:1px solid var(--bdr);border-radius:10px}
+.bm-sub{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:5px}
+.bm-flag-wrap{padding:8px;background:rgba(255,68,68,.06);border:1px solid rgba(255,68,68,.25);border-radius:8px}
+.bm-row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:5px 0;border-bottom:1px solid rgba(29,39,51,.6)}
+.bm-row:last-child{border-bottom:none}
+.bm-k{font-size:12px;color:var(--t);font-weight:600}
+.bm-v{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;text-align:right}
+.bm-v.high{color:var(--err)}.bm-v.low{color:var(--inf)}.bm-v.ok{color:var(--t)}
+.bm-trend{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--t2)}
+.bm-ref{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--t3);text-align:right}
+.bm-gap{font-size:11px;color:var(--warn);margin-top:10px;line-height:1.5;background:rgba(255,140,0,.08);padding:8px 10px;border-radius:8px}
+.bm-note{font-size:10px;color:var(--t3);margin-top:9px;line-height:1.45;font-style:italic}
 .av-note{font-size:11px;color:var(--t3);line-height:1.5;margin:2px 0 11px}
 .av-row{display:flex;align-items:center;gap:8px;padding:4px 0}
 .av-mus{flex:0 0 96px;font-size:11.5px;color:var(--t)}
@@ -755,7 +767,7 @@ const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createOb
   // Single source of truth for the build stamp. Bump this ONE value on every ship; the Tools
   // screen reads it via window.DP_BUILD so the displayed build can never drift from the SW-bust
   // value again. (No deploy-time injection in a static single file, so this stays manual.)
-  var BUILD='2026-08-24T1430';
+  var BUILD='2026-08-24T1600';
   try { window.DP_BUILD = BUILD; } catch(e) {}
   try {
     var prev = localStorage.getItem('dp_build');
@@ -1174,6 +1186,14 @@ function getProgRec(exId, exOrRMax, logs, phase) {
     while (caps.length < nSets) caps.push(caps.length ? caps[caps.length - 1] : rMax);
     return caps;
   };
+  // Collect the recent eligible (non-deload) sessions rather than only the newest. One bad day
+  // used to freeze you on "beat that" until you beat it, even if the session before was a clean
+  // sweep at the SAME load. We scan the last N and treat progression as earned if any of them
+  // swept every slot AT THE CURRENT LOAD. Matching on the same load matters: if you have
+  // deliberately dropped weight (or just moved up), that is a new working load and an older
+  // sweep at a different load must not carry over.
+  const N = 3;
+  const recent = [];
   for (const s of logs) {
     if (s.deload === true) continue;                       // C1
     if (s.deload == null && DLW.has(s.week)) continue;     // C1 (flag missing on older logs)
@@ -1182,15 +1202,21 @@ function getProgRec(exId, exOrRMax, logs, phase) {
     const top = Math.max(...ex.sets.map(x => x.weight));
     const caps = capsFor(ex.sets.length);
     const hit = caps ? ex.sets.map((x, i) => x.reps >= caps[i]) : ex.sets.map(x => x.reps >= rMax);
-    if (hit.every(Boolean)) {
+    recent.push({ top, hit, all: hit.every(Boolean), some: hit.some(Boolean) });
+    if (recent.length >= N) break;
+  }
+  if (recent.length) {
+    const cur = recent[0];
+    const earned = recent.find(r => r.all && r.top === cur.top);   // same load; newest counts too
+    if (earned) {
       // Cut progresses on PERFORMANCE (all slots capped), never on a readiness reading. It fires
       // rarely on a deficit, which is the intended "take it when the reps are there" behaviour.
       return phase === 'cut'
-        ? { type: "inc", msg: "All slots hit their cap — take the load if it's there", wt: top }
-        : { type: "inc", msg: "All slots hit their rep cap — increase weight", wt: top };
+        ? { type: "inc", msg: "All slots hit their cap — take the load if it's there", wt: earned.top }
+        : { type: "inc", msg: "All slots hit their rep cap — increase weight", wt: earned.top };
     }
-    if (hit.some(Boolean)) return { type: "beat", msg: "Beat the slots that fell short, keep weight", wt: top };
-    return { type: "keep", msg: "Keep weight, beat reps", wt: top };
+    if (cur.some) return { type: "beat", msg: "Beat the slots that fell short, keep weight", wt: cur.top };
+    return { type: "keep", msg: "Keep weight, beat reps", wt: cur.top };
   }
   return { type: "first", msg: "First time — establish your working weight" };
 }
@@ -2273,7 +2299,7 @@ function mergeLogs(a, b) {
   }
   const out = order.map(k => map.get(k));
   out.sort((x, y) => x.date < y.date ? 1 : -1);
-  return out.slice(0, 200);
+  return out.slice(0, 600);   // must match the setLogs cap, or a sync would silently truncate history back to 200
 }
 // LAST-WRITE-WINS merge. The old implementation was first-wins over [...local, ...cloud],
 // so the LOCAL copy always beat the cloud copy even when the cloud held a newer edit —
@@ -2954,6 +2980,49 @@ function App() {
     });
   }, []);
   const bloodsLog = useMemo(()=>live(bloodsLogRaw),[bloodsLogRaw]);
+  // BIOMARKER MONITOR. Panels are point-in-time snapshots; this turns them into a longitudinal
+  // view so drift between draws is visible instead of buried in a PDF. Markers your protocol
+  // moves most are surfaced first. Monitoring for review with your doctor — never a diagnosis.
+  const PRIORITY_MARKERS = ['Haematocrit','Haemoglobin','MCV','Cystatin C','eGFR','ApoB / ApoA-I','LDL','Triglycerides','HDL','hs-CRP','PSA (total)','Testosterone','Free testosterone','SHBG','HbA1c','Ferritin'];
+  const EXPECTED_MARKERS = ['Oestradiol (E2)','IGF-1','Prolactin','ALT','AST'];
+  const biomarkers = useMemo(() => {
+    const num = (s) => { const m = String(s==null?'':s).replace(/[<>~]/g,'').match(/-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : null; };
+    const byKey = new Map();
+    for (const panel of (bloodsLog||[])) {
+      const d = panel && panel.date ? panel.date : null; if (!d) continue;
+      for (const grp of (panel.groups||[])) for (const mk of (grp.m||[])) {
+        if (!mk || !mk.k) continue;
+        if (!byKey.has(mk.k)) byKey.set(mk.k, []);
+        byKey.get(mk.k).push({ date:d, v:num(mk.disp), disp:mk.disp, unit:mk.unit||'', ref:mk.ref||'', flag:mk.flag||'ok' });
+      }
+    }
+    const rows = [];
+    for (const [k, arr] of byKey) {
+      arr.sort((a,b)=> a.date < b.date ? 1 : a.date > b.date ? -1 : 0);   // newest first
+      const cur = arr[0], prev = arr[1] || null;
+      let delta = null, dir = 'flat';
+      if (prev && cur.v != null && prev.v != null) {
+        delta = +(cur.v - prev.v).toFixed(2);
+        if (Math.abs(delta) > 1e-9) dir = delta > 0 ? 'up' : 'down';
+      }
+      const pi = PRIORITY_MARKERS.indexOf(k);
+      rows.push({ k, cur, prev, delta, dir, n:arr.length, hist:arr,
+                  outOfRange: cur.flag==='high'||cur.flag==='low',
+                  priority: pi === -1 ? 999 : pi });
+    }
+    rows.sort((a,b)=>{
+      if (a.outOfRange !== b.outOfRange) return a.outOfRange ? -1 : 1;   // flagged first
+      if (a.priority !== b.priority) return a.priority - b.priority;      // then stack movers
+      return a.k.localeCompare(b.k);
+    });
+    const dates = [...new Set((bloodsLog||[]).map(p=>p&&p.date).filter(Boolean))].sort().reverse();
+    const lastDraw = dates[0] || null;
+    const daysSince = lastDraw ? Math.floor((Date.now() - new Date(lastDraw+'T12:00:00Z').getTime())/86400000) : null;
+    const covered = new Set(rows.map(r=>r.k));
+    const missing = EXPECTED_MARKERS.filter(m=>!covered.has(m));
+    return { rows, flagged: rows.filter(r=>r.outOfRange), lastDraw, daysSince,
+             dueIn: daysSince==null ? null : 42 - daysSince, missing, panels: dates.length };
+  }, [bloodsLog]);
   const tempStat = useMemo(()=>{
     const xs=vitalsLog.filter(v=>v&&v.temp!=null).slice(0,7).map(v=>v.temp);
     if(!xs.length) return null;
@@ -2999,7 +3068,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-24T1430';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
+  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-24T1600';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3104,7 +3173,7 @@ function App() {
     const dur=Math.round((Date.now()-(startRef.current||Date.now()))/60000);
     const log={date:new Date().toISOString(),sessionId:sel,sessionName:sess.name,week,block,duration:dur,deload:deloadActive||false,hv:hvActive||false,
       exercises:sess.exercises.map(ex=>{const e=subMap[ex.id]?{...ex,...subMap[ex.id]}:ex; return {id:e.id,name:e.name,...(subMap[ex.id]?{origId:ex.id}:{}),sets:(newData||setData)[e.id]||[],pain:painRef.current[e.id]||0};}).filter(ex=>ex.sets.length>0)};
-    setLogs(prev => [{...log, id:newId(), updatedAt: Date.now()},...prev].slice(0,200));
+    setLogs(prev => [{...log, id:newId(), updatedAt: Date.now()},...prev].slice(0,600));   // 600 ≈ 3yr at 4x/wk: a 200 cap silently erased early-block baselines used by stalls/retention
     clearWip(); setReview(null); setView('complete');
   };
 
@@ -3242,7 +3311,7 @@ function App() {
       reader.onload = ev => {
         try {
           const data=JSON.parse(ev.target.result);
-          if (Array.isArray(data.logs)) { setLogs([...data.logs].sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,200)); }
+          if (Array.isArray(data.logs)) { setLogs([...data.logs].sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,600)); }
           // The app assumes every log is newest-first ([0] === latest). A backup with
           // oldest-first arrays previously imported "successfully" but corrupted every
           // latest-value, average, chart and readiness gate.
@@ -6772,6 +6841,54 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="sec-head" onClick={()=>toggleSec('bloods')}><div className="body-ttl">Bloods</div><span className={'sec-chev'+(secOpen('bloods')?' op':'')}>▾</span></div>
             {secOpen('bloods') && <>
             <div className="body-sub">Reference panel &#8212; the slow backdrop your daily markers read against</div>
+            {biomarkers.rows.length > 0 && (
+              <div className="bm-mon">
+                <div className="mp-hd" style={{marginBottom:8}}>
+                  <span className="mp-ttl">Monitor &#183; {biomarkers.panels} draw{biomarkers.panels===1?'':'s'}</span>
+                  {biomarkers.daysSince!=null && (
+                    <span className="mp-cals" style={{color: biomarkers.dueIn<=0 ? 'var(--warn)' : 'var(--t2)'}}>
+                      {biomarkers.daysSince}d since last{biomarkers.dueIn<=0 ? ' \u00b7 recheck due' : ' \u00b7 next in '+biomarkers.dueIn+'d'}
+                    </span>
+                  )}
+                </div>
+                {biomarkers.flagged.length > 0 && (
+                  <div className="bm-flag-wrap">
+                    <div className="bm-sub">Out of range now</div>
+                    {biomarkers.flagged.map((r,i)=>(
+                      <div key={i} className="bm-row">
+                        <span className="bm-k">{r.k}</span>
+                        <span className={'bm-v '+(r.cur.flag)}>
+                          {r.cur.flag==='high'?'\u25b2':'\u25bc'} {r.cur.disp}{r.cur.unit?' '+r.cur.unit:''}
+                        </span>
+                        <span className="bm-trend">
+                          {r.prev
+                            ? <>{r.prev.disp} &#8594; {r.cur.disp} {r.delta==null?'':r.dir==='up'?'\u2191':r.dir==='down'?'\u2193':'\u2192'}</>
+                            : 'first draw'}
+                        </span>
+                        <span className="bm-ref">{r.cur.ref}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="bm-sub" style={{marginTop:10}}>Tracked markers</div>
+                {biomarkers.rows.filter(r=>!r.outOfRange && r.priority<999).slice(0,10).map((r,i)=>(
+                  <div key={i} className="bm-row">
+                    <span className="bm-k">{r.k}</span>
+                    <span className="bm-v ok">{r.cur.disp}{r.cur.unit?' '+r.cur.unit:''}</span>
+                    <span className="bm-trend">
+                      {r.prev
+                        ? <>{r.prev.disp} &#8594; {r.cur.disp} {r.delta==null?'':r.dir==='up'?'\u2191':r.dir==='down'?'\u2193':'\u2192'}</>
+                        : 'first draw'}
+                    </span>
+                    <span className="bm-ref">{r.cur.ref}</span>
+                  </div>
+                ))}
+                {biomarkers.missing.length > 0 && (
+                  <div className="bm-gap">Not in any panel yet: <b>{biomarkers.missing.join(', ')}</b> &#8212; worth asking for at your next draw given your protocol.</div>
+                )}
+                <div className="bm-note">Monitoring only, not a diagnosis. Trends are for review with whoever manages your protocol &#8212; single values move for lots of reasons, direction across draws is what matters.</div>
+              </div>
+            )}
             {bloodsLog.length ? (
               <div>
                 {/* All panels, newest first. A newer draw supersedes only the markers it
