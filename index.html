@@ -863,12 +863,7 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 // to add IndexedDB migration or schema versioning later without touching call sites.
 // ---------------------------------------------------------------------------
 function usePersistentState(key, initial) {
-  const [value, setValue] = useState(() => {
-    try {
-      const raw = LS.get(key);
-      return raw != null ? JSON.parse(raw) : initial;
-    } catch (e) { return initial; }
-  });
+  const [value, setValue] = useState(() => LS.getJSON(key, initial));
   useEffect(() => {
     // LS.set returns false on failure (quota, private mode). Previously the error was
     // swallowed inside LS.set so this could never be detected — writes silently no-op'd
@@ -888,6 +883,21 @@ const LS = {
   // (usePersistentState, photo saving) need to know when a write actually failed.
   set: (k, v) => { try { localStorage.setItem(k, v); return true; } catch(e) { return false; } },
   del: k => { try { localStorage.removeItem(k); } catch(e) {} },
+  // Safe JSON read. A corrupt/truncated value must NOT throw here — these run inside useState
+  // initialisers, and a throw during first render white-screens the whole app (the error
+  // boundary cannot catch it). Nor should it be silently discarded. Instead quarantine the bad
+  // value under `${k}__corrupt` (recoverable for diagnosis) and return the fallback, so one
+  // damaged key degrades to a default rather than taking everything down.
+  getJSON: (k, fallback) => {
+    let raw = null;
+    try { raw = localStorage.getItem(k); } catch(e) { return fallback; }
+    if (raw == null) return fallback;
+    try { return JSON.parse(raw); }
+    catch(e) {
+      try { localStorage.setItem(k + '__corrupt', raw); localStorage.removeItem(k); } catch(_) {}
+      return fallback;
+    }
+  },
 };
 
 const PHASES = [
@@ -2743,13 +2753,13 @@ function App() {
   }, []);
 
   const [view, setView]         = useState('home');
-  const [week, setWeek]         = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).week||1:1; });
-  const [block, setBlock]       = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).block||1:1; });
+  const [week, setWeek]         = useState(() => LS.getJSON('dp_cfg', {}).week || 1);
+  const [block, setBlock]       = useState(() => LS.getJSON('dp_cfg', {}).block || 1);
   const [newBlockConfirm, setNewBlockConfirm] = useState(false);
-  const [recovery, setRecovery] = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).rec||'normal':'normal'; });
+  const [recovery, setRecovery] = useState(() => LS.getJSON('dp_cfg', {}).rec || 'normal');
   const [sel, setSel]           = useState(null);
-  const [logs, setLogs]         = useState(() => { const r=LS.get('dp_logs'); return r?JSON.parse(r):[]; });
-  const [wipData, setWipData]   = useState(() => { const r=LS.get('dp_wip'); return r?JSON.parse(r):null; });
+  const [logs, setLogs]         = useState(() => LS.getJSON('dp_logs', []));
+  const [wipData, setWipData]   = useState(() => LS.getJSON('dp_wip', null));
   const [expandLog, setExpandLog] = useState(null);
   const [progEx, setProgEx]     = useState(null);
   const [progMetric, setProgMetric] = useState('e1rm');
@@ -2766,8 +2776,8 @@ function App() {
   const [editingLog, setEditingLog] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
   const [condensed, setCondensed] = useState(false);
-  const [highVol, setHighVol] = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).highVol||false:false; });
-  const [goalPhase, setGoalPhase] = useState(() => { const r=LS.get('dp_cfg'); return r?JSON.parse(r).phase||'bulk':'bulk'; });
+  const [highVol, setHighVol] = useState(() => LS.getJSON('dp_cfg', {}).highVol || false);
+  const [goalPhase, setGoalPhase] = useState(() => LS.getJSON('dp_cfg', {}).phase || 'bulk');
   const GOAL_LABEL = { bulk:'muscle gain in a slight surplus', maintain:'maintenance / recomposition at roughly maintenance calories', cut:'fat loss in a caloric deficit' };
   const phaseLine = `CURRENT GOAL: ${GOAL_LABEL[goalPhase]||GOAL_LABEL.bulk}.` + (goalPhase==='cut' ? ' Priority is RETAINING muscle. Progression is welcome when recovery is good and the reps are there \u2014 take it when it comes \u2014 but never force it: holding loads while bodyweight drops is also success, and stalls are expected, not failures to fix. Keep volume around maintenance, protect recovery, and flag if protein looks low or the deficit seems too steep to hold muscle.' : goalPhase==='maintain' ? ' Progression is welcome but not forced; maintaining strength or a slow recomp is the aim.' : ' A small surplus supports growth, so drive progression where recovery allows.');
   const [wt, setWt]             = useState(60);
