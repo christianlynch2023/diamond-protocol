@@ -5514,8 +5514,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 return (
                   <div key={key} className="hm-cell" style={{background:c.bg,borderColor:c.bd}}>
                     <div className="hm-mus">{mus.name}</div>
-                    <div className="hm-val" style={{color:c.fg}}>{sets<mus.min?'\u25bc ':sets>mus.max?'\u25b2 ':''}{sets}</div>
-                    <div className="hm-rng">{mus.min}-{mus.max} \u00b7 {dsets} direct</div>
+                    <div className="hm-val" style={{color:c.fg}}>{sets<mus.min?'▼ ':sets>mus.max?'▲ ':''}{sets}</div>
+                    <div className="hm-rng">{mus.min}-{mus.max} · {dsets} direct</div>
                     <div className="hm-state" style={{color:c.fg}}>{sets<mus.min?'under':sets>mus.max?'over':'in range'}</div>
                   </div>
                 );
