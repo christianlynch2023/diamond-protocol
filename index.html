@@ -1090,6 +1090,15 @@ const getPhase = w => PHASES.find(p => p.weeks.includes(w)) || PHASES[0];
 const fmt = s => { const m=Math.floor(s/60), sc=s%60; return m>0 ? `${m}:${String(sc).padStart(2,'0')}` : `${s}s`; };
 const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' ' + new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+// Freshness of a dated reading, for the Today tiles: how old it is, and whether it's stale
+// enough that it shouldn't be treated as "current". Prevents old weight/BP/glucose values
+// being presented as if they were measured today.
+const freshInfo = (iso, staleDays) => {
+  const t = iso ? new Date(iso).getTime() : NaN;
+  if (isNaN(t)) return null;
+  const d = Math.floor((Date.now() - t) / 86400000);
+  return { d, label: d <= 0 ? 'today' : d === 1 ? 'yesterday' : d + 'd ago', stale: d > staleDays };
+};
 const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
 
 // Exercises where the logged number is ADDED load, not total load. A weighted pull-up at
@@ -5016,7 +5025,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           </div>
 
           <div className="td-card">
-            <div className="td-row"><span className="td-lbl">Weight <span className="td-prov">measured</span></span>
+            <div className="td-row"><span className="td-lbl">Weight {(() => { const f=freshInfo(bodyMetrics[0]&&bodyMetrics[0].date,10); return <span className="td-prov" style={f&&f.stale?{color:'var(--warn)'}:undefined}>{f?'measured · '+f.label:'measured'}</span>; })()}</span>
               <span className="td-val">{bodyMetrics[0]?bodyMetrics[0].weight+'kg':'—'}{bwRate?<span className={'td-arrow '+(bwRate.perWeek<-0.02?'good':bwRate.perWeek>0.02?'warn':'')}>{bwRate.perWeek>0.02?'▲':bwRate.perWeek<-0.02?'▼':'→'} {Math.abs(bwRate.perWeek).toFixed(2)}/wk</span>:null}</span></div>
             {bpStats||bwRate?<div className="td-sub">{bwRate?('trend '+(bwRate.pctWeek>0?'+':'')+bwRate.pctWeek.toFixed(2)+'%/wk'):''}</div>:null}
           </div>
@@ -5040,7 +5049,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           </div>
 
           <div className="td-card">
-            <div className="td-row"><span className="td-lbl">Blood pressure <span className="td-prov">measured</span></span>
+            <div className="td-row"><span className="td-lbl">Blood pressure {(() => { const f=freshInfo(latestBP&&latestBP.date,7); return <span className="td-prov" style={f&&f.stale?{color:'var(--warn)'}:undefined}>{f?'measured · '+f.label:'measured'}</span>; })()}</span>
               {latestBP
                 ? <span className="td-val"><span className={'bpc '+bpCategory(latestBP.sys,latestBP.dia).cls}>{latestBP.sys}/{latestBP.dia}</span></span>
                 : <span className="td-val td-muted">not logged</span>}</div>
@@ -5048,7 +5057,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           </div>
 
           {latestGl && <div className="td-card">
-            <div className="td-row"><span className="td-lbl">Glucose <span className="td-prov">measured</span></span>
+            <div className="td-row"><span className="td-lbl">Glucose {(() => { const f=freshInfo(latestGl&&latestGl.date,7); return <span className="td-prov" style={f&&f.stale?{color:'var(--warn)'}:undefined}>{f?'measured · '+f.label:'measured'}</span>; })()}</span>
               <span className="td-val"><span className={'bpc '+glucoseCategory(latestGl.value).cls}>{latestGl.value}</span><span className="td-muted" style={{fontSize:13}}> mmol/L</span></span></div>
             {glStats && <div className="td-sub">7-day avg {glStats.avg} · {glStats.inRange}% in range{latestGl.value>glStats.avg?' · ▲ up':latestGl.value<glStats.avg?' · ▼ down':' · → level'}</div>}
           </div>}
