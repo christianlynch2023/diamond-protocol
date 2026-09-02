@@ -3579,7 +3579,10 @@ function App() {
 
   const addBP = () => {
     const sys=parseNum(bpSys), dia=parseNum(bpDia);
-    if (sys==null || dia==null || sys<=0 || dia<=0) return;   // reject NaN/blank - feeds bpCategory + readiness gate
+    if (sys==null || dia==null || sys<=0 || dia<=0) { alert('Enter both systolic and diastolic.'); return; }
+    if (sys<60 || sys>260 || dia<40 || dia>160) { alert('BP looks off — check the numbers (systolic 60–260, diastolic 40–160).'); return; }
+    if (sys<=dia) { alert('Systolic should be higher than diastolic — did they get swapped?'); return; }
+    if (bpDate > localToday()) { alert('That date is in the future — pick today or earlier.'); return; }
     const entry = { date: `${bpDate}T12:00:00.000Z`, sys: Math.round(sys), dia: Math.round(dia), pulse: parseNum(bpPulse)!=null ? Math.round(parseNum(bpPulse)) : null };
     setBpLog(prev => [{...entry, id:newId(), updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
     setBpSys(''); setBpDia(''); setBpPulse(''); setBpDate(localToday()); setShowAddBP(false);
@@ -3611,7 +3614,9 @@ function App() {
 
   const addGlucose = () => {
     const g=parseNum(glVal);
-    if (g==null || g<=0) return;
+    if (g==null || g<=0) { alert('Enter a glucose value.'); return; }
+    if (g<2 || g>30) { alert('Glucose looks off — enter mmol/L between 2 and 30.'); return; }
+    if (glDate > localToday()) { alert('That date is in the future — pick today or earlier.'); return; }
     const entry = { date: `${glDate}T12:00:00.000Z`, value: g };
     setGlucoseLog(prev => [{...entry, id:newId(), updatedAt: Date.now()}, ...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0, 400));
     setGlVal(''); setGlDate(localToday()); setShowAddGl(false);
@@ -3735,7 +3740,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
 
   const addBodyMetric = () => {
     const w=parseNum(newWt);
-    if (w==null || w<=0) return;
+    if (w==null || w<=0) { alert('Enter a weight.'); return; }
+    if (w<30 || w>300) { alert('Weight looks off — enter a value in kg between 30 and 300.'); return; }
+    if (wtDate > localToday()) { alert('That date is in the future — pick today or earlier.'); return; }
     const e={date:`${wtDate}T12:00:00.000Z`,weight:w,bodyFat:null,muscle:null,notes:newWtNote};
     setBodyMetrics(prev=>[{...e, id:newId(), updatedAt: Date.now()},...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,200));
     setNewWt('');setNewWtNote('');setWtDate(localToday());setShowAddBody(false);
