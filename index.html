@@ -5036,7 +5036,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 {sess ? (
                   <>
                     <div className="ta-sess">{sess.name}{inProg && <span className="td-chip">in progress</span>}{isDerived && !allDone && <span className="td-chip">next up{sess.day?' · '+sess.day:''}</span>}{isDerived && allDone && <span className="td-chip">week complete · new rotation</span>}</div>
-                    <div className="ta-sub">{sess.focus} · {getPhase(week).name} · target {wr.rir} RIR</div>
+                    <div className="ta-sub">{sess.focus} · {getPhase(week).name} · target {wr.rir}</div>
                     {ex0 && t0 && (
                       <div className="ta-first">
                         <span className="ta-ex">{ex0.name}</span>
