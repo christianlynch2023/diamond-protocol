@@ -1031,7 +1031,9 @@ const MUSCLES = {
 const EX_MUSCLE = {
   ua1:{p:'chest',s:'triceps'}, ua2:{p:'midBack',s:'biceps'}, ua3:{p:'chest',s:'triceps'},
   ua4:{p:'midBack',s:['rearDelt','biceps']}, ua5:{p:'sideDelt'}, ua6:{p:'triceps'}, ua7:{p:'calves'}, ua8:{p:'rearDelt'},
-  la1:{p:'quads',s:['glutes','adductors']}, la2:{p:'quads',s:['glutes','adductors']}, // la2 retired from the programme but kept here so historical logs keep their muscle attribution la3:{p:'hams',s:'glutes'}, la4:{p:'quads',s:['glutes','adductors']},
+  la1:{p:'quads',s:['glutes','adductors']},
+  la2:{p:'quads',s:['glutes','adductors']}, // la2 retired from the programme but kept here so historical logs keep their muscle attribution
+  la3:{p:'hams',s:'glutes'}, la4:{p:'quads',s:['glutes','adductors']},
   la5:{p:'quads'}, la6:{p:'hams'},
   la10:{p:'glutes',s:'hams'}, la7:{p:'calves'},
   ub1:{p:'lats',s:'biceps'}, ub2:{p:'chest',s:['sideDelt','triceps']}, ub3:{p:'chest'},
@@ -1043,6 +1045,32 @@ const EX_MUSCLE = {
   lbquad:{p:'quads',s:['glutes','adductors']}, lbham:{p:'hams'}, lbglt:{p:'glutes',s:'hams'}, lbtri:{p:'triceps'},
   ub8:{p:'midBack',s:'biceps'}, la8:{p:'quads',s:['glutes']}, la9:{p:'abs'}, laob:{p:'obliques',s:'abs'}, ubpal:{p:'obliques',s:'abs'}, lb8:{p:'abs'}, lbleg:{p:'abs'}, lb9:{p:'rearDelt'},
 };
+
+// INVARIANT: every programmed slot must resolve to at least one muscle in EX_MUSCLE.
+// This is the guard that would have caught the RDL/la4 mapping being commented out —
+// a slot with no mapping contributes zero volume silently, with no error. Fail loud instead.
+// Runs here, AFTER both SESSIONS/ALL_EX and EX_MUSCLE are defined (const TDZ).
+(() => {
+  try {
+    const unmapped = ALL_EX.filter(e => { const m = EX_MUSCLE[e.id]; return !m || !m.p; });
+    if (unmapped.length) {
+      const msg = 'Diamond volume invariant FAILED — unmapped slot(s): ' +
+        unmapped.map(e => e.id + ' (' + e.name + ' / ' + e.session + ')').join(', ');
+      try { console.error(msg); } catch(_) {}
+      // Surface it in dev without bricking a live session: a red banner, not a thrown error.
+      if (typeof document !== 'undefined') {
+        const paint = () => {
+          const b = document.createElement('div');
+          b.textContent = msg;
+          b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#ff4444;color:#000;font:700 12px/1.4 monospace;padding:8px 12px;text-align:center';
+          document.body && document.body.appendChild(b);
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paint);
+        else paint();
+      }
+    }
+  } catch(_) { /* never let the guard itself brick the app */ }
+})();
 
 const getPhase = w => PHASES.find(p => p.weeks.includes(w)) || PHASES[0];
 const fmt = s => { const m=Math.floor(s/60), sc=s%60; return m>0 ? `${m}:${String(sc).padStart(2,'0')}` : `${s}s`; };
@@ -3084,7 +3112,7 @@ function App() {
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
   const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
-  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || '2026-08-24T1930';   // shown in Tools; single-sourced from the early build stamp so it cannot drift
+  const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || 'unknown';   // single source of truth is the early BUILD stamp (top of file); bump it per deploy until build-time injection lands (P3)
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
   // Deriving legacy ids on every merge is fragile; doing it once and saving means every
@@ -3225,7 +3253,7 @@ function App() {
           const nx=sess.exercises[nextExIdx];
           setExIdx(nextExIdx); setCurSet(0); setEditIdx(null);
           const _tn = getTarget(nx, logs, week, effPhase);
-          setWt(_tn.weight||60); setRp(_tn.reps||nx.rMin); setRir(effWR(week).rirN);
+          setWt(_tn.weight||60); setRp(_tn.reps||nx.rMin); setRir(rirDefaultFor(nx, effWR(week).rirN));
           saveWip(sel,nd,nextExIdx,0);
         }
       };
@@ -3244,7 +3272,7 @@ function App() {
     setExIdx(idx); setCurSet(logged.length); setEditIdx(null); setReviseMode(true); setFinishModal(false); clearIntInputs();
     const t=getTarget(baseEx,logs,week,effPhase,eid);
     setWt(logged.length?logged[logged.length-1].weight:(t.weight||60));
-    setRp(t.reps||baseEx.rMin); setRir(effWR(week).rirN);
+    setRp(t.reps||baseEx.rMin); setRir(rirDefaultFor(baseEx, effWR(week).rirN));
     saveWip(sel,setData,idx,logged.length);
   };
 
@@ -3262,7 +3290,7 @@ function App() {
       const nextEx=sess.exercises[nx];
       setExIdx(nx); setCurSet(0); setEditIdx(null);
       const _ts = getTarget(nextEx, logs, week, effPhase);
-      setWt(_ts.weight||60); setRp(_ts.reps||nextEx.rMin); setRir(effWR(week).rirN);
+      setWt(_ts.weight||60); setRp(_ts.reps||nextEx.rMin); setRir(rirDefaultFor(nextEx, effWR(week).rirN));
       saveWip(sel,setData,nx,0);
     }
   };
@@ -3897,7 +3925,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!existing.length) {
       setWt(st.weight || 0);
       setRp(st.reps || substituted.rMin);
-      setRir(effWR(week).rirN);
+      setRir(rirDefaultFor(substituted, effWR(week).rirN));
     }
     setShowSwap(false);
   };
@@ -4939,7 +4967,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             const ex0 = sess ? sess.exercises[0] : null;
             const t0 = ex0 ? getTarget(ex0, logs, week, effPhase) : null;
             const warns = [];
-            if (latestBP) { const c = bpCategory(latestBP.sys, latestBP.dia); if (c.cls==='high'||c.cls==='warn') warns.push('BP '+latestBP.sys+'/'+latestBP.dia+' — '+(c.label||'elevated')); }
+            if (latestBP) { const c = bpCategory(latestBP.sys, latestBP.dia); if (c.cls==='red'||c.cls==='amber') warns.push('BP '+latestBP.sys+'/'+latestBP.dia+' — '+(c.label||'elevated')); }
             if (whoopData && whoopData.cachedAt && (Date.now()-new Date(whoopData.cachedAt).getTime())>30*3600000) warns.push('WHOOP data stale');
             if (isDeload) warns.push('Deload week — ~50% sets, 85% load');
             if (ctxReasons && ctxReasons.length) warns.push(ctxReasons.join(' · '));
@@ -5126,7 +5154,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           {whoopConnected ? (
             <div className={`whoop-panel${whoopData?.recovery!=null?' '+getWhoopCls(whoopData.recovery):''}`}>
               <div className="whoop-hdr">
-                <span className="whoop-nm">&#9889; WHOOP{whoopData?.recovery!=null&&<span className={`whoop-auto-badge ${getWhoopCls(whoopData.recovery)}`} style={{marginLeft:8}}>{whoopData.recovery>=67?'Green':'Yellow'}</span>}</span>
+                <span className="whoop-nm">&#9889; WHOOP{whoopData?.recovery!=null&&<span className={`whoop-auto-badge ${getWhoopCls(whoopData.recovery)}`} style={{marginLeft:8}}>{whoopData.recovery>=67?'Green':whoopData.recovery>=34?'Yellow':'Red'}</span>}</span>
                 <span className="whoop-sync">{whoopLoading?'Syncing...':fmtAgo(whoopData?.cachedAt)}</span>
               </div>
               {whoopLoading&&!whoopData?<div className="whoop-loading">Loading recovery data...</div>
