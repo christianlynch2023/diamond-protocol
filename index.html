@@ -3361,25 +3361,52 @@ function App() {
       reader.onload = ev => {
         try {
           const data=JSON.parse(ev.target.result);
-          if (Array.isArray(data.logs)) { setLogs([...data.logs].sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,600)); }
-          // The app assumes every log is newest-first ([0] === latest). A backup with
-          // oldest-first arrays previously imported "successfully" but corrupted every
-          // latest-value, average, chart and readiness gate.
-          const desc = arr => [...arr].sort((a,b)=> (a.date<b.date?1:a.date>b.date?-1:0));
-          if (Array.isArray(data.bodyMetrics)) setBodyMetrics(desc(data.bodyMetrics));
-          if (Array.isArray(data.measurements)) setMeasurements(desc(data.measurements));
-          if (Array.isArray(data.checkins)) setCheckins(desc(data.checkins));
-          if (Array.isArray(data.nutrition)) setNutrition(desc(data.nutrition));
-          if (Array.isArray(data.cardioLog)) setCardioLog(desc(data.cardioLog));
-          if (Array.isArray(data.bpLog)) setBpLog(desc(data.bpLog));
-          if (Array.isArray(data.glucoseLog)) setGlucoseLog(desc(data.glucoseLog));
-          if (Array.isArray(data.protocolLog)) setProtocolLog(desc(data.protocolLog));
-          if (Array.isArray(data.contextLog)) setContextLog(desc(data.contextLog));
-          if (Array.isArray(data.vitalsLog)) setVitalsLog(desc(data.vitalsLog));
-          if (Array.isArray(data.bloodsLog)) setBloodsLog(desc(data.bloodsLog));
+          // Validate this is actually a Diamond backup BEFORE touching state — import replaces
+          // the live arrays, so a random or malformed file would silently wipe good data.
+          const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
+          const KNOWN = ['logs','bodyMetrics','measurements','checkins','nutrition','cardioLog','bpLog','glucoseLog','protocolLog','contextLog','vitalsLog','bloodsLog'];
+          if (!isObj(data) || (!data.version && !KNOWN.some(k => Array.isArray(data[k])))) {
+            alert('That does not look like a Diamond Protocol backup — nothing was changed.');
+            return;
+          }
+          // Per-record validation: drop malformed / future-dated / duplicate-id records rather
+          // than importing garbage; anything rejected is counted and reported. Also fixes the
+          // old bug where oldest-first arrays imported "fine" but corrupted every latest-value
+          // (clean() re-sorts newest-first). Absent arrays are left untouched (partial restore).
+          const validDate = d => typeof d === 'string' && !isNaN(new Date(d).getTime());
+          const notFuture = d => new Date(d).getTime() <= Date.now() + 86400000;
+          const num = x => (typeof x === 'number' && isFinite(x)) ? x : null;
+          const rejected = {};
+          const clean = (name, arr, ok) => {
+            const seen = new Set(); const kept = []; let dropped = 0;
+            for (const r of (Array.isArray(arr) ? arr : [])) {
+              if (!isObj(r) || (ok && !ok(r))) { dropped++; continue; }
+              if (r.id != null) { if (seen.has(r.id)) { dropped++; continue; } seen.add(r.id); }
+              kept.push(r);
+            }
+            if (dropped) rejected[name] = dropped;
+            return kept.sort((a,b)=> ((a.date||'')<(b.date||'')?1:(a.date||'')>(b.date||'')?-1:0));
+          };
+          const dOk = (extra) => (r) => validDate(r.date) && notFuture(r.date) && (!extra || extra(r));
+          let importedLogs = 0;
+          // Strict validation on the high-value dated arrays that drive analytics/readiness:
+          if (Array.isArray(data.logs)) { const L = clean('sessions', data.logs, dOk(r=>Array.isArray(r.exercises))); importedLogs = L.length; setLogs(L.slice(0,600)); }
+          if (Array.isArray(data.bodyMetrics)) setBodyMetrics(clean('weight', data.bodyMetrics, dOk(r=>{const w=num(r.weight);return w!=null&&w>0&&w<=400;})));
+          if (Array.isArray(data.bpLog)) setBpLog(clean('BP', data.bpLog, dOk(r=>{const s=num(r.sys),d=num(r.dia);return s!=null&&d!=null&&s>=40&&s<=300&&d>=20&&d<=200;})));
+          if (Array.isArray(data.glucoseLog)) setGlucoseLog(clean('glucose', data.glucoseLog, dOk(r=>{const v=num(r.value);return v!=null&&v>0&&v<=60;})));
+          // Lenient (object + dedupe + re-sort) on varied-shape arrays, to avoid wrongly dropping legit records:
+          if (Array.isArray(data.measurements)) setMeasurements(clean('measurements', data.measurements));
+          if (Array.isArray(data.checkins)) setCheckins(clean('check-ins', data.checkins));
+          if (Array.isArray(data.nutrition)) setNutrition(clean('nutrition', data.nutrition));
+          if (Array.isArray(data.cardioLog)) setCardioLog(clean('cardio', data.cardioLog));
+          if (Array.isArray(data.protocolLog)) setProtocolLog(clean('protocol', data.protocolLog));
+          if (Array.isArray(data.contextLog)) setContextLog(clean('context', data.contextLog));
+          if (Array.isArray(data.vitalsLog)) setVitalsLog(clean('vitals', data.vitalsLog));
+          if (Array.isArray(data.bloodsLog)) setBloodsLog(clean('bloods', data.bloodsLog));
           if (data.config) { if(data.config.week!=null)setWeek(data.config.week); if(data.config.recovery!=null)setRecovery(data.config.recovery); if(data.config.block!=null)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase!=null)setGoalPhase(data.config.phase); touchCfg(); }  // explicit user restore = a config edit
           if (data.activeTarget && Number.isFinite(data.activeTarget.cals)) setActiveTarget(data.activeTarget);   // restore the locked calorie target
-          alert(`Restored ${data.logs?.length||0} sessions plus body, nutrition, BP, cardio and protocol history.`);
+          const rej = Object.entries(rejected).map(([k,v])=>`${v} ${k}`).join(', ');
+          alert(`Restored ${importedLogs} sessions plus body, nutrition, BP, cardio and protocol history.` + (rej ? `\n\nSkipped invalid or duplicate records: ${rej}.` : ''));
         } catch(err) { alert('Could not read file. Make sure it is a valid Diamond Protocol backup.'); }
       };
       reader.readAsText(file);
