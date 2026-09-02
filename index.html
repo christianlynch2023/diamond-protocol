@@ -1799,6 +1799,22 @@ const ORM_IDS = (() => { const s=new Set(); for(const k in SESSIONS) for(const e
 // Actual LOGGED sets per muscle per training week. The heat map shows what the programme
 // PLANS; this shows what was really done — swaps, skipped sets and abandoned sessions all
 // change the answer, and only the logged version can tell you whether volume actually landed.
+// A logged session counts as "performed" only if it carries real work: at least a few sets
+// with reps actually recorded. Tapping finish with nothing entered still creates a log with a
+// valid date and sessionId (its empty exercises are filtered out), and that must not count
+// toward adherence or week-completeness. reps>0 is the work marker rather than weight, so
+// bodyweight sets still count; a genuine or even deliberately abbreviated session clears the
+// bar of 3 easily, while an accidental empty finish scores 0.
+function sessionRealSets(log) {
+  if (!log || !Array.isArray(log.exercises)) return 0;
+  let n = 0;
+  for (const e of log.exercises) {
+    if (!e || !Array.isArray(e.sets)) continue;
+    for (const s of e.sets) if ((s.reps||0) > 0) n++;
+  }
+  return n;
+}
+function sessionPerformed(log) { return sessionRealSets(log) >= 3; }
 function computeActualVolume(logs, block) {
   const rows = (logs||[]).filter(s => s && s.week && (block==null || s.block===block) && Array.isArray(s.exercises));
   if (!rows.length) return null;
@@ -1808,7 +1824,7 @@ function computeActualVolume(logs, block) {
     // A deload week is half volume by design — including it in the average would read as
     // under-training. Track it, show it, but leave it out of the per-week average.
     if (s.deload === true || (s.deload == null && DLW.has(w))) deloadWeeks.add(w);
-    (sessionsByWeek[w] = sessionsByWeek[w] || new Set()).add(s.sessionId);
+    if (sessionPerformed(s)) (sessionsByWeek[w] = sessionsByWeek[w] || new Set()).add(s.sessionId);
     if (!byWeek[w]) byWeek[w] = {};
     for (const e of s.exercises) {
       if (!e || !Array.isArray(e.sets) || !e.sets.length) continue;
@@ -4771,12 +4787,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const wk = (logs||[]).filter(l => { const t=new Date(l.date).getTime(); return !isNaN(t) && (now-t)/dayMs <= 7; });
     const items = [];
 
-    // Sessions — count DISTINCT planned sessions hit, not raw log rows. Two logs of the same
-    // session (a repeat, or an import duplicate) previously both counted toward the 4/week target,
-    // so adherence could read "full week" off one session logged four times.
+    // Sessions — count DISTINCT planned sessions actually PERFORMED, not raw log rows and not
+    // empty logs. Two logs of the same session (a repeat, or an import duplicate) previously both
+    // counted toward the 4/week target, and a log finished with nothing entered counted as a full
+    // session. Now only sessions carrying real work, deduped by sessionId, count.
     const target = 4;
-    const distinct = new Set(wk.map(l => l.sessionId).filter(Boolean)).size;
-    const repeats = wk.length - distinct;
+    const wkPerf = wk.filter(sessionPerformed);
+    const distinct = new Set(wkPerf.map(l => l.sessionId).filter(Boolean)).size;
+    const repeats = wkPerf.length - distinct;
     items.push({ k:'Sessions', v:`${distinct} / ${target}`,
       verdict: distinct>=target ? 'good' : distinct>=target-1 ? 'ok' : 'miss',
       note: distinct>=target ? (repeats>0 ? `full week (+${repeats} repeat${repeats>1?'s':''})` : 'full week') : `${target-distinct} short` });
