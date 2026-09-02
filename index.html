@@ -2176,7 +2176,7 @@ function computeAlcoholImpact(logs, contextLog, bwAt = null) {
            total: new Set(rows.map(x=>x.sid)).size, drinkDays: drinkDays.size };
 }
 
-function computeStrengthRetention(logs) {
+function computeStrengthRetention(logs, bwAt) {
   const dayMs=86400000, nowTs=Date.now();
   const recentStart=nowTs-21*dayMs, priorStart=nowTs-42*dayMs;
   const byEx={};
@@ -2192,7 +2192,7 @@ function computeStrengthRetention(logs) {
       if (!ex.sets || !ex.sets.length) continue;
       const pid=ex.origId||ex.id;
       if (!ORM_IDS.has(pid)) continue;
-      const best=Math.max(...ex.sets.map(s=>epley(s.weight||0,s.reps||0)));
+      const best=Math.max(...ex.sets.map(s=>epley(totalLoad(pid, s.weight, bwAt, l.date),s.reps||0)));
       if (!best || !isFinite(best)) continue;
       const rec=(byEx[pid]=byEx[pid]||{name:ex.name,recent:0,prior:0});
       if (best>rec[win]) rec[win]=best;
@@ -2239,7 +2239,7 @@ function recentCtx(contextLog) {
 // Compares best e1RM on tracked compounds in the 7 days AFTER a deload week against the 7
 // days BEFORE it. Positive = the deload bought you strength. Repeatedly negative/flat means
 // deloads are costing you a week — real evidence for the take-vs-train-through decision.
-function computeDeloadRebound(logs) {
+function computeDeloadRebound(logs, bwAt) {
   const isDeloadLog = l => l.deload === true || (l.deload == null && DLW.has(l.week));
   const deloadWeeks = {};
   for (const l of logs) { if (isDeloadLog(l)) { const k=(l.block||1)+'-'+l.week; deloadWeeks[k]={block:l.block||1, week:l.week}; } }
@@ -2247,8 +2247,9 @@ function computeDeloadRebound(logs) {
     let b = 0;
     for (const l of arr) for (const ex of (l.exercises||[])) {
       if (!ex.sets || !ex.sets.length) continue;
-      if (!ORM_IDS.has(ex.origId||ex.id)) continue;
-      const e=Math.max(...ex.sets.map(s=>epley(s.weight||0,s.reps||0)));
+      const pid=ex.origId||ex.id;
+      if (!ORM_IDS.has(pid)) continue;
+      const e=Math.max(...ex.sets.map(s=>epley(totalLoad(pid, s.weight, bwAt, l.date),s.reps||0)));
       if (e>b) b=e;
     }
     return b;
@@ -4276,8 +4277,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     return {name:(mapped&&mapped.name)||ex.name, orm:e1(best)};
   }).filter(Boolean):[];
   const progHist=progEx?getPrevHist(progEx,logs,20):[];
-  const _metricVal=(sets)=>{ if(!sets||!sets.length) return 0; if(progMetric==='weight') return Math.max(...sets.map(s=>s.weight||0)); if(progMetric==='volume') return sets.reduce((a,s)=>a+(s.weight||0)*(s.reps||0),0); return Math.max(...sets.map(s=>epley(s.weight||0,s.reps||0))); };
-  const progChartData=progHist.slice().reverse().map(h=>({x:fmtShort(h.date),y:Math.round(_metricVal(h.sets))}));
+  const _metricVal=(sets, dateStr)=>{ if(!sets||!sets.length) return 0; if(progMetric==='weight') return Math.max(...sets.map(s=>s.weight||0)); if(progMetric==='volume') return sets.reduce((a,s)=>a+(s.weight||0)*(s.reps||0),0); return Math.max(...sets.map(s=>epley(totalLoad(progEx, s.weight, bwAt, dateStr), s.reps||0))); };
+  const progChartData=progHist.slice().reverse().map(h=>({x:fmtShort(h.date),y:Math.round(_metricVal(h.sets, h.date))}));
   const prWeight=progChartData.length?Math.max(...progChartData.map(d=>d.y)):0;
   const lastWeight=progChartData.length?progChartData[progChartData.length-1].y:0;
   const _metricLbl=progMetric==='e1rm'?'Estimated 1RM per session (kg)':progMetric==='weight'?'Top-set weight per session (kg)':'Session volume (weight × reps)';
@@ -4285,8 +4286,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const _unit=progMetric==='volume'?'':'kg';
   const curVol=weekMuscleVolume(logs,week,block);
   const volSeries=weeklyVolumeSeries(logs,volMuscle,block);
-  const strengthRet=useMemo(()=>computeStrengthRetention(logs),[logs]);
-  const deloadRebound=useMemo(()=>computeDeloadRebound(logs),[logs]);
+  const strengthRet=useMemo(()=>computeStrengthRetention(logs, bwAt),[logs, bwAt]);
+  const deloadRebound=useMemo(()=>computeDeloadRebound(logs, bwAt),[logs, bwAt]);
   const rirDrift=useMemo(()=>computeRirDrift(logs,block),[logs,block]);
   const actualVol=useMemo(()=>computeActualVolume(logs,block),[logs,block]);
   // Resolves the nearest logged bodyweight to a session date, so weighted pull-ups are
