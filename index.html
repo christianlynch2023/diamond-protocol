@@ -5014,7 +5014,19 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           <div className="td-card">
             <div className="td-row"><span className="td-lbl">Fuel target <span className="td-prov">estimated</span></span>
               <span className="td-val">{effTargets ? effTargets.weekly : (nutriCoach && nutriCoach.suggested) ? nutriCoach.suggested : '—'}{(effTargets || (nutriCoach && nutriCoach.suggested)) ? <span className="td-muted" style={{fontSize:13}}> kcal{effTargets && effTargets.source==='locked' ? ' \u00b7 locked' : ''}</span> : null}</span></div>
-            {nutriCoach && nutriCoach.proteinG && <div className="td-sub">P {nutriCoach.proteinG}g{nutriCoach.carbG!=null?' · C '+nutriCoach.carbG+'g':''}{nutriCoach.fatG!=null?' · F '+nutriCoach.fatG+'g':''}</div>}
+            {(() => {
+              // Macros come from the SAME source as the calorie number above (effTargets), so a
+              // locked calorie target and its macros always reconcile. Reading protein/carb/fat
+              // off the live engine while calories came from the lock let them silently disagree
+              // (locked cals, but carbs derived from a different live estimate). Falls back to the
+              // live engine only when there is no effTargets at all.
+              const P = effTargets ? effTargets.protein : (nutriCoach && nutriCoach.proteinG);
+              const C = effTargets ? effTargets.carb    : (nutriCoach && nutriCoach.carbG);
+              const F = effTargets ? effTargets.fat     : (nutriCoach && nutriCoach.fatG);
+              return (P != null && Number.isFinite(P))
+                ? <div className="td-sub">P {P}g{C!=null?' · C '+C+'g':''}{F!=null?' · F '+F+'g':''}</div>
+                : null;
+            })()}
           </div>
 
           <div className="td-card">
