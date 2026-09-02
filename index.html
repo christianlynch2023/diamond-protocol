@@ -2243,16 +2243,19 @@ function computeDeloadRebound(logs, bwAt) {
   const isDeloadLog = l => l.deload === true || (l.deload == null && DLW.has(l.week));
   const deloadWeeks = {};
   for (const l of logs) { if (isDeloadLog(l)) { const k=(l.block||1)+'-'+l.week; deloadWeeks[k]={block:l.block||1, week:l.week}; } }
-  const best = (arr) => {
-    let b = 0;
+  // Best e1RM per LIFT (keyed by slot id), not one global maximum. Comparing a global max
+  // before against a global max after could pair a pre-deload RDL with a post-deload leg press
+  // and call the difference "rebound". Pairing by lift measures the same movement either side.
+  const bestByEx = (arr) => {
+    const m = {};
     for (const l of arr) for (const ex of (l.exercises||[])) {
       if (!ex.sets || !ex.sets.length) continue;
       const pid=ex.origId||ex.id;
       if (!ORM_IDS.has(pid)) continue;
       const e=Math.max(...ex.sets.map(s=>epley(totalLoad(pid, s.weight, bwAt, l.date),s.reps||0)));
-      if (e>b) b=e;
+      if (!(pid in m) || e>m[pid]) m[pid]=e;
     }
-    return b;
+    return m;
   };
   const out = [];
   for (const k in deloadWeeks) {
@@ -2260,9 +2263,14 @@ function computeDeloadRebound(logs, bwAt) {
     const before = logs.filter(l => (l.block||1)===block && l.week===week-1 && !isDeloadLog(l));
     const after  = logs.filter(l => (l.block||1)===block && l.week===week+1 && !isDeloadLog(l));
     if (!before.length || !after.length) continue;
-    const b=best(before), a=best(after);
-    if (!b || !a) continue;
-    out.push({ block, week, pct:+(((a-b)/b)*100).toFixed(1), before:Math.round(b), after:Math.round(a) });
+    const B=bestByEx(before), A=bestByEx(after);
+    // One paired % delta per lift present on BOTH sides, then average those — so a lift missing
+    // from either week is simply skipped rather than distorting the comparison.
+    const deltas=[];
+    for (const pid in A) { if (B[pid]>0) deltas.push(((A[pid]-B[pid])/B[pid])*100); }
+    if (!deltas.length) continue;
+    const pct = deltas.reduce((s,d)=>s+d,0)/deltas.length;
+    out.push({ block, week, pct:+pct.toFixed(1), lifts:deltas.length });
   }
   if (!out.length) return null;
   const avg=+(out.reduce((s,o)=>s+o.pct,0)/out.length).toFixed(1);
@@ -4743,18 +4751,33 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         note: `${calStats.pDelta>0?'+':''}${calStats.pDelta} vs ${calStats.pTgt}g` });
     }
 
-    // Weight direction, judged against the goal phase
+    // Weight direction AND rate, judged against the goal phase, in % bodyweight/week so the
+    // bands are body-size-independent. Crucially there is now a CEILING as well as a floor:
+    // the old logic called any cut rate past -0.15 kg/wk "good", so it could show a green verdict
+    // next to a "dropping fast — ease off" note. Too fast is a miss, not a win.
     if (bwRate) {
-      const r = bwRate.perWeek;
-      const good = goalPhase==='cut' ? (r < -0.15) : goalPhase==='bulk' ? (r > 0.05) : Math.abs(r)<0.2;
-      const okish = goalPhase==='cut' ? (r < 0.05) : goalPhase==='bulk' ? (r > -0.1) : Math.abs(r)<0.4;
-      const trendNote = goalPhase!=='cut' ? `${goalPhase} phase`
-        : r < -0.9 ? 'dropping fast — ease off'
-        : r < -0.15 ? 'losing as planned'
-        : r < 0.05 ? 'flat — tighten intake'
-        : 'gaining on a cut';
-      items.push({ k:'Weight', v:`${r>0?'+':''}${r.toFixed(2)} kg/wk`,
-        verdict: good ? 'good' : okish ? 'ok' : 'miss',
+      const r = bwRate.perWeek;                    // kg/wk, for display
+      const p = (bwRate.pctWeek != null) ? bwRate.pctWeek : 0;  // % bodyweight / wk, drives verdict
+      let verdict, trendNote;
+      if (goalPhase==='cut') {
+        // retention-friendly loss is ~0.3-1.0% BW/wk; faster risks muscle, slower stalls fat loss
+        if (p < -1.0)       { verdict='miss'; trendNote='dropping fast — ease off to protect muscle'; }
+        else if (p <= -0.3) { verdict='good'; trendNote='losing at a retention-friendly rate'; }
+        else if (p <  0.15) { verdict='ok';   trendNote='barely moving — tighten intake'; }
+        else                { verdict='miss'; trendNote='gaining on a cut'; }
+      } else if (goalPhase==='bulk') {
+        // lean gain is ~0.1-0.5% BW/wk; faster is mostly fat
+        if (p >  0.5)       { verdict='miss'; trendNote='gaining fast — trim the surplus'; }
+        else if (p >= 0.1)  { verdict='good'; trendNote='lean-gaining rate'; }
+        else if (p > -0.1)  { verdict='ok';   trendNote='flat — add a little intake'; }
+        else                { verdict='miss'; trendNote='losing on a bulk'; }
+      } else {
+        if (Math.abs(p) < 0.2)       { verdict='good'; trendNote='holding maintenance'; }
+        else if (Math.abs(p) < 0.4)  { verdict='ok';   trendNote='drifting — nudge intake'; }
+        else                         { verdict='miss'; trendNote=(p>0?'gaining':'losing')+' faster than maintenance'; }
+      }
+      items.push({ k:'Weight', v:`${r>0?'+':''}${r.toFixed(2)} kg/wk (${p>0?'+':''}${p.toFixed(2)}%)`,
+        verdict,
         note: bwRate.disagree ? trendNote + ' (methods differ)' : trendNote });
     }
 
