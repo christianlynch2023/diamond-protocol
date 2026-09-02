@@ -3637,11 +3637,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const addExercise = (exId) => setEditDraft(d => { const sess=SESSIONS[d.sessionId]; const rEx=sess&&sess.exercises.find(e=>e.id===exId); if(!rEx) return d; return {...d, exercises:[...d.exercises, {id:rEx.id, name:rEx.name, sets:[{weight:'',reps:'',rir:''}], pain:0}]}; });
   const saveEdit = () => {
     if (!editDraft) return;
-    const cleaned = {...editDraft, exercises: editDraft.exercises.map(ex => ({...ex, sets: ex.sets.map(s=>({weight:parseFloat(s.weight)||0, reps:parseInt(s.reps)||0, rir:(s.rir===''||s.rir==null)?null:parseInt(s.rir)})).filter(s=>s.weight>0||s.reps>0)})).filter(ex=>ex.sets.length>0)};
-    // Match on date + sessionId, not date alone: duplicate dates (imports, two sessions in a
-    // day) meant editing one session overwrote EVERY log sharing that date. Shallow-merge so
-    // fields not represented in the editor draft (e.g. later WHOOP enrichment) survive.
-    setLogs(prev => prev.map(l => (l.date===cleaned.date && l.sessionId===cleaned.sessionId) ? { ...l, ...cleaned, updatedAt: Date.now() } : l));
+    const cleaned = {...editDraft, exercises: editDraft.exercises.map(ex => ({...ex, sets: ex.sets.map(s=>({...s, weight:parseFloat(s.weight)||0, reps:parseInt(s.reps)||0, rir:(s.rir===''||s.rir==null)?null:parseInt(s.rir)})).filter(s=>s.weight>0||s.reps>0)})).filter(ex=>ex.sets.length>0)};
+    // Match by immutable log id, so two sessions of the same type on the same day can't both be
+    // overwritten. Fall back to date+sessionId only for any legacy log that predates ids.
+    // Shallow-merge so fields not in the editor draft (e.g. later WHOOP enrichment) survive.
+    setLogs(prev => prev.map(l => (
+      ((cleaned.id != null && l.id === cleaned.id) ||
+       (cleaned.id == null && l.date === cleaned.date && l.sessionId === cleaned.sessionId))
+        ? { ...l, ...cleaned, updatedAt: Date.now() } : l)));
     setEditingLog(null); setEditDraft(null);
   };
 
