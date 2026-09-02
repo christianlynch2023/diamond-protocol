@@ -3319,23 +3319,40 @@ function App() {
     document.body.appendChild(input); input.click(); document.body.removeChild(input);
   };
 
-  const clearAllData = () => {
+  const clearAllData = async () => {
     setClearConfirm(false);
+    // 1. Delete the CLOUD snapshot first, while the code is still available. Without this,
+    //    clearing only wiped the device — the full snapshot (training, body, nutrition, BP,
+    //    glucose, bloods) stayed in Blobs and the next device to sync restored all of it.
+    //    sync-data.js has a DELETE handler; it just was never called from here.
+    const code = syncCode || LS.get('sync_code');
+    let cloudMsg = 'No cloud sync was connected.';
+    if (code) {
+      try {
+        const r = await fetch('/.netlify/functions/sync-data', { method: 'DELETE', headers: { 'x-sync-code': code } });
+        cloudMsg = r.ok ? 'Cloud snapshot deleted.'
+          : 'Cloud delete failed (HTTP ' + r.status + ') — the snapshot may remain; retry, or delete from another signed-in device.';
+      } catch (e) {
+        cloudMsg = 'Cloud delete could not be reached (' + (e.message || 'network') + ') — the snapshot may remain.';
+      }
+    }
+    // 2. Reset in-memory state.
     setLogs([]); setWeek(1); setBlock(1); setRecovery('normal'); setHighVol(false); setGoalPhase('bulk');
     setWipData(null);
     setBodyMetrics([]); setMeasurements([]); setNutrition([]); setCardioLog([]); setBpLog([]); setGlucoseLog([]); setProtocolLog([]); setContextLog([]); setVitalsLog([]); setBloodsLog([]);
-    // Previously left photos, WHOOP history/cache/tokens and the sync code behind,
-    // so "Clear All Data" did not actually clear all data.
-    // NOTE: whoopConnected is a DERIVED constant (from the stored token), not state.
-    // Calling a non-existent setWhoopConnected() threw a ReferenceError here and aborted
-    // the whole function, so the localStorage wipe below never ran.
     setCheckins([]); setWhoopHistory([]); setWhoopWorkouts([]); setWhoopData(null);
-    // sync_code MUST be cleared: otherwise the mount effect calls pullFromCloud() on next
-    // load and resurrects everything the user just deleted.
-    setSyncCode(''); setCloudStatus('idle');
-    setActiveTarget(null);
-    ['dp_logs','dp_wip','dp_cfg','body_metrics','body_measurements','nutrition_log','cardio_log','bp_log','glucose_log','protocol_log','context_log','vitals_log','bloods_log',
-     'active_target','checkin_photos','whoop_history','whoop_workouts','whoop_cache','whoop_access_token','whoop_refresh_token','whoop_expires_at','sync_code'].forEach(k=>LS.del(k));
+    // sync_code cleared so the mount effect cannot pull and resurrect what was just deleted.
+    setSyncCode(''); setCloudStatus('idle'); setActiveTarget(null);
+    // 3. Enumerate and remove EVERY local key rather than a fixed list — this origin is the app
+    //    alone, so a full wipe is correct and catches legacy keys the old list missed (an old
+    //    Anthropic key, the build stamp, deload skips, meal/UI state).
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k) keys.push(k); }
+      keys.forEach(k => LS.del(k));
+    } catch(_) {}
+    // 4. Report honestly, including what the app cannot do itself.
+    try { alert('Local data cleared. ' + cloudMsg + '\n\nTwo things this cannot do for you:\n• WHOOP access is not revoked automatically — revoke it in your WHOOP account → Connected Apps.\n• Your Anthropic key lives only in Netlify and is unaffected (as intended).'); } catch(_) {}
   };
 
 
@@ -3808,6 +3825,17 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   };
 
   const disconnectSync = () => { LS.del('sync_code'); setSyncCode(''); setCloudStatus('idle'); };
+
+  // P0.10: the backend derives the storage key from sha256(code) and has no rate limit, so
+  // ALL security rests on the code's entropy. Rather than trust the user to pick a long random
+  // one, generate 120 bits of it. Manual entry stays (to restore an existing code on a new
+  // device), but "Generate" makes the safe path the easy one.
+  const genSyncCode = () => {
+    try {
+      const b = new Uint8Array(15); crypto.getRandomValues(b);
+      setSyncCodeInput(Array.from(b).map(x => x.toString(16).padStart(2,'0')).join('')); // 30 hex chars
+    } catch(_) { alert('Secure random generator unavailable in this browser — type a long random code instead (16+ characters).'); }
+  };
 
   // Pull cloud data once on load if a sync code is stored
   useEffect(() => { const c = LS.get('sync_code'); if (c) pullFromCloud(c); }, []);
@@ -6133,8 +6161,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             ) : (
               <div className="api-row">
                 <div className="bf-lbl">Sync Code (min 8 characters)</div>
-                <input className="api-in" type="text" autoCapitalize="none" autoCorrect="off" placeholder="choose a private code" value={syncCodeInput} onChange={e=>setSyncCodeInput(e.target.value)}/>
-                <div className="api-note">Anyone with this exact code can read and overwrite your data, and there's no rate limit on guesses &#8212; use a long, random code (12+ characters), not a word. Don't share or reuse it.</div>
+                <button className="data-btn" style={{width:'100%',marginBottom:6}} onClick={genSyncCode}>Generate secure code</button>
+                <input className="api-in" type="text" autoCapitalize="none" autoCorrect="off" placeholder="generate one, or type an existing code" value={syncCodeInput} onChange={e=>setSyncCodeInput(e.target.value)}/>
+                <div className="api-note">Anyone with this exact code can read and overwrite your data, and there's no rate limit on guesses &#8212; tap <b>Generate secure code</b> for a strong random one. Only type your own if you're restoring on a new device. Don't share or reuse it.</div>
                 <button className="bf-save" style={{marginTop:6}} onClick={connectSync}>Enable Cloud Sync</button>
               </div>
             )}
