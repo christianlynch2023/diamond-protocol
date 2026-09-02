@@ -3743,8 +3743,20 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (w==null || w<=0) { alert('Enter a weight.'); return; }
     if (w<30 || w>300) { alert('Weight looks off — enter a value in kg between 30 and 300.'); return; }
     if (wtDate > localToday()) { alert('That date is in the future — pick today or earlier.'); return; }
+    // Duplicate same-day guard: raw readings are still allowed (you might weigh morning and
+    // post-training), but a second entry for a day that already has one is usually a mistake.
+    // OK replaces the existing reading(s) for that day; Cancel keeps both.
+    const dayKey = wtDate;
+    const existing = bodyMetrics.filter(m => m && typeof m.date==='string' && m.date.slice(0,10)===dayKey && m.weight!=null);
+    let replace = false;
+    if (existing.length) {
+      replace = window.confirm(`A weight for ${dayKey} already exists (${existing[0].weight}kg). OK replaces it with ${w}kg — Cancel keeps both.`);
+    }
     const e={date:`${wtDate}T12:00:00.000Z`,weight:w,bodyFat:null,muscle:null,notes:newWtNote};
-    setBodyMetrics(prev=>[{...e, id:newId(), updatedAt: Date.now()},...prev].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,200));
+    setBodyMetrics(prev=>{
+      const base = replace ? prev.filter(m => !(m && typeof m.date==='string' && m.date.slice(0,10)===dayKey)) : prev;
+      return [{...e, id:newId(), updatedAt: Date.now()},...base].sort((a,b)=>(a.date<b.date?1:a.date>b.date?-1:0)).slice(0,200);
+    });
     setNewWt('');setNewWtNote('');setWtDate(localToday());setShowAddBody(false);
   };
 
