@@ -5502,16 +5502,21 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="hm-head"><span className="hm-ttl">Muscle heat map</span><span className="hm-wk">planned · Wk {week}{hvActive?' · HV':''}</span></div>
             <div className="hm-grid">
               {Object.entries(MUSCLES).map(([key,mus])=>{
-                const sets=Math.round((plannedVol[key]||0)*10)/10;
-                const dsets=Math.round((volParts.dir[key]||0)*10)/10;
-                if(dsets===0 && mus.optional) return null;
-                const c = dsets<mus.min?{bg:'rgba(74,158,255,.12)',bd:'rgba(74,158,255,.38)',fg:'#5aa9ff'}:dsets>mus.max?{bg:'rgba(212,160,23,.14)',bd:'rgba(212,160,23,.5)',fg:'#e0b020'}:{bg:'rgba(0,232,122,.12)',bd:'rgba(0,232,122,.38)',fg:'#00e87a'};
+                // Status is judged on FRACTIONAL (effective) sets — the same basis as the
+                // "Volume actually logged" card and as the landmark min/max ranges. Judging
+                // planned on direct sets while judging actual on fractional made the two cards
+                // contradict each other for muscles with heavy compound carryover (e.g. triceps
+                // reading "under" here but "in range" below). Direct is shown as secondary detail.
+                const sets=Math.round((plannedVol[key]||0)*10)/10;   // fractional — drives status
+                const dsets=Math.round((volParts.dir[key]||0)*10)/10; // direct isolation — detail
+                if(sets===0 && mus.optional) return null;
+                const c = sets<mus.min?{bg:'rgba(74,158,255,.12)',bd:'rgba(74,158,255,.38)',fg:'#5aa9ff'}:sets>mus.max?{bg:'rgba(212,160,23,.14)',bd:'rgba(212,160,23,.5)',fg:'#e0b020'}:{bg:'rgba(0,232,122,.12)',bd:'rgba(0,232,122,.38)',fg:'#00e87a'};
                 return (
                   <div key={key} className="hm-cell" style={{background:c.bg,borderColor:c.bd}}>
                     <div className="hm-mus">{mus.name}</div>
-                    <div className="hm-val" style={{color:c.fg}}>{dsets<mus.min?'\u25bc ':dsets>mus.max?'\u25b2 ':''}{dsets}</div>
-                    <div className="hm-rng">{mus.min}-{mus.max} \u00b7 {sets} eff</div>
-                    <div className="hm-state" style={{color:c.fg}}>{dsets<mus.min?'under':dsets>mus.max?'over':'in range'}</div>
+                    <div className="hm-val" style={{color:c.fg}}>{sets<mus.min?'\u25bc ':sets>mus.max?'\u25b2 ':''}{sets}</div>
+                    <div className="hm-rng">{mus.min}-{mus.max} \u00b7 {dsets} direct</div>
+                    <div className="hm-state" style={{color:c.fg}}>{sets<mus.min?'under':sets>mus.max?'over':'in range'}</div>
                   </div>
                 );
               })}
