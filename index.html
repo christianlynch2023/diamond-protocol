@@ -1108,6 +1108,25 @@ const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
 // card. bwAt() resolves the nearest logged bodyweight to the session date; when no weight
 // history exists the behaviour falls back to added-load-only rather than inventing a figure.
 const BW_LOADED = new Set(['ub1']);
+// Collapse multiple same-day weigh-ins to ONE median value per calendar day. Trend/rate maths
+// must treat a day as a single observation — three weigh-ins on one morning are not three days
+// of data, and left raw they both bias the average and falsely satisfy sample-size gates. Raw
+// readings are untouched (display, edit and export still see every entry); only the trend series
+// derived here is de-duplicated.
+function dailyMedianWeights(metrics) {
+  const byDay = {};
+  for (const m of (metrics||[])) {
+    if (!m || !(m.weight > 0)) continue;
+    const t = new Date(m.date).getTime(); if (isNaN(t)) continue;
+    const day = new Date(m.date).toISOString().slice(0,10);
+    (byDay[day] = byDay[day] || []).push(m.weight);
+  }
+  return Object.keys(byDay).map(day => {
+    const ws = byDay[day].slice().sort((a,b)=>a-b);
+    const mid = Math.floor(ws.length/2);
+    return { date: day, weight: ws.length % 2 ? ws[mid] : (ws[mid-1]+ws[mid])/2 };
+  });
+}
 function makeBwResolver(bodyMetrics) {
   const pts = (bodyMetrics||[])
     .filter(m => m && m.weight > 0)
@@ -4016,8 +4035,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const bwRate = (() => {
     if (!bodyMetrics || bodyMetrics.length < 2) return null;
     const dayMs = 86400000, nowTs = Date.now();
-    const aged = bodyMetrics
-      .filter(m => m && m.weight > 0)
+    const daily = dailyMedianWeights(bodyMetrics);
+    const aged = daily
       .map(m => ({ age: (nowTs - new Date(m.date).getTime()) / dayMs, w: m.weight }))
       .filter(m => m.age >= 0 && m.age <= 28);
     if (!aged.length) return null;
@@ -4056,7 +4075,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // EWMA (Hacker's Diet / TrendWeight): a smooth daily-updating line as a cross-check.
     // Two independent robust methods agreeing is a far stronger signal than either alone.
     let ewma = null, ewmaRate = null;
-    const chron = bodyMetrics.filter(m => m && m.weight > 0)
+    const chron = daily
       .map(m => ({ t: new Date(m.date).getTime(), w: m.weight }))
       .sort((a,b) => a.t - b.t);
     if (chron.length >= 4) {
