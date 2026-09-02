@@ -2522,77 +2522,9 @@ function glucoseCategory(g) {
   return { label: 'Normal', cls: 'green' };
 }
 
-const VOY_AUG_2026 = {
-  id:'bld_voy_aug2026', date:'2026-08-20', label:'Voy \u00b7 Aug 2026 (full blood count)',
-  groups:[
-    { g:'Red cells \u2014 supersedes May', m:[
-      {k:'Haemoglobin', disp:'173', unit:'g/L', ref:'130\u2013170', flag:'high'},
-      {k:'Haematocrit', disp:'51.4', unit:'%', ref:'38\u201350', flag:'high'},
-      {k:'Red blood cells', disp:'5.15', unit:'10\u00b9\u00b2/L', ref:'4.40\u20135.40', flag:'ok'},
-      {k:'MCV', disp:'105', unit:'fl', ref:'81\u2013100', flag:'high'},
-      {k:'MCH', disp:'33.6', unit:'pg', ref:'27\u201333', flag:'high'},
-      {k:'MCHC', disp:'320', unit:'g/L', ref:'300\u2013350', flag:'ok'} ]},
-    { g:'White cells & platelets \u2014 supersedes May', m:[
-      {k:'White blood cells', disp:'4.83', unit:'10\u2079/L', ref:'4.0\u201311.0', flag:'ok'},
-      {k:'Neutrophils', disp:'3.1', unit:'10\u2079/L', ref:'2.0\u20137.5', flag:'ok'},
-      {k:'Lymphocytes', disp:'1.33', unit:'10\u2079/L', ref:'1.0\u20133.5', flag:'ok'},
-      {k:'Monocytes', disp:'0.32', unit:'10\u2079/L', ref:'0.2\u20130.8', flag:'ok'},
-      {k:'Eosinophils', disp:'0.06', unit:'10\u2079/L', ref:'<0.41', flag:'ok'},
-      {k:'Basophils', disp:'0.02', unit:'10\u2079/L', ref:'0.021\u20130.101', flag:'low'},
-      {k:'Platelets', disp:'251', unit:'10\u2079/L', ref:'150\u2013400', flag:'ok'} ]}
-  ],
-  gaps:['Hormones, thyroid, lipids, glucose, iron, kidney/liver and PSA are NOT in this panel \u2014 the May figures below still stand for those'],
-  note:'Haematocrit and haemoglobin were both reported Normal in May and are now above range. MCV has risen 101 \u2192 105. Worth reviewing with whoever manages your protocol.'
-};
-
-const MAY_2026_BLOODS = {
-  id:'bld_may2026', date:'2026-05-01', label:'Randox Health · May 2026',
-  groups:[
-    { g:'Hormones', m:[
-      {k:'Testosterone', disp:'35.2', unit:'nmol/L', ref:'8.6–29.0', flag:'high'},
-      {k:'Free testosterone', disp:'High', flag:'high'},
-      {k:'SHBG', disp:'Optimal', flag:'ok'},
-      {k:'LH', disp:'<0.3', unit:'U/L', ref:'1.8–8.6', flag:'low'},
-      {k:'FSH', disp:'<0.30', unit:'U/L', ref:'1.51–12.4', flag:'low'} ]},
-    { g:'Thyroid', m:[
-      {k:'TSH', disp:'Optimal', flag:'ok'},
-      {k:'Free T3', disp:'Optimal', flag:'ok'},
-      {k:'Free T4', disp:'Optimal', flag:'ok'} ]},
-    { g:'Metabolic', m:[
-      {k:'HbA1c', disp:'Optimal', flag:'ok'},
-      {k:'Fasting glucose', disp:'Increased', flag:'high'} ]},
-    { g:'Lipids', m:[
-      {k:'Total cholesterol', disp:'High', flag:'high'},
-      {k:'LDL', disp:'High', flag:'high'},
-      {k:'HDL', disp:'Low', flag:'low'},
-      {k:'Triglycerides', disp:'Desirable', flag:'ok'},
-      {k:'ApoB / ApoA-I', disp:'Optimal', flag:'ok'} ]},
-    { g:'Inflammation & CV', m:[
-      {k:'hs-CRP', disp:'1.25', unit:'mg/L', ref:'1–3', flag:'watch'},
-      {k:'CV risk (10yr)', disp:'10–20%', ref:'moderate', flag:'watch'} ]},
-    { g:'Kidney & liver', m:[
-      {k:'Cystatin C', disp:'1.08', unit:'mg/L', ref:'0.58–1.05', flag:'high'},
-      {k:'eGFR', disp:'Satisfactory', flag:'ok'},
-      {k:'FIB-4 (liver)', disp:'Low risk', flag:'ok'} ]},
-    { g:'Iron', m:[
-      {k:'Iron', disp:'35.3', unit:'µmol/L', ref:'5.9–34.5', flag:'high'},
-      {k:'Transferrin sat.', disp:'66.5', unit:'%', ref:'20.1–50.0', flag:'high'},
-      {k:'Ferritin', disp:'Normal', flag:'ok'} ]},
-    { g:'Full blood count', m:[
-      {k:'Haemoglobin', disp:'Normal', flag:'ok'},
-      {k:'Haematocrit', disp:'Normal', flag:'ok'},
-      {k:'MCV', disp:'101', unit:'fl', ref:'76.1–100', flag:'high'},
-      {k:'MCH', disp:'33.7', unit:'pg', ref:'27.1–32.0', flag:'high'},
-      {k:'Eosinophils', disp:'0.03', unit:'10⁹/L', ref:'0.05–0.4', flag:'low'} ]},
-    { g:'Prostate & vitamins', m:[
-      {k:'PSA (total)', disp:'Normal', flag:'ok'},
-      {k:'Vitamin B12', disp:'2727', unit:'ng/L', ref:'198–771', flag:'high'},
-      {k:'Folate', disp:'Optimal', flag:'ok'},
-      {k:'Vitamin D', disp:'Sufficient', flag:'ok'} ]}
-  ],
-  gaps:['Oestradiol (E2)','Prolactin','IGF-1'],
-  note:'Transcribed from your Randox report — exact figures where the gauge was legible, otherwise the lab\u2019s own band.'
-};
+// P0.7: Personal blood panels removed from source (were VOY_AUG_2026 / MAY_2026_BLOODS).
+// They are user data, not code — kept in localStorage/backup, imported via Tools → Import.
+// Extracted copy: bloods-backup.json. Nothing here recreates them (see bloods_log default = []).
 
 // ---------------------------------------------------------------------------------------------
 // RETROSPECTIVE INJECTION-DECAY MODEL (descriptive only).
@@ -2859,7 +2791,6 @@ function App() {
   const [warmWt, setWarmWt]     = useState(100);
   const [ormWt, setOrmWt]       = useState(100);
   const [ormRp, setOrmRp]       = useState(5);
-  const [apiKey, setApiKey]           = useState(() => LS.get('anthropic_key') || '');
   const [briefing, setBriefing]       = useState(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [review, setReview]           = useState(null);
@@ -3013,16 +2944,9 @@ function App() {
     const med = xs.length%2 ? xs[(xs.length-1)/2] : (xs[xs.length/2-1]+xs[xs.length/2])/2;
     return { lo:+(med-0.2).toFixed(2), hi:+(med+0.2).toFixed(2) };
   },[vitalsLog]);
-  const [bloodsLogRaw, setBloodsLog] = usePersistentState('bloods_log', [VOY_AUG_2026, MAY_2026_BLOODS]);
-  // One-time migration: a device that already stored the May panel would otherwise never
-  // receive later reference panels, since persisted state overrides the default.
-  useEffect(() => {
-    setBloodsLog(prev => {
-      const arr = Array.isArray(prev) ? prev : [];
-      if (arr.some(b => b && b.id === VOY_AUG_2026.id)) return prev;
-      return [VOY_AUG_2026, ...arr];
-    });
-  }, []);
+  const [bloodsLogRaw, setBloodsLog] = usePersistentState('bloods_log', []);
+  // P0.7: default is empty and there is NO resurrection effect. Blood panels are user data —
+  // added in-app or restored via Tools → Import (see bloods-backup.json). Deleting one now sticks.
   const bloodsLog = useMemo(()=>live(bloodsLogRaw),[bloodsLogRaw]);
   // BIOMARKER MONITOR. Panels are point-in-time snapshots; this turns them into a longitudinal
   // view so drift between draws is visible instead of buried in a PDF. Markers your protocol
@@ -3406,8 +3330,6 @@ function App() {
 
 
   const getBriefing = async sessionId => {
-    const key = LS.get('anthropic_key');
-    if (!key) { alert('Add your Anthropic API key in Tools first'); return; }
     const sess = SESSIONS[sessionId]; const wr = effWR(week); const ph = getPhase(week);
     setBriefingLoading(true); setBriefing(null);
     const progLines = sess.exercises.map(ex=>{
@@ -3431,21 +3353,19 @@ function App() {
     const painStr=painFlags.length?painFlags.join('; '):'none reported recently';
     const prompt=`You are a personal strength coach for a 48-year-old male on an optimised hormonal protocol with enhanced recovery capacity. He follows the Diamond Protocol 12-week hypertrophy programme. ${phaseLine}\n\nTODAY: ${sess.name} - ${sess.focus}\nPhase: ${ph.name} (Week ${week}/12) | Target: ${wr.rir} | Intensifiers: ${wr.i?'ACTIVE - max '+sess.maxInt+' this session':'Off - straight sets only'}\nWHOOP: ${whStr}\nBody: ${bodyStr}\nFuel: ${fuelStr}\nBlood pressure: ${bpStr}\nFasting glucose: ${glStr}\nRecent joint/tendon pain: ${painStr}\nToday's readiness call: ${readiness.title} - ${readiness.action}\n\nEXERCISE PROGRESSION:\n${progLines}\n\nRECENT SESSIONS:\n${recent}\n\nWrite a concise pre-session briefing in 3-4 short paragraphs. Be specific with weights and reps. Cover: (1) readiness based on recovery data - and if low recovery lines up with low fuel/protein or poor sleep, say so plainly. If BP is Stage 1+, hold intensifiers/grinders today. If fasting glucose is in the watch/high band, note it briefly as a stack signal to monitor (do not alarm or diagnose). Anchor nutrition comments to the 7-day trend not single days, (2) exact targets for main lifts using double progression rules, (3) ${wr.i?'which '+sess.maxInt+' intensifiers to use today and why':'key execution focus for straight sets today'}, (4) one sharp technical or mindset cue. If sharp joint or tendon pain is flagged on any lift, recommend a machine or cable alternative for it today. Keep your guidance consistent with today's readiness call above and explain its reasoning in your own words. Direct, no fluff.`;
     try {
-      const res=await fetch('https://api.anthropic.com/v1/messages',{
+      const res=await fetch('/.netlify/functions/ai-proxy',{
         method:'POST',
-        headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        headers:{'Content-Type':'application/json'},
         body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:700,messages:[{role:'user',content:prompt}]})
       });
       const data=await res.json();
-      const text=data.content?.[0]?.text||'Could not generate briefing. Check your API key in Tools.';
+      const text=data.content?.[0]?.text||'Could not generate briefing. The AI proxy did not return text — check the Netlify function and ANTHROPIC_API_KEY.';
       setBriefing({text,session:sess.name});
     } catch(e){ setBriefing({text:'Error: '+e.message,session:sess.name}); }
     finally{ setBriefingLoading(false); }
   };
 
   const getReview = async () => {
-    const key = LS.get('anthropic_key');
-    if (!key) { alert('Add your Anthropic API key in Tools \u2192 AI Coaching first'); return; }
     const last = logs[0];
     if (!last) return;
     setReviewLoading(true); setReview(null);
@@ -3461,13 +3381,13 @@ function App() {
     const whStr = whoopData?.recovery != null ? `Recovery ${whoopData.recovery}%, HRV ${whoopData.hrv}ms` : 'no Whoop data';
     const prompt = `You are a personal strength coach reviewing a just-completed session for a 48-year-old male on an optimised hormonal protocol with enhanced recovery capacity, following the Diamond Protocol 12-week hypertrophy programme. ${phaseLine}\n\nSESSION JUST COMPLETED: ${last.sessionName} - Week ${last.week} (${ph.name}, target ${wr2.rir})\nDuration: ${last.duration} min | Recovery context: ${whStr}\n\nEXERCISE RESULTS (today vs last time):\n${lines}\n\nWrite a concise post-session review in 2-3 short paragraphs. Cover: (1) what clearly progressed today (specific lifts that added weight or reps), (2) anything that stalled or regressed and the likely reason, (3) 2-3 specific, actionable adjustments for next time this session comes around - exact weights or rep targets where possible. If any lift has sharp pain flagged, recommend swapping it for a joint-friendly alternative next time. Be direct and encouraging but honest. Talk like a coach who tracks every set.`;
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/.netlify/functions/ai-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 650, messages: [{ role: 'user', content: prompt }] })
       });
       const data = await res.json();
-      const text = data.content?.[0]?.text || 'Could not generate review. Check your API key in Tools.';
+      const text = data.content?.[0]?.text || 'Could not generate review. The AI proxy returned no text — check the Netlify function and ANTHROPIC_API_KEY.';
       setReview(text);
     } catch (e) { setReview('Error: ' + e.message); }
     finally { setReviewLoading(false); }
@@ -3510,8 +3430,6 @@ function App() {
   const delCheckin = (id) => setCheckins(prev => prev.filter(c => c.id !== id));
 
   const analyseProgress = async () => {
-    const key = LS.get('anthropic_key');
-    if (!key) { alert('Add your Anthropic API key in Tools \u2192 AI Coaching first'); return; }
     if (!ciCompareA || !ciCompareB) { alert('Pick two check-ins to compare (baseline and current).'); return; }
     const a = checkins.find(c => c.id === ciCompareA);
     const b = checkins.find(c => c.id === ciCompareB);
@@ -3549,9 +3467,9 @@ function App() {
     const waistLine = (baseWaist && curWaist) ? `Waist: ${baseWaist}cm to ${curWaist}cm.` : 'Waist not logged for both.';
     const prompt = `You are an elite bodybuilding coach comparing two physique check-in photos of a 48-year-old male on an optimised hormonal protocol with enhanced recovery, mid-hypertrophy-block, priorities chest > back > delts. The first image is BASELINE (week ${base.week}, ${base.phase}), the second is CURRENT (week ${cur.week}, ${cur.phase}), roughly ${wkGap} weeks apart. Both are the ${base.pose} pose. Hard data: ${bwLine} ${waistLine}\n\nGive an honest, specific comparison in 2-3 short paragraphs. Be direct and critical, not flattering. Cover: (1) visible structural changes you can actually see between the two images (fullness, conditioning, specific regions), (2) whether the priorities (chest, back, delts) appear to be progressing relative to the rest, (3) one or two concrete actions.\n\nCRITICAL HONESTY RULES: Do NOT estimate body-fat percentage from photos - it is unreliable. Do NOT claim precise muscle gain numbers. Explicitly flag that lighting, pump, water (especially on this protocol) and pose consistency can swamp real weekly change, and anchor your read to the bodyweight/waist trend above rather than the pixels where they disagree. If the two photos are too inconsistent in pose/lighting to judge, say so plainly.`;
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/.netlify/functions/ai-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 700, messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base.img.split(',')[1] } },
           { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: cur.img.split(',')[1] } },
@@ -3559,7 +3477,7 @@ function App() {
         ] }] })
       });
       const data = await res.json();
-      setCiAnalysis(data.content?.find(b => b.type === 'text')?.text || 'Could not analyse. Check your API key in Tools.');
+      setCiAnalysis(data.content?.find(b => b.type === 'text')?.text || 'Could not analyse. The AI proxy returned no text — check the Netlify function and ANTHROPIC_API_KEY.');
     } catch(e) { setCiAnalysis('Error: ' + e.message); }
     finally { setCiAnalysing(false); }
   };
@@ -3605,8 +3523,6 @@ function App() {
   };
 
   const getPeriodReview = async (scope) => {
-    const key = LS.get('anthropic_key');
-    if (!key) { alert('Add your Anthropic API key in Tools \u2192 AI Coaching first'); return; }
     setPeriodScope(scope); setPeriodReview(null); setPeriodLoading(true);
     const ph = getPhase(week);
     const fmtVol = v => Object.keys(v).length ? Object.entries(v).map(([m,s]) => `${MUSCLES[m]?.name||m} ${Math.round(s*10)/10}`).join(', ') : 'none';
@@ -3658,13 +3574,13 @@ Bodyweight change: ${bw}\nBlood pressure (latest): ${bpLine}\nEnergy balance (em
 Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the block achieved overall, (2) which muscles and lifts progressed well and which lagged or stalled, (3) what to change for the next block - exercise selection, volume distribution, recovery or nutrition. Explicitly connect the data where you can - protein vs progression, recovery and sleep debt vs performance, BP vs training load. Use the adaptive nutrition numbers above when discussing nutrition: connect the maintenance estimate, intake and weight trend to whether the ${goalPhase} goal is being met. Direct and honest, like a coach planning the next mesocycle.`;
     }
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/.netlify/functions/ai-proxy', {
         method:'POST',
-        headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens: scope==='week'?750:1100, messages:[{role:'user',content:prompt}] })
       });
       const data = await res.json();
-      setPeriodReview(data.content?.[0]?.text || 'Could not generate review. Check your API key in Tools.');
+      setPeriodReview(data.content?.[0]?.text || 'Could not generate review. The AI proxy returned no text — check the Netlify function and ANTHROPIC_API_KEY.');
     } catch(e){ setPeriodReview('Error: '+e.message); }
     finally { setPeriodLoading(false); }
   };
@@ -6215,14 +6131,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           </div>
           <div className="tool-sec">
             <div className="tool-ttl">AI Coaching</div>
-            <div className="tool-sub">Enter your Anthropic API key to enable the pre-session briefing feature</div>
+            <div className="tool-sub">AI runs through a server-side proxy — no API key is stored on this device</div>
             <div style={{fontSize:9,color:'var(--t3)',fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>build {BUILD_ID}</div>
-            <div className="api-row">
-              <div className="bf-lbl">Anthropic API Key</div>
-              <input className="api-in" type="password" placeholder="sk-ant-..." value={apiKey}
-                onChange={e=>{setApiKey(e.target.value);LS.set('anthropic_key',e.target.value);}}/>
-              <div className="api-note">Stored locally on your device only. Get yours at console.anthropic.com</div>
-            </div>
+            <div className="api-note">The key lives in the Netlify ANTHROPIC_API_KEY env var, never in the browser. Nothing to enter here.</div>
           </div>
           <div className="tool-sec">
             <div className="tool-ttl">Data</div>
