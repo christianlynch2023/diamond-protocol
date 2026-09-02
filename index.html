@@ -5008,7 +5008,16 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               warnings, and Start. Everything below stays as the supporting detail. */}
           {(() => {
             const inProg = wipData && SESSIONS[wipData.sessionId];
-            const sid = inProg ? wipData.sessionId : sel;
+            // Derive the next session durably from what's actually been completed this programme
+            // week, instead of depending on `sel` (which is null on every fresh load and forced a
+            // "Choose a session" dead-end). Rotation order = programme order; the first session not
+            // yet performed this week is "next up". An explicit selection still overrides.
+            const order = Object.keys(SESSIONS);
+            const doneThisWeek = new Set((logs||[]).filter(l => (l.block||1)===block && l.week===week && sessionPerformed(l)).map(l => l.sessionId));
+            const derivedNext = order.find(id => !doneThisWeek.has(id)) || order[0];
+            const allDone = doneThisWeek.size >= order.length;
+            const sid = inProg ? wipData.sessionId : (sel || derivedNext);
+            const isDerived = !inProg && !sel;
             const sess = sid ? SESSIONS[sid] : null;
             const ex0 = sess ? sess.exercises[0] : null;
             const t0 = ex0 ? getTarget(ex0, logs, week, effPhase) : null;
@@ -5026,7 +5035,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div className="ta-action">{readiness.action}</div>
                 {sess ? (
                   <>
-                    <div className="ta-sess">{sess.name}{inProg && <span className="td-chip">in progress</span>}</div>
+                    <div className="ta-sess">{sess.name}{inProg && <span className="td-chip">in progress</span>}{isDerived && !allDone && <span className="td-chip">next up{sess.day?' · '+sess.day:''}</span>}{isDerived && allDone && <span className="td-chip">week complete · new rotation</span>}</div>
                     <div className="ta-sub">{sess.focus} · {getPhase(week).name} · target {wr.rir} RIR</div>
                     {ex0 && t0 && (
                       <div className="ta-first">
@@ -5039,6 +5048,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <button className="ta-go" onClick={()=> inProg ? resumeWorkout() : startWorkout(sid)}>
                       {inProg ? 'Resume session' : 'Start '+sess.name}
                     </button>
+                    {!inProg && <button onClick={()=>setView('home')} style={{marginTop:8,background:'none',border:'none',color:'var(--t3)',fontSize:12,textDecoration:'underline',cursor:'pointer',width:'100%',textAlign:'center',fontFamily:'inherit'}}>Not this one? Choose another</button>}
                   </>
                 ) : (
                   <>
