@@ -1774,12 +1774,13 @@ const ORM_IDS = (() => { const s=new Set(); for(const k in SESSIONS) for(const e
 function computeActualVolume(logs, block) {
   const rows = (logs||[]).filter(s => s && s.week && (block==null || s.block===block) && Array.isArray(s.exercises));
   if (!rows.length) return null;
-  const byWeek = {}, deloadWeeks = new Set();
+  const byWeek = {}, deloadWeeks = new Set(), sessionsByWeek = {};
   for (const s of rows) {
     const w = s.week;
     // A deload week is half volume by design — including it in the average would read as
     // under-training. Track it, show it, but leave it out of the per-week average.
     if (s.deload === true || (s.deload == null && DLW.has(w))) deloadWeeks.add(w);
+    (sessionsByWeek[w] = sessionsByWeek[w] || new Set()).add(s.sessionId);
     if (!byWeek[w]) byWeek[w] = {};
     for (const e of s.exercises) {
       if (!e || !Array.isArray(e.sets) || !e.sets.length) continue;
@@ -1795,8 +1796,13 @@ function computeActualVolume(logs, block) {
   const weeks = Object.keys(byWeek).map(Number).sort((a,b)=>a-b);
   if (!weeks.length) return null;
   const latest = weeks[weeks.length-1];
-  // Average across completed, non-deload weeks only (the in-progress latest week is excluded).
-  const done = weeks.slice(0, -1).filter(w => !deloadWeeks.has(w));
+  // Include a week in the average when it is COMPLETE, judged by distinct sessions logged
+  // (>= the 4/week target), not by its position in the array. The old `weeks.slice(0, -1)`
+  // always dropped the newest week, so a single fully-completed week reported 0 completed weeks
+  // and the whole card stayed hidden. The latest week is still excluded while it's in progress.
+  const SESSIONS_PER_WEEK = 4;
+  const weekComplete = w => (sessionsByWeek[w] ? sessionsByWeek[w].size : 0) >= SESSIONS_PER_WEEK;
+  const done = weeks.filter(w => !deloadWeeks.has(w) && (w !== latest || weekComplete(latest)));
   const avg = {};
   if (done.length) {
     for (const mus of Object.keys(MUSCLES)) {
@@ -4737,11 +4743,15 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const wk = (logs||[]).filter(l => { const t=new Date(l.date).getTime(); return !isNaN(t) && (now-t)/dayMs <= 7; });
     const items = [];
 
-    // Sessions
+    // Sessions — count DISTINCT planned sessions hit, not raw log rows. Two logs of the same
+    // session (a repeat, or an import duplicate) previously both counted toward the 4/week target,
+    // so adherence could read "full week" off one session logged four times.
     const target = 4;
-    items.push({ k:'Sessions', v:`${wk.length} / ${target}`,
-      verdict: wk.length>=target ? 'good' : wk.length>=target-1 ? 'ok' : 'miss',
-      note: wk.length>=target ? 'full week' : `${target-wk.length} short` });
+    const distinct = new Set(wk.map(l => l.sessionId).filter(Boolean)).size;
+    const repeats = wk.length - distinct;
+    items.push({ k:'Sessions', v:`${distinct} / ${target}`,
+      verdict: distinct>=target ? 'good' : distinct>=target-1 ? 'ok' : 'miss',
+      note: distinct>=target ? (repeats>0 ? `full week (+${repeats} repeat${repeats>1?'s':''})` : 'full week') : `${target-distinct} short` });
 
     // Volume: muscles under floor, from what was actually LOGGED
     if (actualVol && actualVol.completedWeeks > 0) {
@@ -5627,7 +5637,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <span><b style={{color:'var(--acc)'}}>{durSplit.active} min</b> working</span>
                     <span><b style={{color:'#4a9eff'}}>{durSplit.rest} min</b> resting</span>
                   </div>
-                  <div className="av-note" style={{marginTop:7,marginBottom:0}}>Rest is measured from the timer, so wall-clock minus rest is real working time. Sessions logged before this was tracked are not included.</div>
+                  <div className="av-note" style={{marginTop:7,marginBottom:0}}>This is wall-clock time minus logged rest — so it still includes setup, transitions and any unlogged breaks, not just working sets. Read it as session length, not pure effort time. Sessions logged before this was tracked are not included.</div>
                 </div>
               )}
               {durations.outliers > 0 && <div className="av-note" style={{marginTop:9,marginBottom:0}}>{durations.outliers} session{durations.outliers===1?'':'s'} over 150 min excluded from averages &#8212; almost certainly paused and resumed rather than genuinely that long.</div>}
