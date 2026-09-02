@@ -975,6 +975,10 @@ const SESSIONS = {
   ]}
 };;
 const ALL_EX = Object.values(SESSIONS).flatMap(s => s.exercises.map(e => ({id:e.id,name:e.name,session:s.name})));
+// Map every slot id to its full exercise definition (carries rirMin / avoidFail).
+// Logged exercises only store {id,name,sets}, so anything needing an exercise's RIR floor
+// after the fact (e.g. RIR-drift analysis, P0.3) resolves it through here.
+const EX_DEF_BY_ID = Object.values(SESSIONS).reduce((m, s) => { for (const e of s.exercises) m[e.id] = e; return m; }, {});
 const DEF_INTS = {
   upperA: new Set(["ua5"]),
   lowerA: new Set(["la5","la6"]),
@@ -2265,20 +2269,25 @@ function computeDeloadRebound(logs) {
 }
 
 // ---- RIR drift: are logged reps-in-reserve matching the prescription? ----
-// Positive drift = logging easier than prescribed (sandbagging, or accepting a wrong
-// default). Negative = training harder than programmed, a creeping-overreach signal.
+// Positive drift = logging further from failure than the EFFECTIVE target for that exercise
+// (the higher of the weekly RIR and the exercise's own floor). Negative = training harder
+// than programmed, a creeping-overreach signal. P0.3: the comparison is per-exercise and
+// floor-aware, so a protected 1-RIR lift on a 0-RIR week is NOT flagged as easy — that is the
+// prescription, not sandbagging. A residual positive drift can still be pain, technique or a
+// wrong default, so the wording below stays non-accusatory.
 function computeRirDrift(logs, block) {
   const byWeek = {};
   for (const l of logs) {
     if ((l.block||1) !== block) continue;
     const dl = l.deload === true || (l.deload == null && DLW.has(l.week));
-    const target = effWR(l.week, dl).rirN;
-    if (target == null) continue;
+    const weekRirN = effWR(l.week, dl).rirN;
+    if (weekRirN == null) continue;
     for (const ex of (l.exercises||[])) {
+      const target = rirDefaultFor(EX_DEF_BY_ID[ex.id], weekRirN); // per-exercise effective floor
       for (const s of (ex.sets||[])) {
         const r = (s.rir === '4+') ? 4 : (s.rir == null ? null : Number(s.rir));
         if (r == null || !isFinite(r)) continue;
-        const w=(byWeek[l.week]=byWeek[l.week]||{sum:0,n:0,target});
+        const w=(byWeek[l.week]=byWeek[l.week]||{sum:0,n:0,target:weekRirN});
         w.sum += (r - target); w.n++;
       }
     }
@@ -5747,7 +5756,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               </div>
               <div style={{fontSize:12,lineHeight:1.5,color:'var(--t2)',marginBottom:8}}>
                 {Math.abs(rirDrift.avg)<=0.5?'Logged effort matches the prescription. Your RIR targets are being hit honestly.'
-                 :rirDrift.avg>0.5?'You are logging EASIER than prescribed — leaving roughly '+rirDrift.avg.toFixed(1)+' extra reps in reserve. Either push closer to target or check you are not accepting a wrong default RIR.'
+                 :rirDrift.avg>0.5?'You are logging further from failure than the effective target by about '+rirDrift.avg.toFixed(1)+' reps. That can be right (pain, technique, a protected lift) — but if not, push closer or check you are not carrying a wrong default RIR.'
                  :'You are training HARDER than prescribed by about '+Math.abs(rirDrift.avg).toFixed(1)+' reps. Fine occasionally; sustained, it accumulates fatigue faster than the block plans for.'}
               </div>
               <div className="ar-list">
