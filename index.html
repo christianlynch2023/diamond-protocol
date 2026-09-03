@@ -3292,7 +3292,7 @@ function App() {
   };
 
   const exportData = () => {
-    const data={version:'2.3',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},activeTarget,bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,glucoseLog,protocolLog,contextLog,vitalsLog,bloodsLog};
+    const data={version:'2.4',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},activeTarget,bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,glucoseLog,protocolLog,contextLog,vitalsLog,bloodsLog,whoopHistory,whoopWorkouts,deloadSkips};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`diamond-${new Date().toISOString().split('T')[0]}.json`;
@@ -3397,6 +3397,11 @@ function App() {
           if (Array.isArray(data.contextLog)) setContextLog(clean('context', data.contextLog));
           if (Array.isArray(data.vitalsLog)) setVitalsLog(clean('vitals', data.vitalsLog));
           if (Array.isArray(data.bloodsLog)) setBloodsLog(clean('bloods', data.bloodsLog));
+          // WHOOP history/workouts and deload-skip choices — omitted from older backups, so guarded
+          // by presence. Arrays go through the same lenient sanitiser; deloadSkips is a plain object.
+          if (Array.isArray(data.whoopHistory)) setWhoopHistory(clean('whoop history', data.whoopHistory));
+          if (Array.isArray(data.whoopWorkouts)) setWhoopWorkouts(clean('whoop workouts', data.whoopWorkouts));
+          if (data.deloadSkips && typeof data.deloadSkips==='object' && !Array.isArray(data.deloadSkips)) setDeloadSkips(data.deloadSkips);
           if (data.config) { if(data.config.week!=null)setWeek(data.config.week); if(data.config.recovery!=null)setRecovery(data.config.recovery); if(data.config.block!=null)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase!=null)setGoalPhase(data.config.phase); touchCfg(); }  // explicit user restore = a config edit
           if (data.activeTarget && Number.isFinite(data.activeTarget.cals)) setActiveTarget(data.activeTarget);   // restore the locked calorie target
           const rej = Object.entries(rejected).map(([k,v])=>`${v} ${k}`).join(', ');
