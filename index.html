@@ -3059,12 +3059,17 @@ function App() {
              dueIn: daysSince==null ? null : 42 - daysSince, missing, panels: dates.length };
   }, [bloodsLog]);
   const tempStat = useMemo(()=>{
-    const xs=vitalsLog.filter(v=>v&&v.temp!=null).slice(0,7).map(v=>v.temp);
-    if(!xs.length) return null;
-    const avg=+(xs.reduce((a,b)=>a+b,0)/xs.length).toFixed(2);
+    const all = vitalsLog.filter(v=>v&&v.temp!=null);
     const cur = todayVitals && todayVitals.temp!=null ? todayVitals.temp : null;
+    // Baseline from PRECEDING days only — including today's own reading in its baseline pulls the
+    // average toward it and understates the deviation you're trying to detect. Falls back to all
+    // readings only when there is no prior history yet.
+    const prior = all.filter(v => v.date && v.date.slice(0,10) !== localToday());
+    const src = (prior.length ? prior : all).slice(0,7).map(v=>v.temp);
+    if(!src.length) return null;
+    const avg=+(src.reduce((a,b)=>a+b,0)/src.length).toFixed(2);
     const delta = cur!=null ? +(cur-avg).toFixed(1) : null;
-    return { avg, n:xs.length, delta };
+    return { avg, n:src.length, delta };
   },[vitalsLog, todayVitals]);
   const [ctxUnits, setCtxUnits] = useState('');
   const [ctxTags, setCtxTags] = useState([]);
@@ -6948,7 +6953,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(b.date)}</span>
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{b.sys}/{b.dia}{b.pulse ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {b.pulse}bpm</span> : null}</span>
-                  <span className={`bp-dot ${c.cls}`}></span>
+                  <span className={`bp-dot ${c.cls}`} title={c.label||""} style={{width:"auto",height:"auto",background:"none",fontSize:11,fontWeight:800,lineHeight:1,color:c.cls==="green"?"var(--ok)":c.cls==="amber"?"var(--warn)":"var(--err)"}}>{c.cls==="green"?"✓":c.cls==="amber"?"△":"▲"}</span>
                   <button className="bl-edit" onClick={()=>openBodyEdit('bp',i,b)}>&#9998;</button>
                   <button className="bl-del" onClick={() => tombstone(setBpLog,'bp')((_,j)=>j===i)}>&#215;</button>
                 </div>
@@ -7042,7 +7047,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(g.date)}</span>
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{g.value}<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> mmol/L</span></span>
-                  <span className={`bp-dot ${c.cls}`}></span>
+                  <span className={`bp-dot ${c.cls}`} title={c.label||""} style={{width:"auto",height:"auto",background:"none",fontSize:11,fontWeight:800,lineHeight:1,color:c.cls==="green"?"var(--ok)":c.cls==="amber"?"var(--warn)":"var(--err)"}}>{c.cls==="green"?"✓":c.cls==="amber"?"△":"▲"}</span>
                   <button className="bl-edit" onClick={()=>openBodyEdit('glucose',i,g)}>&#9998;</button>
                   <button className="bl-del" onClick={() => tombstone(setGlucoseLog,'gl')((_,j)=>j===i)}>&#215;</button>
                 </div>
