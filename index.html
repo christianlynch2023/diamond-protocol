@@ -3844,14 +3844,18 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       const res = await fetch('/.netlify/functions/sync-data', { headers: { 'x-sync-code': c } });
       if (!res.ok) { setCloudStatus('error'); return false; }
       const data = await res.json();
-      // Do NOT use data.logs as the existence test. A valid cloud snapshot holding health
-      // data but no logs was skipped, pullFromCloud returned false, and connectSync then
-      // called syncNow() which OVERWROTE that cloud data with the local (empty) state.
+      // Snapshot existence is judged primarily on METADATA: any snapshot this app has ever
+      // written carries `updatedAt`, so its presence proves a real snapshot regardless of which
+      // arrays happen to be populated. The field checks below are belt-and-suspenders for older
+      // snapshots — now complete (context, active target, deload skips, whoop workouts were the
+      // gaps), so a sparse-but-valid snapshot can never be read as empty and then overwritten.
       const hasSnapshot = data && typeof data === 'object' && (
+        data.updatedAt != null || data.config != null || data.activeTarget != null || data.deloadSkips != null ||
         Array.isArray(data.logs) || Array.isArray(data.bodyMetrics) || Array.isArray(data.nutrition) ||
-        Array.isArray(data.bpLog) || Array.isArray(data.glucoseLog) || Array.isArray(data.protocolLog) || Array.isArray(data.vitalsLog) || Array.isArray(data.bloodsLog) ||
-        Array.isArray(data.measurements) || Array.isArray(data.cardioLog) || Array.isArray(data.whoopHistory) ||
-        !!data.config
+        Array.isArray(data.bpLog) || Array.isArray(data.glucoseLog) || Array.isArray(data.protocolLog) ||
+        Array.isArray(data.vitalsLog) || Array.isArray(data.bloodsLog) || Array.isArray(data.contextLog) ||
+        Array.isArray(data.measurements) || Array.isArray(data.cardioLog) ||
+        Array.isArray(data.whoopHistory) || Array.isArray(data.whoopWorkouts)
       );
       if (hasSnapshot) {
         // Merge cloud with current local so offline sessions are never lost
