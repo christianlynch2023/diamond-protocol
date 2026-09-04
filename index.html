@@ -4443,24 +4443,26 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   // WITHOUT touching getProgRec/getPrevHist — the progression engine stays slot-keyed exactly as
   // before, so nothing here can affect prescribed loads. Deload sessions excluded from PRs.
   const movementPRs = useMemo(() => {
-    const byName = {};
-    for (const l of (logs||[])) {
-      if (isDeloadLog(l)) continue;
-      for (const ex of (l.exercises||[])) {
-        if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) continue;
-        const pid = ex.origId || ex.id;
-        let best = 0;
-        for (const s of ex.sets) { if (!(s.reps > 0)) continue; const e = epley(totalLoad(pid, s.weight, bwAt, l.date), s.reps); if (e > best) best = e; }
-        if (best <= 0) continue;
-        const key = ex.name || pid;
-        const rec = byName[key] || { name: key, bestE1RM: 0, sessions: 0, lastDate: null };
-        rec.sessions++;
-        if (!rec.lastDate || l.date > rec.lastDate) rec.lastDate = l.date;
-        if (best > rec.bestE1RM) rec.bestE1RM = best;
-        byName[key] = rec;
+    try {
+      const byName = {};
+      for (const l of (logs||[])) {
+        if (isDeloadLog(l)) continue;
+        for (const ex of (l.exercises||[])) {
+          if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) continue;
+          const pid = ex.origId || ex.id;
+          let best = 0;
+          for (const s of ex.sets) { if (!s || !(s.reps > 0)) continue; const e = epley(totalLoad(pid, s.weight, bwAt, l.date), s.reps); if (e > best) best = e; }
+          if (best <= 0) continue;
+          const key = ex.name || pid;
+          const rec = byName[key] || { name: key, bestE1RM: 0, sessions: 0, lastDate: null };
+          rec.sessions++;
+          if (!rec.lastDate || l.date > rec.lastDate) rec.lastDate = l.date;
+          if (best > rec.bestE1RM) rec.bestE1RM = best;
+          byName[key] = rec;
+        }
       }
-    }
-    return Object.values(byName).map(r => ({ ...r, bestE1RM: Math.round(r.bestE1RM) })).sort((a,b) => (b.sessions - a.sessions) || (b.bestE1RM - a.bestE1RM));
+      return Object.values(byName).map(r => ({ ...r, bestE1RM: Math.round(r.bestE1RM) })).sort((a,b) => (b.sessions - a.sessions) || (b.bestE1RM - a.bestE1RM));
+    } catch (e) { try { console.error('movementPRs failed', e); } catch(_) {} return []; }
   }, [logs, bwAt]);
   const _metricLbl=progMetric==='e1rm'?'Estimated 1RM per session (kg)':progMetric==='weight'?'Top-set weight per session (kg)':'Session volume (weight × reps)';
   const _prLbl=progMetric==='e1rm'?'Best e1RM':progMetric==='weight'?'PR Weight':'Best Volume';
