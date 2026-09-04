@@ -3871,8 +3871,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         const mergedVit = mergeByKey(ensureIds(vitalsLogRaw,'vt'), ensureIds(Array.isArray(data.vitalsLog)?data.vitalsLog:[], 'vt'), e => e.id);
         const mergedBld = mergeByKey(ensureIds(bloodsLogRaw,'bld'), ensureIds(Array.isArray(data.bloodsLog)?data.bloodsLog:[], 'bld'), e => e.id);
         const mergedWhoop = mergeHistory(whoopHistory, Array.isArray(data.whoopHistory) ? data.whoopHistory : []);
-        // Union merge for deload skips: local choices win over cloud on collision. Limitation:
-        // reverting a skip (deleting the key) on one device won't propagate a deletion.
+        // Union merge for deload skips, local wins on collision. A reverted skip is stored as
+        // `false` (a tombstone) rather than a deleted key, so the revert now survives the union
+        // and propagates to other devices instead of being resurrected from the cloud copy.
         const mergedSkips = { ...(data.deloadSkips || {}), ...deloadSkips };
         skipPush.current = true;
         setDeloadSkips(mergedSkips);
@@ -5258,7 +5259,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             <div className="rec-sec">
               <div className="sec-lbl">Scheduled Deload</div>
               <div className="rec-row">
-                <button className={`rc${deloadActive?' bt':''}`} onClick={()=>setDeloadSkips(m=>{const n={...m};delete n[block+'-'+week];return n;})}>Take deload</button>
+                <button className={`rc${deloadActive?' bt':''}`} onClick={()=>setDeloadSkips(m=>({...m,[block+'-'+week]:false}))}>Take deload</button>
                 <button className={`rc${!deloadActive?' nm':''}`} onClick={()=>setDeloadSkips(m=>({...m,[block+'-'+week]:true}))}>Train through</button>
               </div>
               <div className="hv-sub">{deloadActive?'~40-50% volume · 85% load · 3-4 RIR':'Training through · base volume, full load & 1-2 RIR · ramp resets'}</div>
