@@ -1502,6 +1502,7 @@ function SVGBars({ items, color='#4a9eff', height=130, unit='' }) {
   const iW = W - PX*2, iH = H - PT - PB;
   const max = Math.max(...rows.map(r => Number.isFinite(r.hi) ? r.hi : r.value)) * 1.12 || 1;
   const bw = iW / rows.length;
+  const hasRange = rows.some(r => Number.isFinite(r.lo) && Number.isFinite(r.hi));
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:'auto',display:'block'}}>
       {rows.map((r,i) => {
@@ -1521,6 +1522,7 @@ function SVGBars({ items, color='#4a9eff', height=130, unit='' }) {
           </g>
         );
       })}
+      {hasRange && <text x={PX} y={PT-3} textAnchor="start" fontSize="8" fill="var(--t3)" fontFamily="JetBrains Mono">bar = avg &#183; line = min&ndash;max range</text>}
       {unit && <text x={W-2} y={PT-3} textAnchor="end" fontSize="8" fill="var(--t3)" fontFamily="JetBrains Mono">{unit}</text>}
     </svg>
   );
@@ -4735,7 +4737,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const leanSeries = bodyMetrics.filter(m=>leanOf(m)!=null).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:leanOf(m)}));
     const curLean = bodyMetrics.length ? leanOf(bodyMetrics[0]) : null;
     const leanChange = leanSeries.length>=2 ? +(leanSeries[leanSeries.length-1].y - leanSeries[0].y).toFixed(1) : null;
-    const wtSpark = bodyMetrics.slice(0,14).reverse().map(m=>m.weight);
+    const _wtWin = bodyMetrics.slice(0,14).reverse();
+    const wtSpark = _wtWin.map(m=>m.weight);
+    const wtSparkFrom = _wtWin.length ? _wtWin[0].date : null;
+    const wtSparkTo = _wtWin.length ? _wtWin[_wtWin.length-1].date : null;
     // per-site: latest value, change vs oldest-in-window, sparkline
     const perSite = {};
     Object.keys(latestBySite).forEach(site => {
@@ -4745,7 +4750,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       const change = (latest!=null && oldest!=null && rows.length>=2) ? +(latest-oldest).toFixed(1) : null;
       perSite[site] = { latest, change, spark: rows.slice().reverse().map(r=>r.value), n: rows.length };
     });
-    return { avg7, curW, curLean, leanChange, leanSeries, wtSpark, perSite };
+    return { avg7, curW, curLean, leanChange, leanSeries, wtSpark, wtSparkFrom, wtSparkTo, perSite };
   }, [bodyMetrics, measurements]);
   const KEY_SITES = ['Waist','Chest','Left Thigh','Right Thigh'];
   const measSeries=useMemo(()=>measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value})),[measurements,mViewSite]);
@@ -6425,7 +6430,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="dc-lbl">Weight</div>
                   <div className="dc-val">{bodyDash.curW}<span className="dc-u">kg</span></div>
                   <div className="dc-sub">{bodyDash.avg7!=null?`7-day avg ${bodyDash.avg7.toFixed(1)}kg`:''}</div>
-                  {bodyDash.wtSpark.length>1 && <div style={{marginTop:4}}><Sparkline vals={bodyDash.wtSpark} color="#c4ff00" w={90}/></div>}
+                  {bodyDash.wtSpark.length>1 && <div style={{marginTop:4}}><Sparkline vals={bodyDash.wtSpark} color="#c4ff00" w={90}/><div style={{fontSize:8,color:'var(--t3)',fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{bodyDash.wtSparkFrom&&fmtShort(bodyDash.wtSparkFrom)} &ndash; {bodyDash.wtSparkTo&&fmtShort(bodyDash.wtSparkTo)} &#183; {bodyDash.wtSpark.length} weigh-ins</div></div>}
                 </div>
               </div>
             )}
