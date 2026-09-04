@@ -1604,8 +1604,15 @@ function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00
   const line = pts.map((p,i) => `${i===0?'M':'L'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
   const area = line + ` L${pts[pts.length-1][0].toFixed(1)} ${H-PY} L${PX} ${H-PY} Z`;
   const yTicks = [0,0.5,1].map(t => ({v: minV+t*range, y: ty(minV+t*range)}));
-  const step = Math.ceil(data.length/4);
-  const xLabels = data.filter((_,i) => i===0 || i===data.length-1 || i%step===0);
+  const step = Math.max(1, Math.ceil(data.length/4));
+  // Build label indices explicitly (not by value — data.indexOf mis-resolves duplicate date
+  // labels). Drop the final stepped label when it would crowd the true last point, then always
+  // show the last: this removes the "22 A26 Aug" overlap at the right edge of dense series.
+  const xIdx = [];
+  for (let i=0;i<data.length;i+=step) xIdx.push(i);
+  const lastI = data.length-1;
+  if (xIdx.length && lastI - xIdx[xIdx.length-1] < Math.ceil(step*0.6)) xIdx.pop();
+  if (lastI >= 0 && xIdx[xIdx.length-1] !== lastI) xIdx.push(lastI);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',display:'block'}}>
       <defs>
@@ -1629,13 +1636,12 @@ function SVGChart({ data, color='#c4ff00', height=130, band=null, bandColor='#00
       {yTicks.map((t,i) => (
         <g key={i}>
           <line x1={PX} y1={t.y} x2={W-PX} y2={t.y} stroke="#1d2733" strokeWidth="1" strokeDasharray="3 3"/>
-          <text x={PX-5} y={t.y+3} textAnchor="end" fontSize="9" fill="#3c4f62" fontFamily="JetBrains Mono">{Math.round(t.v)}</text>
+          <text x={PX-5} y={t.y+3} textAnchor="end" fontSize="9" fill="#728aa2" fontFamily="JetBrains Mono">{Math.round(t.v)}</text>
         </g>
       ))}
-      {xLabels.map((d,i) => {
-        const idx = data.indexOf(d);
-        return <text key={i} x={tx(idx)} y={H-2} textAnchor="middle" fontSize="9" fill="#3c4f62" fontFamily="JetBrains Mono">{d.x}</text>;
-      })}
+      {xIdx.map((idx,i) => (
+        <text key={i} x={tx(idx)} y={H-2} textAnchor="middle" fontSize="9" fill="#728aa2" fontFamily="JetBrains Mono">{data[idx].x}</text>
+      ))}
       {/* EVENT ANNOTATIONS. The app already records deloads, alcohol, illness, travel and
           protocol doses, but none of it reached the charts, so every wobble needed
           interpreting from memory. Markers are positioned on the same time scale as the
@@ -6923,10 +6929,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                           return (<g key={i}>
                             {segs.map(([k,c,v],si)=>{ if(!v) return null; const y0=yf(acc), y1=yf(acc+v); acc+=v;
                               return <rect key={si} x={x} y={y1} width={w} height={Math.max(0,y0-y1)} fill={c} opacity={i===rows.length-1?1:0.75}/>; })}
-                            <text x={x+w/2} y={H-2} textAnchor="middle" fontSize="7.5" fill="#3c4f62" fontFamily="JetBrains Mono">{i===rows.length-1?'now':fmtShort(new Date(r.t).toISOString()).split(' ')[0]}</text>
+                            <text x={x+w/2} y={H-2} textAnchor="middle" fontSize="7.5" fill="#728aa2" fontFamily="JetBrains Mono">{i===rows.length-1?'now':fmtShort(new Date(r.t).toISOString()).split(' ')[0]}</text>
                           </g>);
                         })}
-                        <text x={PX-4} y={yf(maxV)+4} textAnchor="end" fontSize="8" fill="#3c4f62" fontFamily="JetBrains Mono">{Math.round(maxV)}</text>
+                        <text x={PX-4} y={yf(maxV)+4} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="JetBrains Mono">{Math.round(maxV)}</text>
                       </svg>
                       <div style={{display:'flex',gap:12,marginTop:6,flexWrap:'wrap'}}>
                         {[['Logged','#4a9eff'],['Zone 2','#c4ff00'],['Zone 3','#ff8c00']].map(([l,c],i)=>(
@@ -7322,7 +7328,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <span className="mp-cals">{dm.days} d</span>
                   </div>
                   <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',display:'block'}}>
-                    {[0,0.5,1].map((f,i)=>{const y=(H-PY)-f*(H-2*PY);return(<g key={i}><line x1={PX} y1={y} x2={W-PX} y2={y} stroke="#1d2733" strokeWidth="1" strokeDasharray="3 3"/><text x={PX-4} y={y+3} textAnchor="end" fontSize="8" fill="#3c4f62" fontFamily="JetBrains Mono">{Math.round(f*dm.maxAmt)}</text></g>);})}
+                    {[0,0.5,1].map((f,i)=>{const y=(H-PY)-f*(H-2*PY);return(<g key={i}><line x1={PX} y1={y} x2={W-PX} y2={y} stroke="#1d2733" strokeWidth="1" strokeDasharray="3 3"/><text x={PX-4} y={y+3} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="JetBrains Mono">{Math.round(f*dm.maxAmt)}</text></g>);})}
                     {dm.series.map((s,si)=>{const line=s.pts.map((p,i)=>`${i===0?'M':'L'}${xf(p.d).toFixed(1)} ${yf(p.amt).toFixed(1)}`).join(' ');return <path key={si} d={line} fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>;})}
                     {dm.series.flatMap((s,si)=> s.evs.map((e,ei)=>{const d=(e.t-dm.t0)/86400000;return <circle key={si+'-'+ei} cx={xf(d)} cy={H-PY} r="1.6" fill={s.color} fillOpacity="0.6"/>;}))}
                     {/* Blood draws on the same axis: puts marker drift in protocol context. */}
@@ -7336,9 +7342,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                         <text x={xf(d)} y={PY-4} textAnchor="middle" fontSize="7" fill="#a479e2" opacity="0.9" fontFamily="JetBrains Mono">bloods</text>
                       </g>);
                     })}
-                    <text x={PX} y={H-2} textAnchor="start" fontSize="8" fill="#3c4f62" fontFamily="JetBrains Mono">{fmtShort(new Date(dm.t0).toISOString())}</text>
-                    <text x={W-PX} y={H-2} textAnchor="end" fontSize="8" fill="#3c4f62" fontFamily="JetBrains Mono">today</text>
-                    <text x={PX-4} y={PY-5} fontSize="7.5" fill="#3c4f62" fontFamily="JetBrains Mono">mg-eq</text>
+                    <text x={PX} y={H-2} textAnchor="start" fontSize="8" fill="#728aa2" fontFamily="JetBrains Mono">{fmtShort(new Date(dm.t0).toISOString())}</text>
+                    <text x={W-PX} y={H-2} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="JetBrains Mono">today</text>
+                    <text x={PX-4} y={PY-5} fontSize="7.5" fill="#728aa2" fontFamily="JetBrains Mono">mg-eq</text>
                   </svg>
                   <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:5}}>
                     {dm.series.map((s,si)=>(
