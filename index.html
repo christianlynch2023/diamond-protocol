@@ -2376,19 +2376,22 @@ function computeBurnCheck(whoopHistory, tdee) {
 }
 
 const ALT_BY_MUSCLE = {
-  chest:[{name:'Machine Chest Press'},{name:'Pec Deck'},{name:'Dumbbell Press'},{name:'Cable Press'}],
-  lats:[{name:'Lat Pulldown'},{name:'Pull-Up'},{name:'Straight-Arm Pulldown'}],
-  midBack:[{name:'Chest-Supported Row'},{name:'Cable Row'},{name:'Machine Row'}],
-  sideDelt:[{name:'DB Lateral Raise'},{name:'Machine Lateral Raise'},{name:'Cable Y-Raise'}],
-  rearDelt:[{name:'Reverse Pec Deck'},{name:'Face Pull'},{name:'DB Rear Delt Flye'}],
-  biceps:[{name:'Cable Curl'},{name:'DB Curl'},{name:'Preacher Curl'},{name:'Hammer Curl'}],
-  triceps:[{name:'Cable Pushdown'},{name:'Overhead Cable Ext'},{name:'Dip Machine'},{name:'Skull Crusher'}],
-  quads:[{name:'Leg Press'},{name:'Hack Squat'},{name:'Leg Extension'},{name:'Smith Squat'}],
-  hams:[{name:'Lying Leg Curl'},{name:'Seated Leg Curl'},{name:'Romanian Deadlift'},{name:'Nordic Curl'}],
-  glutes:[{name:'Hip Thrust'},{name:'Glute Leg Press'},{name:'Cable Kickback'},{name:'Bulgarian Split Squat'}],
-  calves:[{name:'Standing Calf Raise'},{name:'Seated Calf Raise'},{name:'Leg Press Calf Raise'}],
-  abs:[{name:'Cable Crunch'},{name:'Hanging Leg Raise'},{name:'Ab Machine'}],
-  adductors:[{name:'Adductor Machine'},{name:'Copenhagen Plank'}],
+  // Each alternative carries its OWN rep range so a swap no longer inherits the base lift's
+  // scheme (e.g. a leg extension inheriting a heavy 6-8 press top-set). rirMin marks connective-
+  // tissue lifts that should stay shy of failure regardless of the week's target.
+  chest:[{name:'Machine Chest Press',rMin:8,rMax:12},{name:'Pec Deck',rMin:12,rMax:15},{name:'Dumbbell Press',rMin:8,rMax:12},{name:'Cable Press',rMin:10,rMax:15}],
+  lats:[{name:'Lat Pulldown',rMin:8,rMax:12},{name:'Pull-Up',rMin:6,rMax:10},{name:'Straight-Arm Pulldown',rMin:12,rMax:15}],
+  midBack:[{name:'Chest-Supported Row',rMin:8,rMax:12},{name:'Cable Row',rMin:10,rMax:12},{name:'Machine Row',rMin:10,rMax:12}],
+  sideDelt:[{name:'DB Lateral Raise',rMin:12,rMax:20},{name:'Machine Lateral Raise',rMin:12,rMax:20},{name:'Cable Y-Raise',rMin:12,rMax:20}],
+  rearDelt:[{name:'Reverse Pec Deck',rMin:12,rMax:20},{name:'Face Pull',rMin:12,rMax:20},{name:'DB Rear Delt Flye',rMin:12,rMax:20}],
+  biceps:[{name:'Cable Curl',rMin:10,rMax:15},{name:'DB Curl',rMin:8,rMax:12},{name:'Preacher Curl',rMin:8,rMax:12},{name:'Hammer Curl',rMin:8,rMax:12}],
+  triceps:[{name:'Cable Pushdown',rMin:10,rMax:15},{name:'Overhead Cable Ext',rMin:10,rMax:15},{name:'Dip Machine',rMin:8,rMax:12},{name:'Skull Crusher',rMin:8,rMax:12,rirMin:1}],
+  quads:[{name:'Leg Press',rMin:10,rMax:15},{name:'Hack Squat',rMin:8,rMax:12},{name:'Leg Extension',rMin:12,rMax:20},{name:'Smith Squat',rMin:8,rMax:12}],
+  hams:[{name:'Lying Leg Curl',rMin:10,rMax:15},{name:'Seated Leg Curl',rMin:10,rMax:15},{name:'Romanian Deadlift',rMin:6,rMax:10,rirMin:1},{name:'Nordic Curl',rMin:5,rMax:10,rirMin:1}],
+  glutes:[{name:'Hip Thrust',rMin:8,rMax:15},{name:'Glute Leg Press',rMin:10,rMax:15},{name:'Cable Kickback',rMin:12,rMax:20},{name:'Bulgarian Split Squat',rMin:8,rMax:12}],
+  calves:[{name:'Standing Calf Raise',rMin:10,rMax:15},{name:'Seated Calf Raise',rMin:12,rMax:20},{name:'Leg Press Calf Raise',rMin:12,rMax:20}],
+  abs:[{name:'Cable Crunch',rMin:12,rMax:20},{name:'Hanging Leg Raise',rMin:8,rMax:15},{name:'Ab Machine',rMin:12,rMax:20}],
+  adductors:[{name:'Adductor Machine',rMin:12,rMax:20},{name:'Copenhagen Plank',rMin:8,rMax:12,rirMin:1}],
 };
 const CORE_EX = {
   upperA: new Set(['ua1','ua2','ua3']),
@@ -3985,7 +3988,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const base = SESSIONS[sel]?.exercises[exIdx];
     if (!base) return;
     const subId = 'sub_' + base.id + '_' + o.name.toLowerCase().replace(/[^a-z0-9]+/g, '');
-    setSubMap(prev => ({ ...prev, [base.id]: { id: subId, name: o.name } }));
+    // The alternative's own prescription (rep range, RIR floor) overrides the base's. setPlan is
+    // cleared so the substitute runs straight sets in its own range, not the base's top-set/back-off
+    // structure (capsFor guards a null setPlan). Stored in subMap so it persists and applies at every
+    // merge site ({...baseEx, ...subMap[id]}): the live target, the logger, and completeSession.
+    const rx = { rMin: o.rMin ?? base.rMin, rMax: o.rMax ?? base.rMax, setPlan: null, ...(o.rirMin != null ? { rirMin: o.rirMin } : {}) };
+    setSubMap(prev => ({ ...prev, [base.id]: { id: subId, name: o.name, ...rx } }));
     setSetData(prev => { if (prev[base.id]) { const n = { ...prev }; n[subId] = prev[base.id]; delete n[base.id]; return n; } return prev; });
     if (painRef.current[base.id]) { painRef.current[subId] = painRef.current[base.id]; delete painRef.current[base.id]; }
     // Keep React state in step with the ref, or the pain chip visually disappears after a
@@ -3994,7 +4002,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // The wt/rp inputs were populated from the BASE exercise's target before the swap. Without
     // resetting them, the user would swap RO-T8 press -> machine press and still be shown (and
     // log) the 90kg RO-T8 load. Recompute the target against the SUBSTITUTE's own history.
-    const substituted = { ...base, id: subId, name: o.name };
+    const substituted = { ...base, id: subId, name: o.name, ...rx };
     const existing = setData[base.id] || setData[subId] || [];
     const st = getTarget(substituted, logs, week, effPhase, subId);
     if (!existing.length) {
