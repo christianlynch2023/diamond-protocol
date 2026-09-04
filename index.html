@@ -4438,6 +4438,32 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const progChartData=progHist.slice().reverse().map(h=>({x:fmtShort(h.date),y:Math.round(_metricVal(h.sets, h.date))}));
   const prWeight=progChartData.length?Math.max(...progChartData.map(d=>d.y)):0;
   const lastWeight=progChartData.length?progChartData[progChartData.length-1].y:0;
+  // 6.7 (additive, read-only): lifetime best e1RM per MOVEMENT, aggregated across every slot the
+  // movement appears in (grouped by name). This is the cross-slot PR view the audit wanted, built
+  // WITHOUT touching getProgRec/getPrevHist — the progression engine stays slot-keyed exactly as
+  // before, so nothing here can affect prescribed loads. Deload sessions excluded from PRs.
+  const movementPRs = useMemo(() => {
+    try {
+      const byName = {};
+      for (const l of (logs||[])) {
+        if (isDeloadLog(l)) continue;
+        for (const ex of (l.exercises||[])) {
+          if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) continue;
+          const pid = ex.origId || ex.id;
+          let best = 0;
+          for (const s of ex.sets) { if (!s || !(s.reps > 0)) continue; const e = epley(totalLoad(pid, s.weight, bwAt, l.date), s.reps); if (e > best) best = e; }
+          if (best <= 0) continue;
+          const key = ex.name || pid;
+          const rec = byName[key] || { name: key, bestE1RM: 0, sessions: 0, lastDate: null };
+          rec.sessions++;
+          if (!rec.lastDate || l.date > rec.lastDate) rec.lastDate = l.date;
+          if (best > rec.bestE1RM) rec.bestE1RM = best;
+          byName[key] = rec;
+        }
+      }
+      return Object.values(byName).map(r => ({ ...r, bestE1RM: Math.round(r.bestE1RM) })).sort((a,b) => (b.sessions - a.sessions) || (b.bestE1RM - a.bestE1RM));
+    } catch (e) { try { console.error('movementPRs failed', e); } catch(_) {} return []; }
+  }, [logs, bwAt]);
   const _metricLbl=progMetric==='e1rm'?'Estimated 1RM per session (kg)':progMetric==='weight'?'Top-set weight per session (kg)':'Session volume (weight × reps)';
   const _prLbl=progMetric==='e1rm'?'Best e1RM':progMetric==='weight'?'PR Weight':'Best Volume';
   const _unit=progMetric==='volume'?'':'kg';
@@ -6149,6 +6175,19 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             </div>
           )}
           {!progEx && <div className="empty-msg">Select an exercise above to see your progression chart and history.</div>}
+          {movementPRs.length > 0 && (
+            <div style={{marginTop:16,background:'var(--crd)',border:'1px solid var(--bdr)',borderRadius:12,padding:14}}>
+              <div style={{fontSize:14,fontWeight:800,color:'var(--t)',marginBottom:2}}>Lifetime movement PRs</div>
+              <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.5,marginBottom:10}}>Best estimated 1RM for each movement, pooled across every programme slot it appears in. Read-only &#183; this does not change any session prescription.</div>
+              {movementPRs.map((m,i)=>(
+                <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'6px 0',borderTop:i?'1px solid var(--bdr)':'none'}}>
+                  <span style={{flex:1,fontSize:13,color:'var(--t)',fontWeight:600}}>{m.name}</span>
+                  <span style={{fontSize:13,color:'var(--acc)',fontWeight:800,fontFamily:"'JetBrains Mono',monospace"}}>{m.bestE1RM}kg</span>
+                  <span style={{fontSize:10,color:'var(--t3)',minWidth:118,textAlign:'right',fontFamily:"'JetBrains Mono',monospace"}}>{m.sessions} sess &#183; {fmtShort(m.lastDate)}</span>
+                </div>
+              ))}
+            </div>
+          )}
           </>}
         </div>
       )}
