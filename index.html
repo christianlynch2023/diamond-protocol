@@ -6347,14 +6347,14 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                       <div className="h-exp" onClick={e=>e.stopPropagation()}>
                         {editDraft.exercises.map((ex,j) => (
                           <div key={j} className="edit-ex">
-                            <div className="edit-ex-hdr"><span className="h-ex-nm">{ex.name}</span><button className="edit-x" onClick={()=>delExercise(j)}>&#215;</button></div>
+                            <div className="edit-ex-hdr"><span className="h-ex-nm">{ex.name}</span><button className="edit-x" aria-label="Remove this exercise" onClick={()=>delExercise(j)}>&#215;</button></div>
                             {ex.sets.map((s,k) => (
                               <div key={k} className="edit-set">
                                 <input className="edit-in" type="number" inputMode="decimal" value={s.weight} placeholder="kg" onChange={e=>updSet(j,k,'weight',e.target.value)}/>
                                 <span className="edit-x2">&#215;</span>
                                 <input className="edit-in" type="number" inputMode="numeric" value={s.reps} placeholder="reps" onChange={e=>updSet(j,k,'reps',e.target.value)}/>
                                 <input className="edit-in sm" type="number" inputMode="numeric" value={s.rir==null?'':s.rir} placeholder="RIR" onChange={e=>updSet(j,k,'rir',e.target.value)}/>
-                                <button className="edit-del" onClick={()=>delSet(j,k)}>&#215;</button>
+                                <button className="edit-del" aria-label="Remove this set" onClick={()=>delSet(j,k)}>&#215;</button>
                               </div>
                             ))}
                             <button className="edit-addset" onClick={()=>addSet(j)}>+ set</button>
@@ -6643,8 +6643,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-date">{fmtShort(m.date)}</span>
                   <span className="bl-val">{m.weight}kg{m.bodyFat!=null?` · ${m.bodyFat}% bf`:''}</span>
                   <span className="bl-note">{m.muscle!=null?`${m.muscle}kg lean`:''}{m.notes?((m.muscle!=null?' · ':'')+m.notes):''}</span>
-                  <button className="bl-edit" onClick={()=>openBodyEdit('weight',i,m)}>&#9998;</button>
-                  <button className="bl-del" onClick={()=>tombstone(setBodyMetrics,'bm')((_,j)=>j===i)}>&#215;</button>
+                  <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('weight',i,m)}>&#9998;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={()=>tombstone(setBodyMetrics,'bm')((_,j)=>j===i)}>&#215;</button>
                 </div>
               ))}
               {bodyMetrics.length===0&&<div className="empty-msg">No entries yet — log your first weigh-in above.</div>}
@@ -6678,8 +6678,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                             <div key={i} className="sh-row">
                               <span className="sh-date">{fmtShort(m.date)}</span>
                               <span className="sh-val">{m.value}cm</span>
-                              <button className="bl-edit" onClick={()=>openBodyEdit('meas',measurements.indexOf(m),m)}>&#9998;</button>
-                              <button className="bl-del" onClick={()=>tombstone(setMeasurements,'ms')(x=>x===m)}>&#215;</button>
+                              <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('meas',measurements.indexOf(m),m)}>&#9998;</button>
+                              <button className="bl-del" aria-label="Delete this entry" onClick={()=>tombstone(setMeasurements,'ms')(x=>x===m)}>&#215;</button>
                             </div>
                           ))}
                         </div>
@@ -6792,7 +6792,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                                   <span style={{fontWeight:700,letterSpacing:'.06em'}}>{POSE_TAG[c.pose]||'?'}</span>
                                   <span>{selA&&<span style={{color:'var(--acc)',fontWeight:700}}>A</span>}{selB&&<span style={{color:'var(--inf)',fontWeight:700}}>B</span>}</span>
                                 </div>
-                                <button onClick={()=>delCheckin(c.id)} style={{position:'absolute',top:2,right:2,width:30,height:30,borderRadius:15,border:'none',background:'rgba(0,0,0,.6)',color:'#fff',fontSize:15,lineHeight:'28px',padding:0}}>&#215;</button>
+                                <button aria-label="Delete this check-in photo" onClick={()=>delCheckin(c.id)} style={{position:'absolute',top:2,right:2,width:30,height:30,borderRadius:15,border:'none',background:'rgba(0,0,0,.6)',color:'#fff',fontSize:15,lineHeight:'28px',padding:0}}>&#215;</button>
                               </div>
                             );
                           })}
@@ -7053,8 +7053,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-date">{fmtShort(n.date)}</span>
                   <span style={{flex:1,margin:'0 8px',fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'var(--t2)'}}>P{n.protein} C{n.carbs} F{n.fat}</span>
                   <span className="bl-val">{n.calories}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>kcal</span></span>
-                  <button className="bl-edit" onClick={()=>openBodyEdit('nutrition',i,n)}>&#9998;</button>
-                  <button className="bl-del" onClick={() => tombstone(setNutrition,'nu')((_,j)=>j===i)}>&#215;</button>
+                  <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('nutrition',i,n)}>&#9998;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setNutrition,'nu')((_,j)=>j===i)}>&#215;</button>
                 </div>
               ))}
               {nutrition.length === 0 && <div className="empty-msg">No macros logged yet.<br/>Log today's totals above.</div>}
@@ -7133,8 +7133,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-date">{fmtShort(c.date)}</span>
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{c.modality}{c.note ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {c.note}</span> : null}</span>
                   <span className="bl-val">{c.minutes}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>min</span></span>
-                  <button className="bl-edit" onClick={()=>openBodyEdit('cardio',i,c)}>&#9998;</button>
-                  <button className="bl-del" onClick={() => tombstone(setCardioLog,'cd')((_,j)=>j===i)}>&#215;</button>
+                  <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('cardio',i,c)}>&#9998;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setCardioLog,'cd')((_,j)=>j===i)}>&#215;</button>
                 </div>
               ))}
               {cardioLog.length === 0 && <div className="empty-msg">No cardio logged yet.<br/>Log a session above.</div>}
@@ -7182,8 +7182,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-date">{fmtShort(b.date)}</span>
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{b.sys}/{b.dia}{b.pulse ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {b.pulse}bpm</span> : null}</span>
                   <span className={`bp-dot ${c.cls}`} title={c.label||""} style={{width:"auto",height:"auto",background:"none",fontSize:11,fontWeight:800,lineHeight:1,color:c.cls==="green"?"var(--ok)":c.cls==="amber"?"var(--warn)":"var(--err)"}}>{c.cls==="green"?"✓":c.cls==="amber"?"△":"▲"}</span>
-                  <button className="bl-edit" onClick={()=>openBodyEdit('bp',i,b)}>&#9998;</button>
-                  <button className="bl-del" onClick={() => tombstone(setBpLog,'bp')((_,j)=>j===i)}>&#215;</button>
+                  <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('bp',i,b)}>&#9998;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setBpLog,'bp')((_,j)=>j===i)}>&#215;</button>
                 </div>
               ); })}
               {bpLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your blood pressure above.</div>}
@@ -7230,7 +7230,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     {(c.tags||[]).map(t=>(CTX_TAGS.find(x=>x.id===t)||{}).label).filter(Boolean).join(', ')}
                     {c.note?<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> · {c.note}</span>:null}
                   </span>
-                  <button className="bl-del" onClick={()=>tombstone(setContextLog,'cx')(x=>x===c)}>&#215;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={()=>tombstone(setContextLog,'cx')(x=>x===c)}>&#215;</button>
                 </div>
               ))}
               {contextLog.length===0&&<div className="empty-msg">No flags logged.<br/>Log alcohol or an off day above.</div>}
@@ -7276,8 +7276,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-date">{fmtShort(g.date)}</span>
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{g.value}<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> mmol/L</span></span>
                   <span className={`bp-dot ${c.cls}`} title={c.label||""} style={{width:"auto",height:"auto",background:"none",fontSize:11,fontWeight:800,lineHeight:1,color:c.cls==="green"?"var(--ok)":c.cls==="amber"?"var(--warn)":"var(--err)"}}>{c.cls==="green"?"✓":c.cls==="amber"?"△":"▲"}</span>
-                  <button className="bl-edit" onClick={()=>openBodyEdit('glucose',i,g)}>&#9998;</button>
-                  <button className="bl-del" onClick={() => tombstone(setGlucoseLog,'gl')((_,j)=>j===i)}>&#215;</button>
+                  <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('glucose',i,g)}>&#9998;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setGlucoseLog,'gl')((_,j)=>j===i)}>&#215;</button>
                 </div>
               ); })}
               {glucoseLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your fasting glucose above.</div>}
@@ -7315,7 +7315,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(v.date)}</span>
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{v.temp}<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &deg;</span></span>
-                  <button className="bl-del" onClick={() => clearVitalField(v.date,'temp')}>&#215;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={() => clearVitalField(v.date,'temp')}>&#215;</button>
                 </div>
               ))}
               {tempLogList.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your waking temp above.</div>}
@@ -7346,7 +7346,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(v.date)}</span>
                   <span style={{flex:1,margin:'0 8px',fontWeight:700,fontSize:12,color:v.wood?'var(--ok)':'var(--t2)'}}>{v.wood?'Yes':'No'}</span>
-                  <button className="bl-del" onClick={() => clearVitalField(v.date,'wood')}>&#215;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={() => clearVitalField(v.date,'wood')}>&#215;</button>
                 </div>
               ))}
               {woodLogList.length === 0 && <div className="empty-msg">No entries yet.<br/>Log Yes/No on the Today tab.</div>}
