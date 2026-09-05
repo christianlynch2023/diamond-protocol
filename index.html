@@ -5119,7 +5119,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             const warns = [];
             if (latestBP) { const c = bpCategory(latestBP.sys, latestBP.dia); if (c.cls==='red'||c.cls==='amber') warns.push('BP '+latestBP.sys+'/'+latestBP.dia+' — '+(c.label||'elevated')); }
             if (whoopData && whoopData.cachedAt && (Date.now()-new Date(whoopData.cachedAt).getTime())>30*3600000) warns.push('WHOOP data stale');
-            if (isDeload) warns.push('Deload week — ~50% sets, 85% load');
+            if (isDeload) warns.push('Deload week — sets cut to ~40-50% of base, 85% load');
             if (ctxReasons && ctxReasons.length) warns.push(ctxReasons.join(' · '));
             return (
               <div className={`td-act ${readiness.cls}`}>
@@ -5310,7 +5310,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
               <div className="hv-sub">{deloadActive?'~40-50% volume · 85% load · 3-4 RIR':'Training through · base volume, full load & 1-2 RIR · ramp resets'}</div>
             </div>
           )}
-          {isDeload && <div className="info-banner warn">Deload week — sets auto-reduced to 50%</div>}
+          {isDeload && <div className="info-banner warn">Deload week — sets roughly halved (floored, so odd-set lifts drop a little more)</div>}
           {recovery==='beat' && <div className="info-banner err">Beat up — drop volume 25-40%, skip intensifiers</div>}
           {whoopConnected && deloadInfo.level==='deload' && <div className="info-banner err">Fatigue rising across your WHOOP data — a deload is recommended. See Progress.</div>}
           {/* WHOOP Biometrics */}
@@ -6020,10 +6020,10 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
             const sHeld = strengthRet.avgPct >= -1.5;
             const sUp = strengthRet.avgPct > 1.5;
             let verdict, vCls;
-            if (losing && sHeld) { verdict = sUp ? 'Losing weight, gaining strength — recomp territory. Ideal.' : 'Weight down, strength held — the loss is fat. Stay the course.'; vCls='var(--ok)'; }
+            if (losing && sHeld) { verdict = sUp ? 'Losing weight while strength climbs — consistent with recomp. Strong signal, though estimated strength and scale mass are both noisy.' : 'Weight down, strength broadly held — consistent with retaining muscle and losing mostly fat. Not proof, but a good sign. Stay the course.'; vCls='var(--ok)'; }
             else if (losing && !sHeld) { verdict = 'Weight AND strength dropping — you may be losing muscle. Check protein, sleep, and consider easing the deficit.'; vCls='var(--err)'; }
-            else if (gaining && sUp) { verdict = 'Weight and strength both up — productive gain phase.'; vCls='var(--ok)'; }
-            else if (!losing && !gaining && sUp) { verdict = 'Weight flat, strength up — clean recomp.'; vCls='var(--ok)'; }
+            else if (gaining && sUp) { verdict = 'Weight and strength both up — consistent with a productive gain phase.'; vCls='var(--ok)'; }
+            else if (!losing && !gaining && sUp) { verdict = 'Weight flat, strength up — consistent with a slow recomp.'; vCls='var(--ok)'; }
             else if (!losing && !gaining && !sHeld) { verdict = 'Weight flat but strength slipping — look at recovery and fuel around sessions.'; vCls='var(--warn)'; }
             else { verdict = 'Strength holding. Keep watching the trend.'; vCls='var(--t2)'; }
             return (
@@ -6042,7 +6042,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     </div>
                   ))}
                 </div>
-                <div className="ar-note">On a cut, holding e1RM while weight falls means the loss is fat. A drop bigger than ~2-3% across several lifts over 3 weeks is the earliest reliable sign the deficit is costing muscle.</div>
+                <div className="ar-note">On a cut, holding e1RM while weight falls is consistent with losing mostly fat and retaining muscle (not proof — strength estimates are noisy). A drop bigger than ~2-3% across several lifts over 3 weeks is the earliest reliable sign the deficit is costing muscle.</div>
               </div>
             );
           })()}
