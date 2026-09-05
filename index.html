@@ -1724,10 +1724,17 @@ function computeDeloadReadiness(history, week) {
   const avg = (arr, k) => { const v = arr.map(e => e[k]).filter(n => n != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
   const rRec = avg(recent, 'recovery'), bRec = avg(base, 'recovery');
   const rHrv = avg(recent, 'hrv'), bHrv = avg(base, 'hrv');
-  let signals = 0; const reasons = [];
-  if (rRec != null && bRec != null && (rRec - bRec) <= -8) { signals++; reasons.push('recovery down ' + Math.round(bRec - rRec) + ' pts'); }
-  if (rHrv != null && bHrv != null && ((rHrv - bHrv) / bHrv * 100) <= -10) { signals++; reasons.push('HRV down ' + Math.round((bHrv - rHrv) / bHrv * 100) + '%'); }
-  if (rRec != null && rRec < 40) { signals++; reasons.push('recovery sitting low'); }
+  // §5.6: recovery-down, recovery-low and HRV-down are all the SAME autonomic domain — WHOOP
+  // recovery is itself derived from HRV/RHR, and "down 8pts" + "sitting low" read the same number.
+  // Counting them separately let one correlated dip triple-count into a >=2 "deload" call. Collect
+  // the observations for context, but the autonomic domain casts ONE vote. A deload then needs a
+  // genuinely independent corroborating factor (end of an accumulation block), not stacked
+  // correlated metrics — which also respects the tren-suppressed-HRV veto below.
+  const reasons = [];
+  if (rRec != null && bRec != null && (rRec - bRec) <= -8) reasons.push('recovery down ' + Math.round(bRec - rRec) + ' pts');
+  if (rHrv != null && bHrv != null && ((rHrv - bHrv) / bHrv * 100) <= -10) reasons.push('HRV down ' + Math.round((bHrv - rHrv) / bHrv * 100) + '%');
+  if (rRec != null && rRec < 40) reasons.push('recovery sitting low');
+  const autonomicVote = reasons.length > 0 ? 1 : 0;
   const endOfBlock = [3, 7, 11].includes(week);
   // Today's recovery is the strongest single signal. If the most recent recovery is solidly
   // green (>=67), don't raise a deload/fatigue flag off trend deltas alone - on tren, HRV/RHR
@@ -1735,10 +1742,9 @@ function computeDeloadReadiness(history, week) {
   const latestRec = sorted.length ? sorted[sorted.length-1].recovery : null;
   const greenNow = latestRec != null && latestRec >= 67;
   let level, msg;
-  if (signals >= 2 && !greenNow) { level = 'deload'; msg = 'Fatigue is accumulating (' + reasons.join(', ') + '). Consider a deload or cut volume 30-40% this week.'; }
-  else if (signals === 1 && !greenNow) { level = 'moderate'; msg = 'Early fatigue signal (' + reasons.join(', ') + '). Hold volume, prioritise sleep, and watch your performance.'; }
+  if (autonomicVote && endOfBlock && !greenNow) { level = 'deload'; msg = 'End of an accumulation block with an autonomic fatigue signal (' + reasons.join(', ') + ') — a deload is well timed now.'; }
+  else if (autonomicVote && !greenNow) { level = 'moderate'; msg = 'Autonomic fatigue signal (' + reasons.join(', ') + '). These are correlated recovery metrics, so treat them as one signal: hold volume, prioritise sleep, and watch performance — a deload is warranted only if your lifts also start dropping.'; }
   else { level = 'fresh'; msg = endOfBlock ? 'Recovery is holding well — you could push one more hard week before deloading.' : 'Recovery is holding well — keep progressing as planned.'; }
-  if (endOfBlock && level === 'moderate' && !greenNow) { level = 'deload'; msg = 'End of an accumulation block and ' + reasons.join(', ') + ' — a deload is well timed now.'; }
   return { level, msg, rRec: rRec != null ? Math.round(rRec) : null, bRec: bRec != null ? Math.round(bRec) : null, rHrv: rHrv != null ? Math.round(rHrv) : null, bHrv: bHrv != null ? Math.round(bHrv) : null };
 }
 
