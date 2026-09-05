@@ -1431,8 +1431,11 @@ function RecoveryFuelStrip({ rows, height=150 }) {
   if (!rows || rows.length < 3) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12,textAlign:'center'}}>Need 3+ days with both WHOOP and logged nutrition to show the overlay</div>;
   const W=Math.max(rows.length*30, 300), barH=height-46, pad=4;
   const kcals=rows.map(r=>r.kcal).filter(v=>v!=null);
-  const maxKcal=kcals.length?Math.max(...kcals):1, minKcal=kcals.length?Math.min(...kcals):0;
-  const range=Math.max(maxKcal-minKcal,1);
+  // §8.6: scale calorie bars from an absolute ZERO baseline (rounded ceiling), not min->max.
+  // Min-max scaling stretched the lowest day to ~0px and the highest to full height, making a
+  // trivial 2200-vs-2400 difference look dramatic. Zero-based bars show true magnitude; the exact
+  // figure is labelled under each bar and the recovery line carries the day-to-day signal.
+  const kcalTop=kcals.length?Math.max(Math.ceil(Math.max(...kcals)/500)*500,500):500;
   const colW=(W-pad*2)/rows.length;
   // recovery line points (0-100 mapped to barH)
   const pts=rows.map((r,i)=>{
@@ -1447,7 +1450,7 @@ function RecoveryFuelStrip({ rows, height=150 }) {
       <svg width={W} height={height} style={{display:'block'}}>
         {rows.map((r,i)=>{
           const x=pad+colW*i;
-          const kh=r.kcal!=null ? Math.max(((r.kcal-minKcal)/range)*(barH*0.7)+6, 6) : 0;
+          const kh=r.kcal!=null ? Math.max((r.kcal/kcalTop)*(barH*0.8), 3) : 0;
           return (
             <g key={i}>
               {r.kcal!=null && <rect x={x+colW*0.2} y={barH-kh} width={colW*0.6} height={kh} rx={2} fill="rgba(74,158,255,.32)"/>}
