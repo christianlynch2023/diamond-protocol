@@ -889,6 +889,36 @@ const LS = {
   },
 };
 
+// Photo store (IndexedDB). Check-in photos are base64 and were exhausting the ~5MB localStorage
+// quota; IndexedDB holds far more. All ops are promise-based and fail soft. Crucially, a photo is
+// never removed from localStorage until its IDB write is confirmed (see the hydration effect), so
+// a failed IDB can never lose an image — the base64 remains as a fallback.
+const IDB = (() => {
+  let dbP = null;
+  const open = () => {
+    if (dbP) return dbP;
+    dbP = new Promise((res, rej) => {
+      try {
+        const r = indexedDB.open('diamond-photos', 1);
+        r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains('photos')) r.result.createObjectStore('photos'); };
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      } catch(e) { rej(e); }
+    });
+    return dbP;
+  };
+  const run = (mode, fn) => open().then(db => new Promise((res, rej) => {
+    let out; const t = db.transaction('photos', mode); const st = t.objectStore('photos');
+    const rq = fn(st); if (rq) rq.onsuccess = () => { out = rq.result; };
+    t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+  }));
+  return {
+    get: k => run('readonly',  s => s.get(k)),
+    put: (k,v) => run('readwrite', s => s.put(v, k)),
+    del: k => run('readwrite', s => s.delete(k)),
+  };
+})();
+
 const PHASES = [
   {weeks:[1,2,3],name:"Accumulation 1",color:"normal"},
   {weeks:[4],name:"Deload",color:"deload"},
@@ -2907,6 +2937,11 @@ function App() {
   const [measurementsRaw, setMeasurements] = usePersistentState('body_measurements', []);
   const measurements = useMemo(()=>live(measurementsRaw),[measurementsRaw]);
   const [checkins, setCheckins] = useState(() => { try { return JSON.parse(LS.get('checkin_photos') || '[]'); } catch(e) { return []; } });
+  // Photo image data lives in IndexedDB; this in-memory cache is hydrated from it on mount so every
+  // reader (display, compare, AI, export) stays synchronous. imgOf falls back to any base64 still on
+  // the record (un-migrated or IDB-unavailable), so a photo always resolves.
+  const [photoImg, setPhotoImg] = useState({});
+  const imgOf = c => (c && (photoImg[c.id] != null ? photoImg[c.id] : c.img)) || null;
   // 'all' shows every pose grouped by check-in date; the pose names act as filters.
   const [ciPose, setCiPose] = useState('all');
   // Which pose a new upload is tagged as (the 'all' view is not a pose you can shoot).
@@ -3181,9 +3216,30 @@ function App() {
   const userSetHighVol  = v => { setHighVol(v);   touchCfg(); };
   const userSetPhase    = v => { setGoalPhase(v); touchCfg(); };
   useEffect(() => { LS.set('dp_logs', JSON.stringify(logs)); }, [logs]);
-  // Must persist even when checkins is empty, or deleting the last photo never writes and
-  // the old array resurrects on reload. Only warn when a WRITE of actual content fails.
-  useEffect(()=>{ const ok = LS.set('checkin_photos',JSON.stringify(checkins)); if(!ok && checkins.length) alert('Storage full — your check-in photo was NOT saved. Delete an older photo and try again.'); },[checkins]);
+  // Hydrate the photo cache from IndexedDB once, and migrate any base64 still on records into IDB.
+  // A base64 is only trusted as "migrated" AFTER its IDB write resolves, so nothing is ever lost.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const cache = {};
+      for (const c of checkins) {
+        try {
+          let d = await IDB.get(c.id);
+          if (d == null && c.img) { await IDB.put(c.id, c.img); d = c.img; } // migrate, confirmed
+          if (d != null) cache[c.id] = d;
+        } catch(_) { /* IDB unavailable — base64 fallback via imgOf still works */ }
+      }
+      if (!cancelled && Object.keys(cache).length) setPhotoImg(cache);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  // Persist check-in METADATA. For photos confirmed in the cache (=in IDB), strip the base64 from
+  // the localStorage copy to free the ~5MB quota; keep base64 for any not-yet-migrated (safety).
+  useEffect(()=>{
+    const meta = checkins.map(c => (photoImg[c.id] != null ? { ...c, img: null } : c));
+    const ok = LS.set('checkin_photos', JSON.stringify(meta));
+    if(!ok && checkins.length) alert('Storage full — your check-in photo was NOT saved. Delete an older photo and try again.');
+  },[checkins, photoImg]);
 
   useEffect(() => {
     if (!timerOn) return;
@@ -3330,7 +3386,7 @@ function App() {
   };
 
   const exportData = () => {
-    const data={version:'2.4',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},activeTarget,bodyMetrics,measurements,checkins,nutrition,cardioLog,bpLog,glucoseLog,protocolLog,contextLog,vitalsLog,bloodsLog,whoopHistory,whoopWorkouts,deloadSkips};
+    const data={version:'2.4',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},activeTarget,bodyMetrics,measurements,checkins:checkins.map(c=>({...c,img:imgOf(c)})),nutrition,cardioLog,bpLog,glucoseLog,protocolLog,contextLog,vitalsLog,bloodsLog,whoopHistory,whoopWorkouts,deloadSkips};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`diamond-${new Date().toISOString().split('T')[0]}.json`;
@@ -3582,11 +3638,12 @@ function App() {
       const bw = bodyMetrics[0]?.weight || null;
       const waist = measurements.find(m => m.site === 'Waist')?.value || null;
       const entry = { id: Date.now(), date: new Date().toISOString(), pose: ciAddPose, week: wk, phase: ph.name, weight: bw, waist, img: dataUrl };
+      try { await IDB.put(entry.id, dataUrl); setPhotoImg(m => ({ ...m, [entry.id]: dataUrl })); } catch(_) { /* keep base64 on the entry as fallback */ }
       setCheckins(prev => [entry, ...prev].slice(0, 24));
     } catch(e) { alert('Could not process image: ' + e.message); }
   };
 
-  const delCheckin = (id) => setCheckins(prev => prev.filter(c => c.id !== id));
+  const delCheckin = (id) => { try { IDB.del(id); } catch(_){} setPhotoImg(m => { const n = { ...m }; delete n[id]; return n; }); setCheckins(prev => prev.filter(c => c.id !== id)); };
 
   const analyseProgress = async () => {
     if (!ciCompareA || !ciCompareB) { alert('Pick two check-ins to compare (baseline and current).'); return; }
@@ -3630,8 +3687,8 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 700, messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base.img.split(',')[1] } },
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: cur.img.split(',')[1] } },
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imgOf(base).split(',')[1] } },
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imgOf(cur).split(',')[1] } },
           { type: 'text', text: prompt }
         ] }] })
       });
@@ -6719,7 +6776,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                             const blocked = !!(aSel && !selA && !selB && aSel.pose !== c.pose);
                             return (
                               <div key={c.id} style={{position:'relative',borderRadius:8,overflow:'hidden',opacity:blocked?0.35:1,border:selA?'2px solid var(--acc)':selB?'2px solid var(--inf)':'1px solid var(--bdr)'}}>
-                                <img src={c.img} alt={c.pose} style={{width:'100%',aspectRatio:'3/4',objectFit:'cover',display:'block'}}
+                                <img src={imgOf(c)} alt={c.pose} style={{width:'100%',aspectRatio:'3/4',objectFit:'cover',display:'block'}}
                                   onClick={()=>{
                                     if(selA){setCiCompareA(null);setCiCompareB(null);}
                                     else if(selB){setCiCompareB(null);}
