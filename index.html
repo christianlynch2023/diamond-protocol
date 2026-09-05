@@ -2099,28 +2099,49 @@ const PERF_MIN_VERDICT = 8;
 
 function relPerfByBucket(rows, minSessions = PERF_MIN_SHOW) {
   if (!rows.length) return null;
-  const meanBy = {};
-  for (const r of rows) (meanBy[r.pid] = meanBy[r.pid] || []).push(r.e1rm);
-  for (const k in meanBy) { const a = meanBy[k]; meanBy[k] = a.reduce((x,y)=>x+y,0)/a.length; }
-  const acc = {};
-  for (const r of rows) {
-    const m = meanBy[r.pid];
-    if (!m) continue;
-    const rel = (r.e1rm/m - 1) * 100;
-    const b = (acc[r.bucket] = acc[r.bucket] || { n:0, sum:0, sids:new Set() });
-    b.n++; b.sum += rel; if (r.sid) b.sids.add(r.sid);
-  }
-  const out = {};
-  // Gate on distinct SESSIONS, not rows. One session contributes ~8 exercise-rows, so a
-  // row-based minimum would let a single day's training qualify a bucket and produce a
-  // confident-looking verdict from one session.
-  for (const k in acc) {
-    const sess = acc[k].sids.size || 0;
-    out[k] = { n: acc[k].n, sessions: sess,
-               mean: sess >= minSessions ? +(acc[k].sum/acc[k].n).toFixed(1) : null,
-               provisional: sess < PERF_MIN_VERDICT };
-  }
-  return out;
+  try {
+    // §5.1: detrend each lift against its OWN linear progression before bucketing. Normalising
+    // against the all-time mean let long-term strength gains leak into the buckets — recent
+    // sessions being stronger is progression, not a recovery/time-of-day/alcohol effect. Residual =
+    // actual e1RM vs the lift's fitted trend at that date, so buckets reflect deviation FROM trend.
+    const byPid = {};
+    for (const r of rows) (byPid[r.pid] = byPid[r.pid] || []).push(r);
+    const acc = {};
+    for (const pid in byPid) {
+      const pr = byPid[pid].filter(r => r.date).sort((a,b)=> a.date < b.date ? -1 : 1);
+      const n = pr.length;
+      if (!n) continue;
+      const mean = pr.reduce((s,r)=>s+r.e1rm,0)/n;
+      const t0 = new Date(pr[0].date).getTime();
+      const xs = pr.map(r => (new Date(r.date).getTime()-t0)/86400000); // days since first session
+      // Least-squares line e1RM ~ day; fall back to a flat mean when <3 points or no time spread.
+      let intercept = mean, slope = 0;
+      if (n >= 3) {
+        const mx = xs.reduce((a,b)=>a+b,0)/n;
+        let sxx=0, sxy=0;
+        for (let i=0;i<n;i++){ const dx=xs[i]-mx; sxx+=dx*dx; sxy+=dx*(pr[i].e1rm-mean); }
+        if (sxx > 0) { slope = sxy/sxx; intercept = mean - slope*mx; }
+      }
+      for (let i=0;i<n;i++){
+        const exp = intercept + slope*xs[i];
+        if (!(exp > 0)) continue;
+        const rel = (pr[i].e1rm - exp)/exp * 100;   // % residual vs trend
+        const r = pr[i];
+        const b = (acc[r.bucket] = acc[r.bucket] || { n:0, sum:0, sids:new Set() });
+        b.n++; b.sum += rel; if (r.sid) b.sids.add(r.sid);
+      }
+    }
+    const out = {};
+    // Gate on distinct SESSIONS, not rows: one session is ~8 exercise-rows, so a row-based minimum
+    // would let a single day qualify a bucket and produce a confident verdict from one session.
+    for (const k in acc) {
+      const sess = acc[k].sids.size || 0;
+      out[k] = { n: acc[k].n, sessions: sess,
+                 mean: sess >= minSessions ? +(acc[k].sum/acc[k].n).toFixed(1) : null,
+                 provisional: sess < PERF_MIN_VERDICT };
+    }
+    return out;
+  } catch(e) { try{console.error('relPerfByBucket failed',e);}catch(_){} return null; }
 }
 
 // One row per exercise per non-deload session, tagged by a caller-supplied bucket.
@@ -2135,7 +2156,7 @@ function perfRows(logs, bucketFn, bwAt = null) {
       const pid = ex.origId||ex.id;
       const best = Math.max(...ex.sets.map(s => epley(totalLoad(pid, s.weight, bwAt, l.date), s.reps||0)));
       if (!best || !isFinite(best)) continue;
-      rows.push({ pid, e1rm: best, bucket, sid: l.id || l.date });
+      rows.push({ pid, e1rm: best, bucket, sid: l.id || l.date, date: l.date });
     }
   }
   return rows;
