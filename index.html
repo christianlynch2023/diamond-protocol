@@ -5793,6 +5793,27 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       {view === 'progress' && (
         <div className="screen">
           <div className="topbar"><span className="logo">Progress</span></div>
+          {(() => {
+            // §8.1 core: surface the few things that need action first, so you don't scan 17 cards.
+            // Reads only already-computed signals; every access is guarded and the whole block is
+            // try/caught to render null on any error — it can never crash the screen.
+            try {
+              const items = [];
+              try { const b = bpLog && bpLog[0]; if (b) { const bc = bpCategory(b.sys, b.dia); const age = (Date.now()-new Date(b.date).getTime())/86400000; if ((bc.cls==='red'||bc.cls==='amber') && age<=7) items.push({sev:'#ff6b6b', t:`Blood pressure ${b.sys}/${b.dia} (${bc.label||'elevated'}) in the last week — take a repeat reading.`}); } } catch(_){}
+              try { if (readiness && readiness.cls==='red') items.push({sev:'#ff6b6b', t:`Readiness is red today — ${readiness.action}`}); } catch(_){}
+              try { const s = weekReview && weekReview.items && weekReview.items.find(i=>i.k==='Sessions'); if (s && s.verdict==='miss') items.push({sev:'#e0b020', t:`Sessions behind this week (${s.v}).`}); } catch(_){}
+              try { const p = weekReview && weekReview.items && weekReview.items.find(i=>i.k==='Protein'); if (p && p.verdict==='miss') items.push({sev:'#e0b020', t:`Protein under target (${p.v}) — muscle-retention risk on a cut.`}); } catch(_){}
+              try { if (plateaus && plateaus.length) items.push({sev:'#728aa2', t:`${plateaus.length} lift${plateaus.length>1?'s':''} stalled: ${plateaus.slice(0,2).map(p=>p.name).join(', ')}${plateaus.length>2?'\u2026':''}.`}); } catch(_){}
+              const top = items.slice(0,3);
+              if (!top.length) return null;
+              return (
+                <div className="ar-card" style={{borderColor:'rgba(255,107,107,.35)'}}>
+                  <div className="hm-head"><span className="hm-ttl">Needs attention</span><span className="hm-wk">{top.length}</span></div>
+                  {top.map((it,i)=>(<div key={i} style={{display:'flex',gap:8,padding:'6px 0',borderTop:i?'1px solid var(--bdr)':'none',fontSize:12,color:'var(--t2)',lineHeight:1.5}}><span style={{color:it.sev,fontWeight:800}}>&#8226;</span><span>{it.t}</span></div>))}
+                </div>
+              );
+            } catch(e) { return null; }
+          })()}
           {weekReview && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Week in review</span><span className="hm-wk">last 7 days</span></div>
