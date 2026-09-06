@@ -4530,7 +4530,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   }).filter(Boolean):[];
   const progHist=progEx?getPrevHist(progEx,logs,20):[];
   const _metricVal=(sets, dateStr)=>{ if(!sets||!sets.length) return 0; if(progMetric==='weight') return Math.max(...sets.map(s=>s.weight||0)); if(progMetric==='volume') return sets.reduce((a,s)=>a+(s.weight||0)*(s.reps||0),0); return Math.max(...sets.map(s=>epley(totalLoad(progEx, s.weight, bwAt, dateStr), s.reps||0))); };
-  const progChartData=progHist.slice().reverse().map(h=>({x:fmtShort(h.date),y:Math.round(_metricVal(h.sets, h.date))}));
+  const progChartData=progHist.slice().reverse().map(h=>({x:fmtShort(h.date),y:Math.round(_metricVal(h.sets, h.date)),t:new Date(h.date).getTime()}));
   const prWeight=progChartData.length?Math.max(...progChartData.map(d=>d.y)):0;
   const lastWeight=progChartData.length?progChartData[progChartData.length-1].y:0;
   // 6.7 (additive, read-only): lifetime best e1RM per MOVEMENT, aggregated across every slot the
@@ -4843,7 +4843,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const curW = bodyMetrics[0]?.weight ?? null;
     // lean mass: prefer logged muscle, else weight*(1-bf/100)
     const leanOf = (m) => (m.muscle!=null && (!m.weight || m.muscle >= m.weight*0.4)) ? m.muscle : (m.bodyFat!=null && m.weight!=null ? +(m.weight*(1-m.bodyFat/100)).toFixed(1) : null);
-    const leanSeries = bodyMetrics.filter(m=>leanOf(m)!=null).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:leanOf(m)}));
+    const leanSeries = bodyMetrics.filter(m=>leanOf(m)!=null).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:leanOf(m),t:new Date(m.date).getTime()}));
     const curLean = bodyMetrics.length ? leanOf(bodyMetrics[0]) : null;
     const leanChange = leanSeries.length>=2 ? +(leanSeries[leanSeries.length-1].y - leanSeries[0].y).toFixed(1) : null;
     const _wtWin = bodyMetrics.slice(0,14).reverse();
@@ -4862,7 +4862,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     return { avg7, curW, curLean, leanChange, leanSeries, wtSpark, wtSparkFrom, wtSparkTo, perSite };
   }, [bodyMetrics, measurements]);
   const KEY_SITES = ['Waist','Chest','Left Thigh','Right Thigh'];
-  const measSeries=useMemo(()=>measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value})),[measurements,mViewSite]);
+  const measSeries=useMemo(()=>measurements.filter(m=>m.site===mViewSite).slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.value,t:new Date(m.date).getTime()})),[measurements,mViewSite]);
   const protSeries=useMemo(()=>nutrition.slice(0,21).reverse().map(n=>({x:fmtShort(n.date),y:n.protein,t:new Date(n.date).getTime()})),[nutrition]);
   const recFuelRows = useMemo(() => {
     const nutByDate={}; nutrition.forEach(n=>{ const d=(n.date||'').slice(0,10); if(d) nutByDate[d]=n; });
@@ -5810,6 +5810,24 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div className="ar-card" style={{borderColor:'rgba(255,107,107,.35)'}}>
                   <div className="hm-head"><span className="hm-ttl">Needs attention</span><span className="hm-wk">{top.length}</span></div>
                   {top.map((it,i)=>(<div key={i} style={{display:'flex',gap:8,padding:'6px 0',borderTop:i?'1px solid var(--bdr)':'none',fontSize:12,color:'var(--t2)',lineHeight:1.5}}><span style={{color:it.sev,fontWeight:800}}>&#8226;</span><span>{it.t}</span></div>))}
+                </div>
+              );
+            } catch(e) { return null; }
+          })()}
+          {(() => {
+            // Reorg: compress everything that's FINE into one glanceable strip, so healthy
+            // measures don't each take a full card. Reads existing verdicts only; fully fail-safe.
+            try {
+              const chips = [];
+              try { (weekReview && weekReview.items || []).filter(i=>i.verdict==='good').forEach(i=>chips.push(`${i.k} ${i.v}`)); } catch(_){}
+              try { const b = bpLog && bpLog[0]; if (b) { const c = bpCategory(b.sys,b.dia); if (c.cls==='green') chips.push('BP normal'); } } catch(_){}
+              if (!chips.length) return null;
+              return (
+                <div className="ar-card">
+                  <div className="hm-head"><span className="hm-ttl">On track</span><span className="hm-wk">{chips.length} &#10003;</span></div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
+                    {chips.slice(0,8).map((c,i)=><span key={i} style={{fontSize:11,color:'#00e87a',background:'rgba(0,232,122,.1)',border:'1px solid rgba(0,232,122,.3)',borderRadius:6,padding:'3px 8px'}}>{c}</span>)}
+                  </div>
                 </div>
               );
             } catch(e) { return null; }
