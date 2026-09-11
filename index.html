@@ -3134,6 +3134,43 @@ function App() {
     return { rows, flagged: rows.filter(r=>r.outOfRange), lastDraw, daysSince,
              dueIn: daysSince==null ? null : 42 - daysSince, missing, panels: dates.length };
   }, [bloodsLog]);
+  // Cross-panel / cross-provider comparison. Providers name the same marker differently
+  // ("Total Testosterone" vs "Testosterone", "Oestradiol" vs "Estradiol", "FT4" vs "Free T4"),
+  // so a raw string match wouldn't align them. normKey strips case/punctuation and maps known
+  // aliases to one canonical row. Columns are the panel DATES (newest first). Fully wrapped —
+  // this is a display view over user data and must never crash the Body tab.
+  const bloodCompare = useMemo(() => {
+    try {
+      const ALIAS = {
+        totaltestosterone:'testosterone', freetestosterone:'freetestosterone',
+        estradiol:'oestradiol', oestradiol:'oestradiol',
+        ft4:'freet4', freet4:'freet4', ft3:'freet3', freet3:'freet3',
+        egfr:'egfr', estimatedglomerularfiltrationrate:'egfr',
+        totalcholesterolhdlratio:'tchdlratio', tchdlratio:'tchdlratio', cholesterolhdlratio:'tchdlratio',
+        rbc:'redbloodcells', redbloodcells:'redbloodcells', wbc:'whitebloodcells', whitebloodcells:'whitebloodcells',
+        mcv:'mcv', meancellvolume:'mcv', mch:'mch', meancellhaemoglobin:'mch', meancorpuscularhaemoglobin:'mch',
+        mchc:'mchc', totalbilirubin:'bilirubin', bilirubin:'bilirubin',
+        totalcholesterol:'totalcholesterol', ldlcholesterol:'ldl', ldl:'ldl', hdl:'hdl',
+        haematocrit:'haematocrit', hct:'haematocrit', haemoglobin:'haemoglobin', hgb:'haemoglobin',
+        prostatespecificantigenpsa:'psa', psa:'psa', thyroidfunctiontsh:'tsh', tsh:'tsh',
+        sexhormonebindingglobulinshbg:'shbg', shbg:'shbg',
+        folliclestimulatinghormone:'fsh', fsh:'fsh', luteinisinghormone:'lh', lh:'lh',
+      };
+      const norm = k => { const s = String(k||'').toLowerCase().replace(/[^a-z0-9]/g,''); return ALIAS[s] || s; };
+      const panels = (bloodsLog||[]).filter(p=>p&&p.date).slice().sort((a,b)=> a.date<b.date?1:-1);
+      const dates = panels.map(p=>p.date);
+      const rows = {};
+      for (const p of panels) for (const g of (p.groups||[])) for (const m of (g.m||[])) {
+        if (!m || m.k==null) continue;
+        const nk = norm(m.k); if (!nk) continue;
+        if (!rows[nk]) rows[nk] = { label: m.k, cells: {} };
+        if (!rows[nk].cells[p.date]) rows[nk].cells[p.date] = m; // newest panel supplies the row label
+      }
+      const arr = Object.values(rows).map(r => ({ ...r, n: Object.keys(r.cells).length }));
+      const multi = arr.filter(r => r.n >= 2).sort((a,b) => (b.n - a.n) || a.label.localeCompare(b.label));
+      return { dates, rows: multi };
+    } catch(e) { try{console.error('bloodCompare failed',e);}catch(_){} return { dates:[], rows:[] }; }
+  }, [bloodsLog]);
   const tempStat = useMemo(()=>{
     const all = vitalsLog.filter(v=>v&&v.temp!=null);
     const cur = todayVitals && todayVitals.temp!=null ? todayVitals.temp : null;
@@ -7443,6 +7480,34 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <div className="bm-gap">Not in any panel yet: <b>{biomarkers.missing.join(', ')}</b> &#8212; worth asking for at your next draw given your protocol.</div>
                 )}
                 <div className="bm-note">Monitoring only, not a diagnosis. Trends are for review with whoever manages your protocol &#8212; single values move for lots of reasons, direction across draws is what matters.</div>
+              </div>
+            )}
+            {bloodCompare.rows.length > 0 && (
+              <div className="bm-mon" style={{marginTop:12}}>
+                <div className="mp-hd" style={{marginBottom:8}}><span className="mp-ttl">Compare across panels</span><span className="mp-cals">{bloodCompare.rows.length} shared markers</span></div>
+                <div style={{overflowX:'auto',WebkitOverflowScrolling:'touch'}}>
+                  <table style={{borderCollapse:'collapse',fontSize:11,minWidth:'100%'}}>
+                    <thead>
+                      <tr>
+                        <th style={{textAlign:'left',padding:'4px 8px 6px 0',color:'var(--t3)',fontWeight:700,position:'sticky',left:0,background:'var(--crd)'}}>Marker</th>
+                        {bloodCompare.dates.map(d=><th key={d} style={{padding:'4px 8px 6px',color:'var(--t2)',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,whiteSpace:'nowrap',textAlign:'center'}}>{fmtShort(d)}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bloodCompare.rows.map((r,i)=>(
+                        <tr key={i} style={{borderTop:'1px solid var(--bdr)'}}>
+                          <td style={{textAlign:'left',padding:'6px 8px 6px 0',color:'var(--t)',position:'sticky',left:0,background:'var(--crd)',whiteSpace:'nowrap'}}>{r.label}</td>
+                          {bloodCompare.dates.map(d=>{
+                            const c = r.cells[d];
+                            const col = !c ? 'var(--t3)' : (c.flag==='high'||c.flag==='low') ? '#ff6b6b' : c.flag==='watch' ? '#e0b020' : 'var(--t)';
+                            return <td key={d} style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:col,whiteSpace:'nowrap'}}>{c ? `${c.flag==='high'?'\u25b2 ':c.flag==='low'?'\u25bc ':''}${c.disp}` : '\u2014'}</td>;
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="bm-note">Same marker across panels, newest date first. Blank (&#8212;) = not measured that draw. Units can differ between providers &#8212; check the per-panel detail below before comparing absolute values.</div>
               </div>
             )}
             {bloodsLog.length ? (
