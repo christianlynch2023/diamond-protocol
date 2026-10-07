@@ -314,7 +314,7 @@ body{background:#07090c;color:#dde5ee;font-family:'Syne',sans-serif;-webkit-font
 .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:440px;background:var(--sur);border-top:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;overflow:hidden;padding-left:2px;padding-right:2px;z-index:100;padding-bottom:env(safe-area-inset-bottom,0);height:calc(64px + env(safe-area-inset-bottom,0))}
 .bn{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:7px 2px;border-radius:8px;transition:all .15s;flex:1 1 0;min-width:0}
 .bn-ic{font-size:18px}
-.bn-lb{font-size:8.5px;font-weight:700;letter-spacing:.03em;color:var(--t3);text-transform:uppercase;transition:color .15s;white-space:nowrap}
+.bn-lb{font-size:8px;font-weight:700;letter-spacing:0;color:var(--t3);text-transform:uppercase;transition:color .15s;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .bn.on .bn-lb{color:var(--acc)}
 ::-webkit-scrollbar{width:3px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -918,6 +918,57 @@ const IDB = (() => {
     del: k => run('readwrite', s => s.delete(k)),
   };
 })();
+
+// Personal cut plan (Oct 2026): 86.6kg trend -> 80kg goal at ~0.5kg/wk. Plan content, not user
+// data, so it lives in code. Meal macros are approximate; totals are summed at render so the
+// displayed day total always matches the meals listed.
+const MEAL_PLAN = {
+  goalKg: 80, checkpointKg: 83, targetRate: 0.5,
+  targets: {
+    train: { kcal: 2100, p: 200, c: 180, f: 65, fibre: '35-40' },
+    rest:  { kcal: 1800, p: 200, c: 115, f: 60, fibre: '35-40' },
+  },
+  days: {
+    train_am: [
+      { t: '04:30', n: 'Pre-training', food: 'Banana + black coffee', p: 1, c: 27, f: 0 },
+      { t: '06:30', n: 'Breakfast', food: '60g oats, 40g whey, 150g berries', p: 37, c: 55, f: 6 },
+      { t: '12:30', n: 'Lunch', food: '200g cooked chicken breast, 200g potato, big salad, 1 tbsp olive oil', p: 64, c: 40, f: 19 },
+      { t: '16:00', n: 'Snack', food: '250g 0% Greek yoghurt, 15g walnuts', p: 27, c: 10, f: 10 },
+      { t: '19:30', n: 'Dinner', food: '200g salmon (white fish 3 nights a week), veg, 120g cooked rice', p: 43, c: 40, f: 26 },
+      { t: '21:30', n: 'Evening', food: '200g low-fat cottage cheese or a casein shake', p: 25, c: 7, f: 4 },
+    ],
+    train_pm: [
+      { t: '07:30', n: 'Breakfast', food: '250g 0% Greek yoghurt, 15g walnuts', p: 27, c: 10, f: 10 },
+      { t: '12:30', n: 'Lunch', food: '200g cooked chicken breast, 200g potato, big salad, 1 tbsp olive oil', p: 64, c: 40, f: 19 },
+      { t: '15:30', n: 'Snack', food: '200g low-fat cottage cheese', p: 25, c: 7, f: 4 },
+      { t: '18:00', n: 'Pre-training', food: '60g oats, 40g whey, 150g berries', p: 37, c: 55, f: 6 },
+      { t: '19:30', n: 'Top-up', food: 'Banana (skip caffeine this late to protect sleep)', p: 1, c: 27, f: 0 },
+      { t: '21:30', n: 'Dinner', food: '200g salmon (white fish 3 nights a week), veg, 120g cooked rice', p: 43, c: 40, f: 26 },
+    ],
+    rest: [
+      { t: '07:30', n: 'Breakfast', food: '30g oats, 40g whey, 150g berries', p: 35, c: 35, f: 4 },
+      { t: '12:30', n: 'Lunch', food: '230g cooked chicken breast, big salad, 1 tsp olive oil', p: 72, c: 6, f: 15 },
+      { t: '16:00', n: 'Snack', food: '250g 0% Greek yoghurt, 15g walnuts, 1 apple', p: 27, c: 30, f: 10 },
+      { t: '19:30', n: 'Dinner', food: '200g salmon (white fish 3 nights a week), veg, 120g cooked rice', p: 43, c: 40, f: 26 },
+      { t: '21:30', n: 'Evening', food: '200g low-fat cottage cheese', p: 25, c: 7, f: 4 },
+    ],
+  },
+  rules: [
+    ['Losing 0.4-0.7 kg/wk', 'Hold'],
+    ['Under 0.3 kg/wk for 2 weeks', 'Cut 150 kcal of rest-day carbs, or add 2,000 steps a day'],
+    ['Over 0.9 kg/wk', 'Add 150 kcal of carbs'],
+    ['e1RM down 5%+ on 2+ main lifts for 2 weeks', 'Add 150 kcal of carbs on training days and check sleep'],
+    ['Already at 1,800 avg, 200g protein, 55g fat', 'Do not cut food further. Add cardio instead'],
+  ],
+  habits: [
+    'Steps: 8-10k a day. Zone 2: 2-3 sessions of 30-40 min a week (mountain biking counts).',
+    'Diet break: one week at about 2,450 kcal around week 8, timed with the deload.',
+    'HDL: oily fish 2-3 times a week, olive oil and nuts for fat, omega-3 2-3g EPA+DHA a day.',
+    'Glucose: keep most carbs around training, high fibre, no big carb loads late at night.',
+    'Haematocrit: 3.5-4 litres of water a day.',
+    'Supplements: creatine 5g is fine (tell your doctor, it raises creatinine). No extra vitamin D or B12.',
+  ],
+};
 
 const PHASES = [
   {weeks:[1,2,3],name:"Accumulation 1",color:"normal"},
@@ -2863,6 +2914,8 @@ function App() {
   }, []);
 
   const [view, setView]         = useState('home');
+  const [mealDay, setMealDay]   = useState('train');   // 'train' | 'rest'
+  const [mealTime, setMealTime] = useState('am');      // training session time: 'am' (5am) | 'pm' (8pm)
   const [week, setWeek]         = useState(() => LS.getJSON('dp_cfg', {}).week || 1);
   const [block, setBlock]       = useState(() => LS.getJSON('dp_cfg', {}).block || 1);
   const [newBlockConfirm, setNewBlockConfirm] = useState(false);
@@ -6457,6 +6510,108 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         </div>
       )}
 
+      {view === 'meals' && (() => {
+        try {
+          const P = MEAL_PLAN;
+          const key = mealDay === 'rest' ? 'rest' : (mealTime === 'pm' ? 'train_pm' : 'train_am');
+          const meals = P.days[key];
+          const tgt = P.targets[mealDay === 'rest' ? 'rest' : 'train'];
+          const tot = meals.reduce((a,m)=>({p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{p:0,c:0,f:0});
+          const kcal = Math.round(tot.p*4 + tot.c*4 + tot.f*9);
+          // Live progress against the plan. bwRate can be null (too few weigh-ins); every branch is guarded.
+          const r = (typeof bwRate !== 'undefined') ? bwRate : null;
+          const latest = (bodyMetrics && bodyMetrics[0] && Number.isFinite(bodyMetrics[0].weight)) ? bodyMetrics[0].weight : null;
+          const trend = r && Number.isFinite(r.ewma) ? r.ewma : latest;
+          const loss = r && Number.isFinite(r.perWeek) ? -r.perWeek : null;
+          const toGo = trend != null ? +(trend - P.goalKg).toFixed(1) : null;
+          let vTxt, vCol;
+          if (loss == null) { vTxt = 'Not enough weigh-ins yet to judge the rate. Aim for 3+ morning weigh-ins a week.'; vCol = 'var(--t2)'; }
+          else if (loss > 0.9) { vTxt = 'Losing over 0.9 kg a week. Add 150 kcal of carbs.'; vCol = 'var(--warn)'; }
+          else if (loss >= 0.7) { vTxt = 'Fast end of the range. Hold, and watch your lifts.'; vCol = 'var(--ok)'; }
+          else if (loss >= 0.4) { vTxt = 'On target. Hold the plan.'; vCol = 'var(--ok)'; }
+          else if (loss >= 0.3) { vTxt = 'Slightly under target. Hold one more week and check you are hitting the numbers.'; vCol = 'var(--warn)'; }
+          else { vTxt = 'Under 0.3 kg a week. If this holds for 2 weeks, cut 150 kcal of rest-day carbs or add 2,000 steps a day.'; vCol = 'var(--warn)'; }
+          const wksTarget = toGo != null && toGo > 0 ? Math.ceil(toGo / P.targetRate) : null;
+          const wksNow = toGo != null && toGo > 0 && loss != null && loss > 0.05 ? Math.ceil(toGo / loss) : null;
+          const mono = {fontFamily:"'JetBrains Mono',monospace"};
+          const stat = (label, val) => (
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:10,color:'var(--t3)',marginBottom:2}}>{label}</div>
+              <div style={{...mono,fontSize:15,fontWeight:700,color:'var(--t)'}}>{val}</div>
+            </div>
+          );
+          return (
+            <div className="screen">
+              <div className="topbar"><span className="logo">Meals</span><span className="top-badge">Cut to {P.goalKg}kg</span></div>
+
+              <div className="ar-card">
+                <div className="hm-head"><span className="hm-ttl">Where you are</span><span className="hm-wk">goal {P.goalKg}kg</span></div>
+                <div style={{display:'flex',gap:10,marginBottom:10}}>
+                  {stat('Trend weight', trend != null ? trend.toFixed(1)+'kg' : '-')}
+                  {stat('To go', toGo != null ? (toGo > 0 ? toGo.toFixed(1)+'kg' : 'Done') : '-')}
+                  {stat('Rate', loss != null ? (loss >= 0 ? '-' : '+') + Math.abs(loss).toFixed(2)+'/wk' : '-')}
+                </div>
+                <div style={{fontSize:12,lineHeight:1.5,color:vCol,fontWeight:600}}>{vTxt}</div>
+                {(wksTarget || wksNow) && <div className="ar-note">
+                  {wksTarget ? `About ${wksTarget} weeks to go at the planned 0.5 kg a week` : ''}{wksNow ? `${wksTarget ? '; ' : ''}about ${wksNow} at your current rate` : ''}. Add a week for the diet break.
+                </div>}
+                {trend != null && trend <= P.checkpointKg && toGo > 0 && <div className="ar-note" style={{color:'var(--acc)'}}>Checkpoint reached ({P.checkpointKg}kg). Reassess whether {P.goalKg}kg is still the right finish, or whether a slightly higher, leaner-looking weight is better.</div>}
+              </div>
+
+              <div className="ar-card">
+                <div style={{display:'flex',gap:6,marginBottom:8}}>
+                  <button className={`rc${mealDay==='train'?' nm':''}`} onClick={()=>setMealDay('train')}>Training day</button>
+                  <button className={`rc${mealDay==='rest'?' nm':''}`} onClick={()=>setMealDay('rest')}>Rest day</button>
+                </div>
+                {mealDay === 'train' && <div style={{display:'flex',gap:6,marginBottom:12}}>
+                  <button className={`rc${mealTime==='am'?' nm':''}`} onClick={()=>setMealTime('am')}>5am session</button>
+                  <button className={`rc${mealTime==='pm'?' nm':''}`} onClick={()=>setMealTime('pm')}>8pm session</button>
+                </div>}
+                <div style={{display:'flex',gap:6,marginBottom:12}}>
+                  {[['kcal',tgt.kcal],['protein',tgt.p+'g'],['carbs',tgt.c+'g'],['fat',tgt.f+'g']].map(([l,v])=>(
+                    <div key={l} style={{flex:1,textAlign:'center',padding:'8px 2px',background:'var(--sur)',border:'1px solid var(--bdr)',borderRadius:8}}>
+                      <div style={{...mono,fontSize:14,fontWeight:700,color:'var(--acc)'}}>{v}</div>
+                      <div style={{fontSize:10,color:'var(--t3)'}}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+                {meals.map((m,i)=>(
+                  <div key={i} style={{display:'flex',gap:10,padding:'9px 0',borderTop:'1px solid var(--bdr)'}}>
+                    <div style={{...mono,fontSize:12,color:'var(--t2)',width:42,flexShrink:0}}>{m.t}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:700,color:'var(--t)'}}>{m.n}</div>
+                      <div style={{fontSize:12,color:'var(--t2)',lineHeight:1.45}}>{m.food}</div>
+                      <div style={{...mono,fontSize:10,color:'var(--t3)',marginTop:2}}>P {m.p} &#183; C {m.c} &#183; F {m.f}</div>
+                    </div>
+                  </div>
+                ))}
+                <div style={{display:'flex',justifyContent:'space-between',paddingTop:9,borderTop:'1px solid var(--bdr)',...mono,fontSize:11,color:'var(--t2)'}}>
+                  <span>Day total &#8776; {kcal} kcal</span><span>P {tot.p} &#183; C {tot.c} &#183; F {tot.f}</span>
+                </div>
+                <div className="ar-note">Fibre {tgt.fibre}g. Weights are cooked unless stated. Swap like for like (chicken for turkey or lean beef, rice for potato) and keep the protein the same.</div>
+              </div>
+
+              <div className="ar-card">
+                <div className="hm-head"><span className="hm-ttl">Adjustment rules</span><span className="hm-wk">7-day average</span></div>
+                {P.rules.map(([sig,act],i)=>(
+                  <div key={i} style={{padding:'7px 0',borderTop:i?'1px solid var(--bdr)':'none'}}>
+                    <div style={{fontSize:12,fontWeight:700,color:'var(--t)'}}>{sig}</div>
+                    <div style={{fontSize:12,color:'var(--t2)',lineHeight:1.45}}>{act}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="ar-card">
+                <div className="hm-head"><span className="hm-ttl">Habits that support the cut</span></div>
+                {P.habits.map((h,i)=>(<div key={i} style={{fontSize:12,color:'var(--t2)',lineHeight:1.5,padding:'5px 0',borderTop:i?'1px solid var(--bdr)':'none'}}>{h}</div>))}
+              </div>
+            </div>
+          );
+        } catch(e) {
+          try{console.error('meals view failed',e);}catch(_){}
+          return <div className="screen"><div className="topbar"><span className="logo">Meals</span></div><div className="empty-msg">The meal plan could not load. Your data is safe; reload the app.</div></div>;
+        }
+      })()}
       {view === 'privacy' && (() => {
         const fmtB = b => b < 1024 ? b+' B' : b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(2)+' MB';
         const syncOn = !!syncCode;
@@ -7644,7 +7799,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       {restFlash && <div className="rest-flash"><div className="rest-flash-txt">REST OVER</div></div>}
       {view !== 'workout' && view !== 'complete' && (
         <div className="bnav">
-          {[['today','&#128197;','Today'],['home','&#127947;','Program'],['progress','&#128200;','Progress'],['history','&#128203;','History'],['body','&#9878;','Body'],['privacy','&#128274;','Privacy'],['tools','&#128295;','Tools']].map(([v,icon,label]) => (
+          {[['today','&#128197;','Today'],['meals','&#127869;','Meals'],['home','&#127947;','Program'],['progress','&#128200;','Progress'],['history','&#128203;','History'],['body','&#9878;','Body'],['privacy','&#128274;','Privacy'],['tools','&#128295;','Tools']].map(([v,icon,label]) => (
             <div key={v} className={`bn${view===v?' on':''}`} onClick={() => setView(v)}>
               <span className="bn-ic" dangerouslySetInnerHTML={{__html:icon}}/>
               <span className="bn-lb">{label}</span>
