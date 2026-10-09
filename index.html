@@ -1777,15 +1777,51 @@ function parseWhoopHistory(rec) {
   const records = rec?.records || rec?.data || [];
   return records.map(r => {
     const s = r.score || r;
-    const date = (r.created_at || r.updated_at || '').slice(0, 10);
-    if (!date) return null;
+    // Local date, not a UTC slice, so it lines up with sleep history and localToday().
+    const ts = new Date(r.created_at || r.updated_at || '');
+    if (isNaN(ts)) return null;
+    const date = `${ts.getFullYear()}-${String(ts.getMonth()+1).padStart(2,'0')}-${String(ts.getDate()).padStart(2,'0')}`;
     return {
       date,
       recovery: Math.round(s.recovery_score ?? 0) || null,
       hrv: Math.round(s.hrv_rmssd_milli ?? s.hrv ?? 0) || null,
       rhr: Math.round(s.resting_heart_rate ?? 0) || null,
+      // Kept per day so they can be trended (skin temp is an early illness signal).
+      spo2: s.spo2_percentage != null ? Math.round(s.spo2_percentage*10)/10 : null,
+      skinTemp: s.skin_temp_celsius != null ? Math.round(s.skin_temp_celsius*10)/10 : null,
     };
   }).filter(x => x && x.recovery != null);
+}
+// One entry per night from the sleep feed: main sleeps only, scored only, dated by the local
+// day you woke up (matches the recovery date). Previously only the latest night was kept, and
+// only on days the app was opened.
+function parseWhoopSleeps(raw) {
+  const records = raw?.records || raw?.data || [];
+  const out = [];
+  for (const r of records) {
+    if (!r || r.nap) continue;
+    if (r.score_state && r.score_state !== 'SCORED') continue;
+    const s = r.score; if (!s) continue;
+    const end = new Date(r.end || r.start || ''); if (isNaN(end)) continue;
+    const date = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
+    const ss = s.stage_summary || {};
+    const light = ss.total_light_sleep_time_milli || 0, deep = ss.total_slow_wave_sleep_time_milli || 0, rem = ss.total_rem_sleep_time_milli || 0;
+    const asleep = light + deep + rem;
+    const sn = s.sleep_needed || {};
+    const needed = (sn.baseline_milli||0) + (sn.need_from_sleep_debt_milli||0) + (sn.need_from_recent_strain_milli||0) + (sn.need_from_recent_nap_milli||0);
+    out.push({
+      date,
+      sleepHrs: asleep > 0 ? Math.round(asleep/360000)/10 : null,
+      deepHrs: asleep > 0 ? Math.round(deep/360000)/10 : null,
+      remHrs: asleep > 0 ? Math.round(rem/360000)/10 : null,
+      sleepPerf: s.sleep_performance_percentage != null ? Math.round(s.sleep_performance_percentage) : null,
+      sleepEff: s.sleep_efficiency_percentage != null ? Math.round(s.sleep_efficiency_percentage) : null,
+      sleepConsistency: s.sleep_consistency_percentage != null ? Math.round(s.sleep_consistency_percentage) : null,
+      respRate: s.respiratory_rate != null ? Math.round(s.respiratory_rate*10)/10 : null,
+      sleepDebt: needed > 0 && asleep > 0 ? Math.max(0, Math.round((needed - asleep)/360000)/10) : null,
+    });
+  }
+  return out;
 }
 function mergeHistory(a, b) {
   const map = {};
@@ -1861,6 +1897,7 @@ function parseWhoopWorkouts(raw) {
       })(),
       sport: w.sport_name || null,
       distanceKm: s.distance_meter != null ? Math.round(s.distance_meter/100)/10 : null,
+      altitudeGainM: s.altitude_gain_meter != null ? Math.round(s.altitude_gain_meter) : null,
     };
   }).filter(w => w.start && w.strain != null);
 }
@@ -2783,7 +2820,10 @@ function App() {
       r.skinTemp = s.skin_temp_celsius != null ? Math.round(s.skin_temp_celsius*10)/10 : null;
     }
     // Sleep performance, stages, respiratory rate and sleep debt come from the sleep feed
-    const sleep = data?.sleep?.records?.[0] || data?.sleep?.data?.[0];
+    // Latest MAIN sleep only. The feed returns naps too (nap:true); taking records[0] meant an
+    // afternoon nap replaced last night's hours, stages and debt, and fed readiness.
+    const sleepRecs = data?.sleep?.records || data?.sleep?.data || [];
+    const sleep = sleepRecs.find(x => x && !x.nap) || null;
     if (sleep) {
       const s = sleep.score || sleep;
       r.sleep = Math.round(s.sleep_performance_percentage ?? s.sleep_efficiency_percentage ?? 0) || null;
@@ -2823,7 +2863,16 @@ function App() {
     if (!t) return;
     setWhoopLoading(true);
     try {
-      const res = await fetch('/.netlify/functions/whoop-data', { headers: { Authorization: `Bearer ${t}` } });
+      // Back-fill from the last stored day (minus 3 days overlap), or 60 days on first run, so
+      // days the app was not opened are still captured. The server pages through WHOOP's feeds.
+      let since = '';
+      try {
+        const last = (whoopHistory || []).reduce((m, e) => (e && e.date && e.date > m ? e.date : m), '');
+        const d = last ? new Date(last + 'T12:00:00') : new Date(Date.now() - 60*86400000);
+        d.setDate(d.getDate() - 3);
+        since = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      } catch(_) { since = ''; }
+      const res = await fetch('/.netlify/functions/whoop-data' + (since ? '?since=' + since : ''), { headers: { Authorization: `Bearer ${t}` } });
       // One refresh attempt only. Previously a repeatedly-rejected token caused
       // fetch -> refresh -> fetch -> refresh ... indefinitely.
       if (res.status === 401) { if (!allowRefresh) { throw new Error('WHOOP token rejected after refresh'); } await refreshWhoopToken(); return; }
@@ -2842,8 +2891,9 @@ function App() {
       // Completed cycles carry TRUE full-day burns and overwrite any partial value already
       // stored for that date (mergeHistory is field-level, and these come last so they win).
       const cycleHist = parseWhoopCycles(raw.cycles);
-      if (newHist.length || todayEntry.length || cycleHist.length) {
-        setWhoopHistory(prev => mergeHistory(prev, [...newHist, ...todayEntry, ...cycleHist]));
+      const sleepHist = parseWhoopSleeps(raw.sleep);
+      if (newHist.length || sleepHist.length || todayEntry.length || cycleHist.length) {
+        setWhoopHistory(prev => mergeHistory(prev, [...newHist, ...sleepHist, ...todayEntry, ...cycleHist]));
       }
       const wos = parseWhoopWorkouts(raw.workouts);
       // Merge, don't replace: the endpoint returns a recent page, so a wholesale replace
