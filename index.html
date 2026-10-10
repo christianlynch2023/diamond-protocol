@@ -919,6 +919,37 @@ const IDB = (() => {
   };
 })();
 
+// Blood panel entry helpers. Names are normalised so a marker typed as "Total Testosterone"
+// or "HCT" picks up the unit, range and group already used for it in earlier panels.
+const BLOOD_GROUPS = ['Hormones','Thyroid','Lipids','Liver','Kidney','Metabolic','Iron','Prostate & vitamins','Full blood count','Other'];
+const BLOOD_ALIAS_KEYS = {
+  totaltestosterone:'testosterone', estradiol:'oestradiol', ft4:'freet4', ft3:'freet3',
+  estimatedglomerularfiltrationrate:'egfr', totalcholesterolhdlratio:'tchdlratio', cholesterolhdlratio:'tchdlratio',
+  rbc:'redbloodcells', wbc:'whitebloodcells', meancellvolume:'mcv', meancellhaemoglobin:'mch',
+  meancorpuscularhaemoglobin:'mch', totalbilirubin:'bilirubin', ldlcholesterol:'ldl', hct:'haematocrit',
+  hgb:'haemoglobin', prostatespecificantigenpsa:'psa', thyroidfunctiontsh:'tsh',
+  sexhormonebindingglobulinshbg:'shbg', folliclestimulatinghormone:'fsh', luteinisinghormone:'lh',
+  totaltriglycerides:'triglycerides', redcelldistribution:'rdw',
+};
+function bloodNormKey(k) { const s = String(k || '').toLowerCase().replace(/[^a-z0-9]/g, ''); return BLOOD_ALIAS_KEYS[s] || s; }
+// Parses "8.6-29.0", "8.6–29.0", "<5.0", "≤42", ">1.0", ">1.55 (Randox)". Returns {lo, hi} or null.
+function bloodParseRef(ref) {
+  const r = String(ref || '').replace(/,/g, '');
+  let m = r.match(/(-?\d+(?:\.\d+)?)\s*[–-]\s*(\d+(?:\.\d+)?)/);
+  if (m) return { lo: +m[1], hi: +m[2] };
+  m = r.match(/[<≤]\s*(\d+(?:\.\d+)?)/); if (m) return { lo: null, hi: +m[1] };
+  m = r.match(/[>≥]\s*(\d+(?:\.\d+)?)/); if (m) return { lo: +m[1], hi: null };
+  return null;
+}
+function bloodAutoFlag(value, ref) {
+  const v = parseFloat(String(value || '').replace(/[<>≤≥\s]/g, ''));
+  const rr = bloodParseRef(ref);
+  if (!Number.isFinite(v) || !rr) return 'ok';
+  if (rr.lo != null && v < rr.lo) return 'low';
+  if (rr.hi != null && v > rr.hi) return 'high';
+  return 'ok';
+}
+
 // Personal cut plan (Oct 2026): 86.6kg trend -> 80kg goal at ~0.5kg/wk. Plan content, not user
 // data, so it lives in code. Meal macros are approximate; totals are summed at render so the
 // displayed day total always matches the meals listed.
@@ -3194,6 +3225,22 @@ function App() {
   // P0.7: default is empty and there is NO resurrection effect. Blood panels are user data —
   // added in-app or restored via Tools → Import (see bloods-backup.json). Deleting one now sticks.
   const bloodsLog = useMemo(()=>live(bloodsLogRaw),[bloodsLogRaw]);
+  // In-app panel entry. The draft is persisted so an app reload mid-entry does not lose it.
+  // Shape: { editId, date, provider, note, rows:[{k,v,unit,ref,g,flag}], err }
+  const [bldForm, setBldForm] = usePersistentState('bloods_draft', null);
+  // Newest known unit / range / group for every marker name, used to pre-fill new entries.
+  const bloodMarkerIndex = useMemo(() => {
+    const idx = {};
+    try {
+      const panels = (bloodsLog || []).filter(p => p && p.date).slice().sort((a, b) => a.date < b.date ? 1 : -1);
+      for (const p of panels) for (const g of (p.groups || [])) for (const m of (g.m || [])) {
+        if (!m || !m.k) continue;
+        const nk = bloodNormKey(m.k);
+        if (!idx[nk]) idx[nk] = { k: m.k, unit: m.unit || '', ref: m.ref || '', g: g.g || 'Other' };
+      }
+    } catch (e) { /* display helper only */ }
+    return idx;
+  }, [bloodsLog]);
   // BIOMARKER MONITOR. Panels are point-in-time snapshots; this turns them into a longitudinal
   // view so drift between draws is visible instead of buried in a PDF. Markers your protocol
   // moves most are surfaced first. Monitoring for review with your doctor — never a diagnosis.
@@ -3633,7 +3680,15 @@ function App() {
           if (Array.isArray(data.protocolLog)) setProtocolLog(clean('protocol', data.protocolLog));
           if (Array.isArray(data.contextLog)) setContextLog(clean('context', data.contextLog));
           if (Array.isArray(data.vitalsLog)) setVitalsLog(clean('vitals', data.vitalsLog));
-          if (Array.isArray(data.bloodsLog)) setBloodsLog(clean('bloods', data.bloodsLog));
+          // Bloods MERGE by panel id rather than replace. A file holding one new panel used to wipe
+          // every other panel. Imported panels are stamped newer so a corrected re-import wins.
+          let bloodsMerged = null;
+          if (Array.isArray(data.bloodsLog)) {
+            const stamp = Date.now();
+            const inc = (ensureIds(clean('bloods', data.bloodsLog), 'bld') || []).map(p => ({ ...p, updatedAt: stamp }));
+            setBloodsLog(prev => mergeByKey(ensureIds(prev || [], 'bld'), inc, e => e.id));
+            bloodsMerged = inc.length;
+          }
           // WHOOP history/workouts and deload-skip choices — omitted from older backups, so guarded
           // by presence. Arrays go through the same lenient sanitiser; deloadSkips is a plain object.
           if (Array.isArray(data.whoopHistory)) setWhoopHistory(clean('whoop history', data.whoopHistory));
@@ -3642,7 +3697,9 @@ function App() {
           if (data.config) { if(data.config.week!=null)setWeek(data.config.week); if(data.config.recovery!=null)setRecovery(data.config.recovery); if(data.config.block!=null)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase!=null)setGoalPhase(data.config.phase); touchCfg(); }  // explicit user restore = a config edit
           if (data.activeTarget && Number.isFinite(data.activeTarget.cals)) setActiveTarget(data.activeTarget);   // restore the locked calorie target
           const rej = Object.entries(rejected).map(([k,v])=>`${v} ${k}`).join(', ');
-          alert(`Restored ${importedLogs} sessions plus body, nutrition, BP, cardio and protocol history.` + (rej ? `\n\nSkipped invalid or duplicate records: ${rej}.` : ''));
+          const onlyBloods = bloodsMerged != null && Object.keys(data).filter(k => KNOWN.includes(k)).every(k => k === 'bloodsLog');
+          const bldMsg = bloodsMerged != null ? `${bloodsMerged} blood panel${bloodsMerged===1?'':'s'} imported. Existing panels were kept.` : '';
+          alert((onlyBloods ? bldMsg : `Restored ${importedLogs} sessions plus body, nutrition, BP, cardio and protocol history.` + (bldMsg ? '\n\n' + bldMsg : '')) + (rej ? `\n\nSkipped invalid or duplicate records: ${rej}.` : ''));
         } catch(err) { alert('Could not read file. Make sure it is a valid Diamond Protocol backup.'); }
       };
       reader.readAsText(file);
@@ -3991,6 +4048,89 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const id = e.id || legacyId(e, kind);
     return { ...e, id, deletedAt: Date.now(), updatedAt: Date.now() };
   }));
+  // ---- Blood panel entry ----
+  const bldEmptyRow = () => ({ k: '', v: '', unit: '', ref: '', g: 'Other', flag: 'auto' });
+  const startBloodPanel = () => {
+    // Pre-fill marker names, units and ranges from the latest panel so entry is just values.
+    const latest = (bloodsLog || []).filter(p => p && p.date).slice().sort((a, b) => a.date < b.date ? 1 : -1)[0];
+    const rows = latest
+      ? (latest.groups || []).flatMap(g => (g.m || []).map(m => ({ k: m.k, v: '', unit: m.unit || '', ref: m.ref || '', g: g.g || 'Other', flag: 'auto' })))
+      : [bldEmptyRow(), bldEmptyRow(), bldEmptyRow()];
+    setBldForm({ editId: null, date: localToday(), provider: '', note: '', rows, err: '' });
+  };
+  const editBloodPanel = (panel) => {
+    if (!panel) return;
+    const lbl = String(panel.label || '');
+    const provider = lbl.includes('\u00b7') ? lbl.split('\u00b7').pop().trim() : '';
+    const rows = (panel.groups || []).flatMap(g => (g.m || []).map(m => ({
+      k: m.k || '', v: m.disp != null ? String(m.disp) : '', unit: m.unit || '', ref: m.ref || '', g: g.g || 'Other',
+      // Keep the stored flag only if it differs from what the range would say (a deliberate override).
+      flag: (m.flag && m.flag !== bloodAutoFlag(m.disp, m.ref)) ? m.flag : 'auto',
+    })));
+    setBldForm({ editId: panel.id, date: panel.date, provider, note: panel.note || '', gaps: panel.gaps || null, rows, err: '' });
+  };
+  const updBldRow = (i, patch) => setBldForm(f => {
+    if (!f) return f;
+    const rows = f.rows.map((r, j) => {
+      if (j !== i) return r;
+      const nr = { ...r, ...patch };
+      // Typing a known marker name fills in its unit, range and group if they are still blank.
+      if (patch.k != null) {
+        const known = bloodMarkerIndex[bloodNormKey(patch.k)];
+        if (known) { if (!nr.unit) nr.unit = known.unit; if (!nr.ref) nr.ref = known.ref; if (!r.k || nr.g === 'Other') nr.g = known.g; }
+      }
+      return nr;
+    });
+    return { ...f, rows, err: '' };
+  });
+  const addBldRow = () => setBldForm(f => f ? { ...f, rows: [...f.rows, bldEmptyRow()] } : f);
+  const delBldRow = (i) => setBldForm(f => f ? { ...f, rows: f.rows.filter((_, j) => j !== i) } : f);
+  const cancelBloodPanel = () => {
+    const entered = bldForm && bldForm.rows.some(r => String(r.v).trim());
+    if (entered && !window.confirm('Discard this panel? The values you entered will be lost.')) return;
+    setBldForm(null);
+  };
+  const saveBloodPanel = () => {
+    const f = bldForm; if (!f) return;
+    const fail = (err) => setBldForm(x => x ? { ...x, err } : x);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '') || isNaN(new Date(f.date + 'T12:00:00'))) return fail('Enter a valid draw date.');
+    if (f.date > localToday()) return fail('The draw date cannot be in the future.');
+    const filled = f.rows.filter(r => String(r.k).trim() && String(r.v).trim());
+    if (!filled.length) return fail('Enter at least one marker with a value.');
+    const keys = filled.map(r => bloodNormKey(r.k));
+    const dupe = keys.find((k, i) => keys.indexOf(k) !== i);
+    if (dupe) return fail('A marker appears twice: ' + filled[keys.indexOf(dupe)].k + '. Remove one.');
+    const order = (g) => { const i = BLOOD_GROUPS.indexOf(g); return i < 0 ? BLOOD_GROUPS.length : i; };
+    const byGroup = {};
+    for (const r of filled) {
+      const g = r.g || 'Other';
+      (byGroup[g] = byGroup[g] || []).push({
+        k: String(r.k).trim(), disp: String(r.v).trim(), unit: String(r.unit || '').trim(), ref: String(r.ref || '').trim(),
+        flag: r.flag && r.flag !== 'auto' ? r.flag : bloodAutoFlag(r.v, r.ref),
+      });
+    }
+    const groups = Object.keys(byGroup).sort((a, b) => order(a) - order(b)).map(g => ({ g, m: byGroup[g] }));
+    const dateLbl = new Date(f.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const provider = String(f.provider || '').trim() || 'Manual';
+    const now = Date.now();
+    const base = { date: f.date, label: dateLbl + ' \u00b7 ' + provider, groups, updatedAt: now };
+    if (String(f.note || '').trim()) base.note = String(f.note).trim();
+    if (f.gaps && f.gaps.length) base.gaps = f.gaps;
+    if (f.editId) {
+      setBloodsLog(prev => (prev || []).map(p => p && p.id === f.editId ? { ...p, ...base, note: base.note, id: f.editId } : p));
+    } else {
+      const clash = (bloodsLog || []).find(p => p.date === f.date && String(p.label || '').endsWith(provider));
+      if (clash && !window.confirm('A ' + provider + ' panel for this date already exists. Save another one anyway?')) return;
+      const id = 'bld_' + f.date.replace(/-/g, '') + '_' + Math.random().toString(36).slice(2, 7);
+      setBloodsLog(prev => [{ id, ...base }, ...(prev || [])].sort((a, b) => (a.date || '') < (b.date || '') ? 1 : -1));
+    }
+    setBldForm(null);
+  };
+  const deleteBloodPanel = (panel) => {
+    if (!panel || !window.confirm('Delete the ' + (panel.label || panel.date) + ' panel? This also removes it from cloud sync.')) return;
+    tombstone(setBloodsLog, 'bld')(x => x === panel);
+  };
+
   const saveBodyEdit = () => {
     if(!editBody) return;
     const cfg = BODY_TYPES[editBody.type];
@@ -4957,7 +5097,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     try {
       const cat = {
         'Training': ['dp_logs','dp_wip','dp_cfg','deload_skips','active_target','schema_v','cfg_updated_at'],
-        'Body & health': ['body_metrics','body_measurements','bloods_log','bp_log','glucose_log','vitals_log','protocol_log','cardio_log','nutrition_log','context_log'],
+        'Body & health': ['body_metrics','body_measurements','bloods_log','bp_log','glucose_log','vitals_log','protocol_log','cardio_log','nutrition_log','context_log','bloods_draft'],
         'Check-in photos': ['checkin_photos'],
         'WHOOP': ['whoop_access_token','whoop_refresh_token','whoop_expires_at','whoop_cache','whoop_history','whoop_workouts'],
         'Sync & keys': ['sync_code'],
@@ -6925,7 +7065,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span className="bl-val">{m.weight}kg{m.bodyFat!=null?` · ${m.bodyFat}% bf`:''}</span>
                   <span className="bl-note">{m.muscle!=null?`${m.muscle}kg lean`:''}{m.notes?((m.muscle!=null?' · ':'')+m.notes):''}</span>
                   <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('weight',i,m)}>&#9998;</button>
-                  <button className="bl-del" aria-label="Delete this entry" onClick={()=>tombstone(setBodyMetrics,'bm')((_,j)=>j===i)}>&#215;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={()=>tombstone(setBodyMetrics,'bm')(x=>x===m)}>&#215;</button>
                 </div>
               ))}
               {bodyMetrics.length===0&&<div className="empty-msg">No entries yet — log your first weigh-in above.</div>}
@@ -7335,7 +7475,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span style={{flex:1,margin:'0 8px',fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'var(--t2)'}}>P{n.protein} C{n.carbs} F{n.fat}</span>
                   <span className="bl-val">{n.calories}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>kcal</span></span>
                   <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('nutrition',i,n)}>&#9998;</button>
-                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setNutrition,'nu')((_,j)=>j===i)}>&#215;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setNutrition,'nu')(x=>x===n)}>&#215;</button>
                 </div>
               ))}
               {nutrition.length === 0 && <div className="empty-msg">No macros logged yet.<br/>Log today's totals above.</div>}
@@ -7415,7 +7555,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{c.modality}{c.note ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {c.note}</span> : null}</span>
                   <span className="bl-val">{c.minutes}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>min</span></span>
                   <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('cardio',i,c)}>&#9998;</button>
-                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setCardioLog,'cd')((_,j)=>j===i)}>&#215;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setCardioLog,'cd')(x=>x===c)}>&#215;</button>
                 </div>
               ))}
               {cardioLog.length === 0 && <div className="empty-msg">No cardio logged yet.<br/>Log a session above.</div>}
@@ -7464,7 +7604,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{b.sys}/{b.dia}{b.pulse ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {b.pulse}bpm</span> : null}</span>
                   <span className={`bp-dot ${c.cls}`} title={c.label||""} style={{width:"auto",height:"auto",background:"none",fontSize:11,fontWeight:800,lineHeight:1,color:c.cls==="green"?"var(--ok)":c.cls==="amber"?"var(--warn)":"var(--err)"}}>{c.cls==="green"?"✓":c.cls==="amber"?"△":"▲"}</span>
                   <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('bp',i,b)}>&#9998;</button>
-                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setBpLog,'bp')((_,j)=>j===i)}>&#215;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setBpLog,'bp')(x=>x===b)}>&#215;</button>
                 </div>
               ); })}
               {bpLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your blood pressure above.</div>}
@@ -7558,7 +7698,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{g.value}<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> mmol/L</span></span>
                   <span className={`bp-dot ${c.cls}`} title={c.label||""} style={{width:"auto",height:"auto",background:"none",fontSize:11,fontWeight:800,lineHeight:1,color:c.cls==="green"?"var(--ok)":c.cls==="amber"?"var(--warn)":"var(--err)"}}>{c.cls==="green"?"✓":c.cls==="amber"?"△":"▲"}</span>
                   <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('glucose',i,g)}>&#9998;</button>
-                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setGlucoseLog,'gl')((_,j)=>j===i)}>&#215;</button>
+                  <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setGlucoseLog,'gl')(x=>x===g)}>&#215;</button>
                 </div>
               ); })}
               {glucoseLog.length === 0 && <div className="empty-msg">No readings yet.<br/>Log your fasting glucose above.</div>}
@@ -7687,6 +7827,59 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                 <div className="bm-note">Monitoring only, not a diagnosis. Trends are for review with whoever manages your protocol &#8212; single values move for lots of reasons, direction across draws is what matters.</div>
               </div>
             )}
+            {!bldForm && <button className="add-toggle" onClick={startBloodPanel}><span>Add a blood panel</span><span className="plus">+</span></button>}
+            {bldForm && (() => {
+              try {
+                const f = bldForm;
+                const inStyle = { fontSize: 16, padding: '8px 9px' };   // 16px stops iOS zooming on focus
+                const filledN = f.rows.filter(r => String(r.k).trim() && String(r.v).trim()).length;
+                const flagLbl = (r) => { const a = bloodAutoFlag(r.v, r.ref); return 'Auto' + (a === 'high' ? ' \u25b2' : a === 'low' ? ' \u25bc' : ''); };
+                return (
+                  <div className="body-form" style={{ background: 'var(--sur)', border: '1px solid var(--bdr)', borderRadius: 10, padding: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--t)' }}>{f.editId ? 'Edit panel' : 'New blood panel'}</div>
+                    <div className="bf-row">
+                      <div className="bf-grp"><div className="bf-lbl">Draw date</div>
+                        <input className="bf-in" style={inStyle} type="date" value={f.date || ''} max={localToday()} onChange={e => setBldForm(x => ({ ...x, date: e.target.value, err: '' }))} /></div>
+                      <div className="bf-grp"><div className="bf-lbl">Provider</div>
+                        <input className="bf-in" style={inStyle} type="text" placeholder="Manual, Randox..." value={f.provider || ''} onChange={e => setBldForm(x => ({ ...x, provider: e.target.value }))} /></div>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.5 }}>
+                      {f.editId ? 'Change any value, then save.' : 'Marker names, units and ranges are copied from your latest panel. Fill in the values you have; rows left blank are skipped.'} Flags work themselves out from the range unless you set one.
+                    </div>
+                    <datalist id="bld-markers">{Object.values(bloodMarkerIndex).map(m => <option key={m.k} value={m.k} />)}</datalist>
+                    {f.rows.map((r, i) => (
+                      <div key={i} style={{ borderTop: '1px solid var(--bdr)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <input className="bf-in" style={{ ...inStyle, flex: 1, minWidth: 0 }} list="bld-markers" placeholder="Marker" value={r.k} onChange={e => updBldRow(i, { k: e.target.value })} />
+                          <input className="bf-in" style={{ ...inStyle, width: 84, flexShrink: 0 }} inputMode="decimal" placeholder="Value" value={r.v} onChange={e => updBldRow(i, { v: e.target.value })} />
+                          <button className="bl-del" aria-label={'Remove ' + (r.k || 'this marker')} onClick={() => delBldRow(i)}>&#215;</button>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input className="bf-in" style={{ ...inStyle, width: 72, flexShrink: 0, fontSize: 16 }} placeholder="Unit" value={r.unit} onChange={e => updBldRow(i, { unit: e.target.value })} />
+                          <input className="bf-in" style={{ ...inStyle, flex: 1, minWidth: 0 }} placeholder="Range e.g. 38-50" value={r.ref} onChange={e => updBldRow(i, { ref: e.target.value })} />
+                          <select className="bf-sel" style={{ width: 92, flexShrink: 0, fontSize: 16 }} aria-label="Flag" value={r.flag || 'auto'} onChange={e => updBldRow(i, { flag: e.target.value })}>
+                            <option value="auto">{flagLbl(r)}</option><option value="ok">OK</option><option value="high">High</option><option value="low">Low</option><option value="watch">Watch</option>
+                          </select>
+                        </div>
+                        <select className="bf-sel" style={{ fontSize: 16 }} aria-label="Group" value={r.g || 'Other'} onChange={e => updBldRow(i, { g: e.target.value })}>
+                          {BLOOD_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                    <button className="add-toggle" onClick={addBldRow}><span>Add a marker</span><span className="plus">+</span></button>
+                    <input className="bf-in" style={inStyle} type="text" placeholder="Note (optional)" value={f.note || ''} onChange={e => setBldForm(x => ({ ...x, note: e.target.value }))} />
+                    {f.err && <div style={{ fontSize: 12, color: 'var(--err)', fontWeight: 700 }}>{f.err}</div>}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <button className="bf-save" onClick={saveBloodPanel}>{f.editId ? 'Save changes' : 'Save panel'} ({filledN})</button>
+                      <button className="bf-save" style={{ background: 'none', color: 'var(--t2)', border: '1px solid var(--bdr)' }} onClick={cancelBloodPanel}>Cancel</button>
+                    </div>
+                  </div>
+                );
+              } catch (e) {
+                try { console.error('blood form failed', e); } catch (_) {}
+                return <div className="empty-msg">The panel form could not load. <button className="bf-save" onClick={() => setBldForm(null)}>Reset form</button></div>;
+              }
+            })()}
             {bloodCompare.rows.length > 0 && (
               <div className="bm-mon" style={{marginTop:12}}>
                 <div className="mp-hd" style={{marginBottom:8}}><span className="mp-ttl">Compare across panels</span><span className="mp-cals">{bloodCompare.rows.length} shared markers</span></div>
@@ -7722,7 +7915,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     still own (hormones, lipids, iron and so on). */}
                 {bloodsLog.map((panel, pi) => (
                   <div key={panel.id||pi} style={pi>0?{marginTop:16,paddingTop:14,borderTop:'1px solid var(--bdr)',opacity:0.82}:null}>
-                    <div className="bld-head"><span className="bld-date">{panel.label||fmtShort(panel.date)}</span></div>
+                    <div className="bld-head" style={{display:'flex',alignItems:'center',gap:4}}><span className="bld-date" style={{flex:1}}>{panel.label||fmtShort(panel.date)}</span>
+                      <button className="bl-edit" aria-label={'Edit the '+(panel.label||panel.date)+' panel'} onClick={()=>{ if (bldForm && !window.confirm('Replace the panel you are currently entering?')) return; editBloodPanel(panel); }}>&#9998;</button>
+                      <button className="bl-del" aria-label={'Delete the '+(panel.label||panel.date)+' panel'} onClick={()=>deleteBloodPanel(panel)}>&#215;</button></div>
                     {(panel.groups||[]).map((grp,gi)=>(
                       <div key={gi} className="bld-group">
                         <div className="bld-gname">{grp.g}</div>
@@ -7786,7 +7981,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     {p.notes&&<div className="p-note">{p.notes}</div>}
                   </div>
                   <button className="p-edit" onClick={()=>openBodyEdit('protocol',i,p)}>&#9998;</button>
-                  <button className="p-del" onClick={()=>tombstone(setProtocolLog,'pr')((_,j)=>j===i)}>&#215;</button>
+                  <button className="p-del" onClick={()=>tombstone(setProtocolLog,'pr')(x=>x===p)}>&#215;</button>
                 </div>
               ))}
               {protocolLog.length===0&&<div className="empty-msg">No entries yet — log your first dose above.</div>}
