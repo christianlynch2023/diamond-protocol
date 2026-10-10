@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <!-- Content Security Policy. connect-src self means injected code cannot send data to any other server.
+       unsafe-inline/unsafe-eval are required while JSX is compiled in the browser by Babel. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; manifest-src 'self' blob:; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -2995,8 +2998,8 @@ function App() {
   }, []);
 
   const [view, setView]         = useState('home');
-  const [mealDay, setMealDay]   = useState('train');   // 'train' | 'rest'
-  const [mealTime, setMealTime] = useState('am');      // training session time: 'am' (5am) | 'pm' (8pm)
+  const [mealDay, setMealDay]   = usePersistentState('meal_day', 'train');   // 'train' | 'rest' (remembered)
+  const [mealTime, setMealTime] = usePersistentState('meal_time', 'am');     // session time: 'am' (5am) | 'pm' (8pm)
   const [week, setWeek]         = useState(() => LS.getJSON('dp_cfg', {}).week || 1);
   const [block, setBlock]       = useState(() => LS.getJSON('dp_cfg', {}).block || 1);
   const [newBlockConfirm, setNewBlockConfirm] = useState(false);
@@ -3316,9 +3319,17 @@ function App() {
         if (!rows[nk]) rows[nk] = { label: m.k, cells: {} };
         if (!rows[nk].cells[p.date]) rows[nk].cells[p.date] = m; // newest panel supplies the row label
       }
-      const arr = Object.values(rows).map(r => ({ ...r, n: Object.keys(r.cells).length }));
+      // Unit check: providers can report the same marker in different units (nmol/L vs ng/dL).
+      // Spelling variants (IU/L vs U/L, umol vs µmol, x10^9 vs 10⁹) are normalised first so only
+      // real mismatches are flagged, because comparing raw numbers across units is meaningless.
+      const SUP = {'⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9'};
+      const normUnit = u => String(u || '').toLowerCase().replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, c => SUP[c]).replace(/µ|μ/g, 'u').replace(/\s|\*|\^|x(?=10)/g, '').replace(/miu/g, 'mu').replace(/iu\//g, 'u/');
+      const arr = Object.values(rows).map(r => {
+        const units = new Set(Object.values(r.cells).map(c => normUnit(c && c.unit)).filter(Boolean));
+        return { ...r, n: Object.keys(r.cells).length, unitMismatch: units.size > 1 };
+      });
       const multi = arr.filter(r => r.n >= 2).sort((a,b) => (b.n - a.n) || a.label.localeCompare(b.label));
-      return { dates, rows: multi };
+      return { dates, rows: multi, anyMismatch: multi.some(r => r.unitMismatch) };
     } catch(e) { try{console.error('bloodCompare failed',e);}catch(_){} return { dates:[], rows:[] }; }
   }, [bloodsLog]);
   const tempStat = useMemo(()=>{
@@ -4821,7 +4832,9 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     try {
       const byName = {};
       for (const l of (logs||[])) {
-        if (isDeloadLog(l)) continue;
+        // isDeloadLog is local to computeDeloadRebound and not in scope here. Calling it threw
+        // inside this try/catch, so the Lifetime movement PRs card silently never rendered.
+        if (l.deload === true || (l.deload == null && DLW.has(l.week))) continue;
         for (const ex of (l.exercises||[])) {
           if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) continue;
           const pid = ex.origId || ex.id;
@@ -5101,7 +5114,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         'Check-in photos': ['checkin_photos'],
         'WHOOP': ['whoop_access_token','whoop_refresh_token','whoop_expires_at','whoop_cache','whoop_history','whoop_workouts'],
         'Sync & keys': ['sync_code'],
-        'App settings': ['meal_slot','body_sec_closed','prog_grp_closed'],
+        'App settings': ['meal_slot','body_sec_closed','prog_grp_closed','meal_day','meal_time'],
       };
       const sizeOf = k => { try { const v = localStorage.getItem(k); return v==null ? 0 : new Blob([v]).size; } catch(_) { return 0; } };
       const known = new Set(Object.values(cat).flat());
@@ -6554,6 +6567,60 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <SVGChart data={whoopHistory.slice(-30).filter(h=>h.hrv!=null).map(h=>({x:h.date.slice(5),y:h.hrv,t:new Date(h.date).getTime()}))} height={110} color="#4a9eff"/>
                   </>
                 )}
+                {(() => {
+                  // Sleep and body-signal trends from the per-day WHOOP history. Display only: like
+                  // every readiness signal, nothing here changes the workout.
+                  try {
+                    const H = whoopHistory.slice(-30);
+                    const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+                    const series = k => H.filter(h => h && Number.isFinite(h[k])).map(h => ({ x: h.date.slice(5), y: h[k], t: new Date(h.date).getTime() }));
+                    const cmp = k => {
+                      const v = H.filter(h => h && Number.isFinite(h[k]));
+                      if (v.length < 5) return null;
+                      const base = v.slice(0, -7).map(h => h[k]);
+                      return { now: avg(v.slice(-7).map(h => h[k])), base: base.length >= 3 ? avg(base) : null };
+                    };
+                    const metrics = [
+                      ['sleepHrs', 'Sleep', 'h', 1, '#a479e2'],
+                      ['rhr', 'Resting HR', ' bpm', 0, '#ff6b6b'],
+                      ['skinTemp', 'Skin temp', '\u00b0C', 1, '#e0b020'],
+                      ['spo2', 'SpO\u2082', '%', 1, '#4a9eff'],
+                      ['respRate', 'Resp. rate', ' rpm', 1, '#00e87a'],
+                    ].map(([k, label, unit, dp, color]) => ({ k, label, unit, dp, color, data: series(k), c: cmp(k) }))
+                     .filter(m => m.data.length >= 3);
+                    if (!metrics.length) return null;
+                    const st = H.filter(h => h && Number.isFinite(h.skinTemp));
+                    let tempUp = null;
+                    if (st.length >= 10) {
+                      const d = avg(st.slice(-3).map(h => h.skinTemp)) - avg(st.slice(0, -3).map(h => h.skinTemp));
+                      if (d >= 0.5) tempUp = d.toFixed(1);
+                    }
+                    return (
+                      <>
+                        <div className="chart-lbl" style={{ marginTop: 16 }}>Sleep and body signals (last 30 days)</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))', gap: 6, margin: '6px 0 4px' }}>
+                          {metrics.map(m => {
+                            const delta = m.c && m.c.base != null ? m.c.now - m.c.base : null;
+                            return (
+                              <div key={m.k} style={{ background: 'var(--sur)', border: '1px solid var(--bdr)', borderRadius: 8, padding: '7px 8px' }}>
+                                <div style={{ fontSize: 10, color: 'var(--t3)' }}>{m.label} &#183; 7-day</div>
+                                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, fontWeight: 700, color: m.color }}>{m.c ? m.c.now.toFixed(m.dp) + m.unit : '-'}</div>
+                                <div style={{ fontSize: 10, color: 'var(--t3)' }}>{delta != null ? (delta >= 0 ? '+' : '') + delta.toFixed(m.dp) + ' vs before' : 'building baseline'}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {tempUp && <div style={{ fontSize: 11, color: '#e0b020', lineHeight: 1.5, margin: '6px 0' }}>Skin temp is {tempUp}&#176;C above your baseline over the last 3 days. That often comes before illness, or after very hard training. It is a prompt to check in with yourself, not a diagnosis.</div>}
+                        {metrics.map(m => (
+                          <React.Fragment key={m.k}>
+                            <div className="chart-lbl" style={{ marginTop: 10 }}>{m.label} ({m.unit.trim()})</div>
+                            <SVGChart data={m.data} height={90} color={m.color} />
+                          </React.Fragment>
+                        ))}
+                      </>
+                    );
+                  } catch (e) { try { console.error('whoop trends failed', e); } catch (_) {} return null; }
+                })()}
                 {recFuelReady && (
                   <>
                     <div className="chart-lbl" style={{marginTop:14}}>Recovery vs fuel &#8212; last {recFuelRows.filter(r=>r.recovery!=null).length} days</div>
@@ -7894,7 +7961,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     <tbody>
                       {bloodCompare.rows.map((r,i)=>(
                         <tr key={i} style={{borderTop:'1px solid var(--bdr)'}}>
-                          <td style={{textAlign:'left',padding:'6px 8px 6px 0',color:'var(--t)',position:'sticky',left:0,background:'var(--crd)',whiteSpace:'nowrap'}}>{r.label}</td>
+                          <td style={{textAlign:'left',padding:'6px 8px 6px 0',color:'var(--t)',position:'sticky',left:0,background:'var(--crd)',whiteSpace:'nowrap'}}>{r.label}{r.unitMismatch && <span title="Units differ between panels" aria-label="Units differ between panels" style={{color:'#e0b020',marginLeft:4}}>&#9888;</span>}</td>
                           {bloodCompare.dates.map(d=>{
                             const c = r.cells[d];
                             const col = !c ? 'var(--t3)' : (c.flag==='high'||c.flag==='low') ? '#ff6b6b' : c.flag==='watch' ? '#e0b020' : 'var(--t)';
@@ -7905,7 +7972,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
                     </tbody>
                   </table>
                 </div>
-                <div className="bm-note">Same marker across panels, newest date first. Blank (&#8212;) = not measured that draw. Units can differ between providers &#8212; check the per-panel detail below before comparing absolute values.</div>
+                <div className="bm-note">Same marker across panels, newest date first. Blank (&#8212;) = not measured that draw. Units can differ between providers &#8212; check the per-panel detail below before comparing absolute values.{bloodCompare.anyMismatch && <span style={{color:'#e0b020'}}> &#9888; marks a marker reported in different units on different panels, so its numbers are not directly comparable.</span>}</div>
               </div>
             )}
             {bloodsLog.length ? (
