@@ -1,6 +1,7 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
+import type { SessionLog, Synced } from '../types';
 
-export function mergeLogs(a, b) {
+export function mergeLogs(a: SessionLog[] | null | undefined, b: SessionLog[] | null | undefined): SessionLog[] {
   const map = new Map(); const order = [];
   // Key on the immutable id (falling back to a deterministic legacy id). Keying on
   // date|sessionId meant an edit that changed either field created a phantom second
@@ -24,14 +25,14 @@ export function mergeLogs(a, b) {
 // Records need an IMMUTABLE id. Merge keys previously embedded the mutable value
 // (date|weight, date|sys|dia ...), so editing a value produced a DIFFERENT key,
 // pickNewer() never fired, and both the old and edited record survived as duplicates.
-export function newId() {
+export function newId(): string {
   try { if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID(); } catch(e){}
   return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 }
 
 // Deterministic legacy id so the SAME pre-migration record gets the SAME id on every
 // device — otherwise migration itself would create cross-device duplicates.
-export function legacyId(e, kind, index) {
+export function legacyId(e: Record<string, any>, kind: string, index?: number): string {
   // Must distinguish MULTIPLE same-day records (two BP readings on one date previously
   // hashed identically and mergeByKey then discarded one as a duplicate version).
   const parts = [kind, e.date||'', e.site||'', e.compound||'', e.modality||'', e.sessionId||'',
@@ -43,7 +44,7 @@ export function legacyId(e, kind, index) {
   return 'lg_' + kind + '_' + hh.toString(36);
 }
 
-export function ensureIds(arr, kind) {
+export function ensureIds<T extends Synced>(arr: T[] | null | undefined, kind: string): T[] {
   if (!Array.isArray(arr)) return arr;
   let changed = false;
   const out = arr.map((e, i) => {
@@ -54,20 +55,20 @@ export function ensureIds(arr, kind) {
   return changed ? out : arr;
 }
 
-export function live(arr) { return (arr || []).filter(e => e && !e.deletedAt); }
+export function live<T extends Synced>(arr: T[] | null | undefined): T[] { return (arr || []).filter(e => e && !e.deletedAt); }
 
-export function pruneTombstones(arr, days) {
+export function pruneTombstones<T extends Synced>(arr: T[] | null | undefined, days: number): T[] {
   const cut = Date.now() - (days || 90) * 86400000;
   return (arr || []).filter(e => !e.deletedAt || e.deletedAt > cut);
 }
 
-export function pickNewer(x, y) {
+export function pickNewer<T extends Synced>(x: T, y: T): T {
   const tx = x && x.updatedAt != null ? x.updatedAt : 0;
   const ty = y && y.updatedAt != null ? y.updatedAt : 0;
   return ty > tx ? y : x;   // ties keep the incumbent (local) — deterministic
 }
 
-export function mergeByKey(a, b, keyFn) {
+export function mergeByKey<T extends Synced>(a: T[] | null | undefined, b: T[] | null | undefined, keyFn: (e: T) => string): T[] {
   const map = new Map(); const order = [];
   for (const e of [...(a || []), ...(b || [])]) {
     if (!e) continue;

@@ -1,6 +1,6 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
-import { DLW } from '../data/programme.js';
-import { epley, totalLoad } from './training.js';
+import { DLW } from '../data/programme';
+import { epley, totalLoad } from './training';
 
 // Does training on low recovery actually cost performance? Splits sessions by the WHOOP
 // recovery recorded that day and compares mean e1RM per lift, normalised so lifts with big
@@ -78,7 +78,9 @@ export const PERF_MIN_SHOW = 3;
 export const PERF_MIN_VERDICT = 8;
 
 
-export function relPerfByBucket(rows, minSessions = PERF_MIN_SHOW) {
+export interface BucketStats { n: number; sessions: number; mean: number | null; provisional: boolean }
+
+export function relPerfByBucket(rows, minSessions = PERF_MIN_SHOW): Record<string, BucketStats> | null {
   if (!rows.length) return null;
   try {
     // §5.1: detrend each lift against its OWN linear progression before bucketing. Normalising
@@ -112,7 +114,7 @@ export function relPerfByBucket(rows, minSessions = PERF_MIN_SHOW) {
         b.n++; b.sum += rel; if (r.sid) b.sids.add(r.sid);
       }
     }
-    const out = {};
+    const out: Record<string, BucketStats> = {};
     // Gate on distinct SESSIONS, not rows: one session is ~8 exercise-rows, so a row-based minimum
     // would let a single day qualify a bucket and produce a confident verdict from one session.
     for (const k in acc) {

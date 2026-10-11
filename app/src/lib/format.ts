@@ -9,7 +9,7 @@ export const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'nu
 // Freshness of a dated reading, for the Today tiles: how old it is, and whether it's stale
 // enough that it shouldn't be treated as "current". Prevents old weight/BP/glucose values
 // being presented as if they were measured today.
-export const freshInfo = (iso, staleDays) => {
+export const freshInfo = (iso: string | null | undefined, staleDays: number): { d: number; label: string; stale: boolean } | null => {
   const t = iso ? new Date(iso).getTime() : NaN;
   if (isNaN(t)) return null;
   const d = Math.floor((Date.now() - t) / 86400000);
@@ -21,7 +21,7 @@ export const freshInfo = (iso, staleDays) => {
 // Returns a finite number, or null if the input is empty/blank/non-numeric/non-finite.
 // Guards against: "." "-" "  " "1.2.3" "Infinity" "5e" and comma-decimal locales ("5,5").
 // Returns null (not 0) so callers reject the entry rather than silently store a wrong value.
-export const parseNum = (raw) => {
+export const parseNum = (raw: unknown): number | null => {
   if (raw == null) return null;
   const s = String(raw).trim().replace(',', '.');
   if (s === '') return null;
@@ -29,4 +29,4 @@ export const parseNum = (raw) => {
   return Number.isFinite(n) ? n : null;
 };
 
-export const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+export const localToday = (): string => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };

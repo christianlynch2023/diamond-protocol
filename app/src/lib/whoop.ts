@@ -1,12 +1,13 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
+import type { SessionLog, WhoopDay, WhoopWorkout } from '../types';
 
 // Parse ALL cycle records, keeping only COMPLETED cycles (those with an end timestamp).
 // The in-progress cycle's kilojoule field is a running total — reading it mid-morning and
 // storing it as the day's expenditure is what produced the systematically-low ~1,500 kcal
 // "avg out". A completed cycle carries the true full-day burn.
-export function parseWhoopCycles(raw) {
+export function parseWhoopCycles(raw: any): WhoopDay[] {
   const records = raw?.records || raw?.data || [];
-  const localDay = ts => { const d = new Date(ts); return isNaN(d) ? null : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+  const localDay = ts => { const d = new Date(ts); return isNaN(d.getTime()) ? null : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
   return records.map(c => {
     const s = c.score || c;
     const end = c.end || c.during?.upper || null;
@@ -20,13 +21,13 @@ export function parseWhoopCycles(raw) {
 }
 
 
-export function parseWhoopHistory(rec) {
+export function parseWhoopHistory(rec: any): WhoopDay[] {
   const records = rec?.records || rec?.data || [];
   return records.map(r => {
     const s = r.score || r;
     // Local date, not a UTC slice, so it lines up with sleep history and localToday().
     const ts = new Date(r.created_at || r.updated_at || '');
-    if (isNaN(ts)) return null;
+    if (isNaN(ts.getTime())) return null;
     const date = `${ts.getFullYear()}-${String(ts.getMonth()+1).padStart(2,'0')}-${String(ts.getDate()).padStart(2,'0')}`;
     return {
       date,
@@ -43,14 +44,14 @@ export function parseWhoopHistory(rec) {
 // One entry per night from the sleep feed: main sleeps only, scored only, dated by the local
 // day you woke up (matches the recovery date). Previously only the latest night was kept, and
 // only on days the app was opened.
-export function parseWhoopSleeps(raw) {
+export function parseWhoopSleeps(raw: any): WhoopDay[] {
   const records = raw?.records || raw?.data || [];
   const out = [];
   for (const r of records) {
     if (!r || r.nap) continue;
     if (r.score_state && r.score_state !== 'SCORED') continue;
     const s = r.score; if (!s) continue;
-    const end = new Date(r.end || r.start || ''); if (isNaN(end)) continue;
+    const end = new Date(r.end || r.start || ''); if (isNaN(end.getTime())) continue;
     const date = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
     const ss = s.stage_summary || {};
     const light = ss.total_light_sleep_time_milli || 0, deep = ss.total_slow_wave_sleep_time_milli || 0, rem = ss.total_rem_sleep_time_milli || 0;
@@ -72,8 +73,8 @@ export function parseWhoopSleeps(raw) {
   return out;
 }
 
-export function mergeHistory(a, b) {
-  const map = {};
+export function mergeHistory(a: WhoopDay[] | null | undefined, b: WhoopDay[] | null | undefined): WhoopDay[] {
+  const map: Record<string, any> = {};
   // Field-level merge: a later entry must not wipe fields it simply doesn't carry
   // (e.g. parseWhoopHistory has no dayCal; a wholesale replace would erase it).
   [...(a || []), ...(b || [])].forEach(e => {
@@ -87,7 +88,7 @@ export function mergeHistory(a, b) {
 }
 
 
-export function parseWhoopWorkouts(raw) {
+export function parseWhoopWorkouts(raw: any): WhoopWorkout[] {
   const records = raw?.records || raw?.data || [];
   return records.map(w => {
     const s = w.score || w;
@@ -121,7 +122,7 @@ export function parseWhoopWorkouts(raw) {
   }).filter(w => w.start && w.strain != null);
 }
 
-export function matchWorkout(log, workouts) {
+export function matchWorkout(log: SessionLog, workouts: WhoopWorkout[] | null | undefined): WhoopWorkout | null {
   if (!workouts || !workouts.length || !log.date) return null;
   const end = new Date(log.date).getTime();
   const start = end - (log.duration || 60) * 60000;

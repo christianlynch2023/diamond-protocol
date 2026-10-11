@@ -1,7 +1,8 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
-import { DLW, EX_MUSCLE, _deloadNow } from '../data/programme.js';
+import { DLW, EX_MUSCLE, _deloadNow } from '../data/programme';
+import type { BodyMetric, BwResolver, SessionLog, SetEntry } from '../types';
 
-export const epley = (w,r) => r<=1 ? w : Math.round(w*(1+r/30));
+export const epley = (w: number, r: number): number => r<=1 ? w : Math.round(w*(1+r/30));
 
 
 // Exercises where the logged number is ADDED load, not total load. A weighted pull-up at
@@ -17,7 +18,7 @@ export const BW_LOADED = new Set(['ub1']);
 // of data, and left raw they both bias the average and falsely satisfy sample-size gates. Raw
 // readings are untouched (display, edit and export still see every entry); only the trend series
 // derived here is de-duplicated.
-export function dailyMedianWeights(metrics) {
+export function dailyMedianWeights(metrics: BodyMetric[] | null | undefined) {
   const byDay = {};
   for (const m of (metrics||[])) {
     if (!m || !(m.weight > 0)) continue;
@@ -32,7 +33,7 @@ export function dailyMedianWeights(metrics) {
   });
 }
 
-export function makeBwResolver(bodyMetrics) {
+export function makeBwResolver(bodyMetrics: BodyMetric[] | null | undefined): BwResolver | null {
   const pts = (bodyMetrics||[])
     .filter(m => m && m.weight > 0)
     .map(m => ({ t: new Date(m.date).getTime(), w: m.weight }))
@@ -49,7 +50,7 @@ export function makeBwResolver(bodyMetrics) {
 }
 
 // Total load moved for a set, accounting for bodyweight-loaded lifts.
-export function totalLoad(exId, weight, bwAt, dateStr) {
+export function totalLoad(exId: string, weight: number, bwAt?: BwResolver | null, dateStr?: string): number {
   const w = weight || 0;
   if (!BW_LOADED.has(exId) || !bwAt) return w;
   const bw = bwAt(dateStr);
@@ -82,9 +83,9 @@ export function theilSenSlope(pts) {
 // A supporting metric only — e1RM and hitting rep targets at RIR are the primary
 // hypertrophy signals. Tonnage can rise on lighter/higher-rep work, so read it as
 // "total work done", not "did I get stronger".
-export const volLoad = (sets) => (sets || []).reduce((a, s) => a + ((+s.weight || 0) * (+s.reps || 0)), 0);
+export const volLoad = (sets: SetEntry[] | null | undefined): number => (sets || []).reduce((a, s) => a + ((+s.weight || 0) * (+s.reps || 0)), 0);
 
-export const sessionVol = (log) => (log && log.exercises ? log.exercises.reduce((a, e) => a + volLoad(e.sets), 0) : 0);
+export const sessionVol = (log: SessionLog | null | undefined): number => (log && log.exercises ? log.exercises.reduce((a, e) => a + volLoad(e.sets), 0) : 0);
 
 
 
@@ -198,7 +199,7 @@ export function getProgRec(exId, exOrRMax, logs, phase) {
 }
 
 
-export function getPrevHist(exId, logs, limit=3, exactOnly=false) {
+export function getPrevHist(exId: string, logs: SessionLog[], limit = 3, exactOnly = false) {
   const res = [];
   for (const s of logs) {
     // C1: skip deload sessions. getTarget reads getPrevHist(...,1)[0] as "last working set",

@@ -2,10 +2,10 @@
 import React from 'react';
 import { useApp } from '../appContext.js';
 import { SVGChart, Sparkline } from '../components/charts.jsx';
-import { CTX_TAGS } from '../lib/associations.js';
-import { BLOOD_GROUPS, bloodAutoFlag } from '../lib/bloods.js';
-import { fmtShort, localToday } from '../lib/format.js';
-import { MEAS_SITES, PK_ESTERS, bpCategory, glucoseCategory } from '../lib/health.js';
+import { CTX_TAGS } from '../lib/associations';
+import { BLOOD_GROUPS, bloodAutoFlag } from '../lib/bloods';
+import { fmtShort, localToday } from '../lib/format';
+import { MEAS_SITES, PK_ESTERS, bpCategory, glucoseCategory } from '../lib/health';
 
 export default function BodyView() {
   const {

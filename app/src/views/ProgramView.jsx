@@ -1,7 +1,7 @@
 // ProgramView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
 import { useApp } from '../appContext.js';
-import { DEF_INTS, DLW, SESSIONS } from '../data/programme.js';
+import { DEF_INTS, DLW, SESSIONS } from '../data/programme';
 
 export default function ProgramView() {
   const {

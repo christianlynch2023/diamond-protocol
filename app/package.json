@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "vite build",
-    "preview": "vite preview --host"
+    "build": "tsc -p . && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc -p ."
   },
   "dependencies": {
     "react": "18.2.0",
@@ -14,6 +15,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "typescript": "6.0.3"
   }
 }

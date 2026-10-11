@@ -2,9 +2,9 @@
 import React from 'react';
 import { useApp } from '../appContext.js';
 import { RecoveryFuelStrip, SVGBars, SVGChart, SVGScatter } from '../components/charts.jsx';
-import { ALL_EX, MUSCLES } from '../data/programme.js';
-import { fmtShort } from '../lib/format.js';
-import { bpCategory } from '../lib/health.js';
+import { ALL_EX, MUSCLES } from '../data/programme';
+import { fmtShort } from '../lib/format';
+import { bpCategory } from '../lib/health';
 
 export default function ProgressView() {
   const {

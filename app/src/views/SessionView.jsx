@@ -1,9 +1,9 @@
 // SessionView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
 import { useApp } from '../appContext.js';
-import { CORE_EX, SESSIONS, getEffSets } from '../data/programme.js';
-import { fmt } from '../lib/format.js';
-import { getPrevHist, getProgRec } from '../lib/training.js';
+import { CORE_EX, SESSIONS, getEffSets } from '../data/programme';
+import { fmt } from '../lib/format';
+import { getPrevHist, getProgRec } from '../lib/training';
 
 export default function SessionView() {
   const {

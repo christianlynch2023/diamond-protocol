@@ -1,7 +1,7 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
-import { DLW, EX_DEF_BY_ID, EX_MUSCLE, MUSCLES, ORM_IDS, SESSIONS, effWR, rirDefaultFor } from '../data/programme.js';
-import { fmtShort } from './format.js';
-import { epley, totalLoad } from './training.js';
+import { DLW, EX_DEF_BY_ID, EX_MUSCLE, MUSCLES, ORM_IDS, SESSIONS, effWR, rirDefaultFor } from '../data/programme';
+import { fmtShort } from './format';
+import { epley, totalLoad } from './training';
 
 // ---- Strength-retention index (the cut KPI) ----
 // For each `orm` compound: compare best e1RM in the trailing 21 days vs the 21 days before

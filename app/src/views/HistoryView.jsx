@@ -1,10 +1,10 @@
 // HistoryView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
 import { useApp } from '../appContext.js';
-import { DLW, SESSIONS } from '../data/programme.js';
-import { fmtDate } from '../lib/format.js';
-import { sessionVol } from '../lib/training.js';
-import { matchWorkout } from '../lib/whoop.js';
+import { DLW, SESSIONS } from '../data/programme';
+import { fmtDate } from '../lib/format';
+import { sessionVol } from '../lib/training';
+import { matchWorkout } from '../lib/whoop';
 
 export default function HistoryView() {
   const {

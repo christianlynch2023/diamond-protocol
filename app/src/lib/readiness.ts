@@ -1,5 +1,5 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
-import { bpCategory } from './health.js';
+import { bpCategory } from './health';
 
 export function computeDeloadReadiness(history, week) {
   if (!history || history.length < 6) return { level: 'unknown', msg: 'Need about a week of WHOOP data to assess fatigue.' };

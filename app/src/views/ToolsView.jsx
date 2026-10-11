@@ -1,7 +1,7 @@
 // ToolsView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
 import { useApp } from '../appContext.js';
-import { epley } from '../lib/training.js';
+import { epley } from '../lib/training';
 
 export default function ToolsView() {
   const {

@@ -19,22 +19,30 @@
 | `src/views/CompleteView.jsx` | Session complete screen |
 | `src/components/charts.jsx` | SVGChart, SVGBars, SVGScatter, Sparkline, RecoveryFuelStrip |
 | `src/components/RootBoundary.jsx` | Crash screen shown if the app errors |
-| `src/data/programme.js` | Sessions, exercises, weekly RIR plan, deload weeks, muscle map, phases |
-| `src/data/mealPlan.js` | The cut meal plan |
-| `src/lib/storage.js` | localStorage helpers, IndexedDB photo store, usePersistentState |
-| `src/lib/sync.js` | IDs, tombstones and merge rules used by cloud sync and import |
-| `src/lib/training.js` | e1RM, bodyweight, volume, plates, warm-ups, progression targets |
-| `src/lib/sessions.js` | Session analytics: volume, stalls, pain, durations, retention, deload rebound |
-| `src/lib/associations.js` | Recovery, time-of-day and alcohol associations (detrended) |
-| `src/lib/readiness.js` | Readiness and deload-readiness |
-| `src/lib/whoop.js` | WHOOP parsing and history merge |
-| `src/lib/health.js` | BP and glucose categories, measurement sites, exposure model |
-| `src/lib/bloods.js` | Blood marker names, ranges and flags |
-| `src/lib/format.js` | Dates and number formatting |
-| `src/lib/audio.js` | Rest-timer chime and vibration |
+| `src/data/programme.ts` | Sessions, exercises, weekly RIR plan, deload weeks, muscle map, phases |
+| `src/data/mealPlan.ts` | The cut meal plan |
+| `src/lib/storage.ts` | localStorage helpers and the IndexedDB photo store |
+| `src/lib/hooks.js` | `usePersistentState` (stays JavaScript until the screens get React types) |
+| `src/types.ts` | Shapes of stored data: SessionLog, SetEntry, BloodPanel, WhoopDay, BodyMetric |
+| `src/lib/sync.ts` | IDs, tombstones and merge rules used by cloud sync and import |
+| `src/lib/training.ts` | e1RM, bodyweight, volume, plates, warm-ups, progression targets |
+| `src/lib/sessions.ts` | Session analytics: volume, stalls, pain, durations, retention, deload rebound |
+| `src/lib/associations.ts` | Recovery, time-of-day and alcohol associations (detrended) |
+| `src/lib/readiness.ts` | Readiness and deload-readiness |
+| `src/lib/whoop.ts` | WHOOP parsing and history merge |
+| `src/lib/health.ts` | BP and glucose categories, measurement sites, exposure model |
+| `src/lib/bloods.ts` | Blood marker names, ranges and flags |
+| `src/lib/format.ts` | Dates and number formatting |
+| `src/lib/audio.ts` | Rest-timer chime and vibration |
 
 Modules only import "downwards" (no cycles). `data/programme.js` exports `setDeloadNow`,
 which App calls each render; imported variables are read-only, so never assign `_deloadNow` directly.
 
 Screens get state from `useApp()`. To give a screen something new, add it to `__appCtx` just above
 App's `return`. Screens must never assign to App variables; they call the setters instead.
+
+## TypeScript (Phase 3a)
+`lib/` and `data/` are TypeScript; screens are still JavaScript. `npm run build` runs the type
+check first (`tsc -p .`), so a type error stops the build and nothing broken reaches Netlify.
+`npm run typecheck` runs the check on its own. The config starts loose (`strict: false`);
+about 130 errors stand between it and full strict mode, mostly in the analytics files (Phase 3b).

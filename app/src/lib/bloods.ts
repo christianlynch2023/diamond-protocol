@@ -1,4 +1,5 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
+import type { BloodFlag } from '../types';
 
 // Blood panel entry helpers. Names are normalised so a marker typed as "Total Testosterone"
 // or "HCT" picks up the unit, range and group already used for it in earlier panels.
@@ -14,10 +15,10 @@ export const BLOOD_ALIAS_KEYS = {
   totaltriglycerides:'triglycerides', redcelldistribution:'rdw',
 };
 
-export function bloodNormKey(k) { const s = String(k || '').toLowerCase().replace(/[^a-z0-9]/g, ''); return BLOOD_ALIAS_KEYS[s] || s; }
+export function bloodNormKey(k: unknown): string { const s = String(k || '').toLowerCase().replace(/[^a-z0-9]/g, ''); return BLOOD_ALIAS_KEYS[s] || s; }
 
 // Parses "8.6-29.0", "8.6–29.0", "<5.0", "≤42", ">1.0", ">1.55 (Randox)". Returns {lo, hi} or null.
-export function bloodParseRef(ref) {
+export function bloodParseRef(ref: unknown): { lo: number | null; hi: number | null } | null {
   const r = String(ref || '').replace(/,/g, '');
   let m = r.match(/(-?\d+(?:\.\d+)?)\s*[–-]\s*(\d+(?:\.\d+)?)/);
   if (m) return { lo: +m[1], hi: +m[2] };
@@ -26,7 +27,7 @@ export function bloodParseRef(ref) {
   return null;
 }
 
-export function bloodAutoFlag(value, ref) {
+export function bloodAutoFlag(value: unknown, ref: unknown): BloodFlag {
   const v = parseFloat(String(value || '').replace(/[<>≤≥\s]/g, ''));
   const rr = bloodParseRef(ref);
   if (!Number.isFinite(v) || !rr) return 'ok';

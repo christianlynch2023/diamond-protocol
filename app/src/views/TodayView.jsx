@@ -1,11 +1,11 @@
 // TodayView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
 import { useApp } from '../appContext.js';
-import { SESSIONS, getPhase } from '../data/programme.js';
-import { freshInfo } from '../lib/format.js';
-import { bpCategory, glucoseCategory } from '../lib/health.js';
-import { sessionPerformed } from '../lib/sessions.js';
-import { getTarget } from '../lib/training.js';
+import { SESSIONS, getPhase } from '../data/programme';
+import { freshInfo } from '../lib/format';
+import { bpCategory, glucoseCategory } from '../lib/health';
+import { sessionPerformed } from '../lib/sessions';
+import { getTarget } from '../lib/training';
 
 export default function TodayView() {
   const {
