@@ -4,7 +4,7 @@
 
 | File | What lives there |
 |---|---|
-| `src/App.jsx` | Owns all state, effects and the live workout flow (session, workout, complete). Shares state with the screens via `AppCtx` |
+| `src/App.jsx` | Owns all state, effects, timers, modals and overlays. Shares state with every screen via `AppCtx` |
 | `src/appContext.js` | `AppCtx` and `useApp()`: how screens read App's state |
 | `src/views/TodayView.jsx` | Today tab |
 | `src/views/ProgramView.jsx` | Program tab |
@@ -14,6 +14,9 @@
 | `src/views/MealsView.jsx` | Meals tab |
 | `src/views/PrivacyView.jsx` | Privacy tab |
 | `src/views/ToolsView.jsx` | Tools tab |
+| `src/views/SessionView.jsx` | Session preview before you start |
+| `src/views/WorkoutView.jsx` | The live workout: logging sets, swap, skip, end |
+| `src/views/CompleteView.jsx` | Session complete screen |
 | `src/components/charts.jsx` | SVGChart, SVGBars, SVGScatter, Sparkline, RecoveryFuelStrip |
 | `src/components/RootBoundary.jsx` | Crash screen shown if the app errors |
 | `src/data/programme.js` | Sessions, exercises, weekly RIR plan, deload weeks, muscle map, phases |

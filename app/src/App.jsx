@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ALT_BY_MUSCLE, CORE_EX, DLW, EX_MUSCLE, MUSCLES, SESSIONS, buildIntensifier, effWR, getEffSets, getPhase, intBadge, rirDefaultFor, setDeloadNow } from './data/programme.js';
+import { ALT_BY_MUSCLE, DLW, EX_MUSCLE, MUSCLES, SESSIONS, buildIntensifier, effWR, getEffSets, getPhase, rirDefaultFor, setDeloadNow } from './data/programme.js';
 import { computeAlcoholImpact, computeRecoveryPerformance, computeTimeOfDay, recentCtx } from './lib/associations.js';
 import { playChime, primeAudio } from './lib/audio.js';
 import { BLOOD_GROUPS, bloodAutoFlag, bloodNormKey } from './lib/bloods.js';
@@ -9,7 +9,7 @@ import { computeDeloadReadiness, computeReadiness } from './lib/readiness.js';
 import { computeActualVolume, computeBurnCheck, computeDeloadRebound, computeDurations, computePainTrend, computeRirDrift, computeStalls, computeStrengthRetention, computeTrainingLoad, sessionPerformed } from './lib/sessions.js';
 import { IDB, LS, usePersistentState } from './lib/storage.js';
 import { ensureIds, legacyId, live, mergeByKey, mergeLogs, newId, pruneTombstones } from './lib/sync.js';
-import { calcPlates, calcWarmups, dailyMedianWeights, epley, exMuscle, getPrevHist, getProgRec, getTarget, makeBwResolver, totalLoad, volLoad, weekMuscleVolume, weeklyVolumeSeries } from './lib/training.js';
+import { calcPlates, calcWarmups, dailyMedianWeights, epley, exMuscle, getPrevHist, getProgRec, getTarget, makeBwResolver, totalLoad, weekMuscleVolume, weeklyVolumeSeries } from './lib/training.js';
 import { mergeHistory, parseWhoopCycles, parseWhoopHistory, parseWhoopSleeps, parseWhoopWorkouts } from './lib/whoop.js';
 import { RootBoundary } from './components/RootBoundary.jsx';
 import { AppCtx } from './appContext.js';
@@ -21,6 +21,9 @@ import ProgramView from './views/ProgramView.jsx';
 import ProgressView from './views/ProgressView.jsx';
 import TodayView from './views/TodayView.jsx';
 import ToolsView from './views/ToolsView.jsx';
+import CompleteView from './views/CompleteView.jsx';
+import SessionView from './views/SessionView.jsx';
+import WorkoutView from './views/WorkoutView.jsx';
 
 function App() {
 
@@ -2575,7 +2578,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const warmups=calcWarmups(warmWt);
 
   // Everything the screens use, shared through AppCtx (see appContext.js).
-  const __appCtx = { BUILD_ID, KEY_SITES, _metricLbl, _prLbl, _unit, acceptTarget, activeTarget, actualVol, addBP, addBldRow, addBodyMetric, addCardio, addCheckin, addContext, addExercise, addGlucose, addMeasurement, addNutrition, addProtocol, addSet, alcoholImpact, allDone, analyseProgress, autoReg, bannerColor, bannerName, biomarkers, bldForm, block, bloodCompare, bloodMarkerIndex, bloodsLog, bodyDash, bodyMetrics, bpDate, bpDia, bpLog, bpPulse, bpSeries, bpStats, bpSys, burnCheck, bwRate, cDate, cMin, cNote, cType, calStats, cancelBloodPanel, cardioLog, cardioMins, cardioSessions, cardioTrend, chartEvents, checkins, ciAddPose, ciAnalysing, ciAnalysis, ciCompareA, ciCompareB, ciPose, clearVitalField, clearWip, cloudErr, cloudStatus, connectSync, contextLog, ctxDate, ctxNote, ctxReasons, ctxTags, ctxUnits, curVol, decayModel, delBldRow, delCheckin, delExercise, delSet, deleteBloodPanel, deloadActive, deloadInfo, deloadRebound, disconnectSync, disconnectWhoop, doneToday, durSplit, durations, editBloodPanel, editDraft, editingLog, effPhase, effTargets, expandLog, expandedSite, exportData, exportSummary, fetchWhoopData, fmtAgo, genSyncCode, getPeriodReview, getWhoopCls, glDate, glSeries, glStats, glVal, glucoseLog, goalPhase, grpOpen, highVol, hvActive, hydration, imgOf, importData, isDeload, lastWeight, latestBP, latestBySite, latestGl, lockCals, logs, mDate, mSite, mVal, mViewSite, mealDay, mealPlan, mealSlot, mealTime, measSeries, measurements, movementPRs, nC, nDate, nF, nP, newWt, newWtNote, nutriCoach, nutriDayType, nutrition, openBodyEdit, ormRp, ormWt, pCmp, pDate, pDose, pNote, pUnit, painTrend, periodLoading, periodReview, periodScope, plannedVol, plateRes, plateTgt, plateaus, prWeight, progChartData, progEx, progHist, progMetric, protSeries, protocolLog, pullFromCloud, readiness, recFuelReady, recFuelRows, recPerf, recovery, resumeWorkout, rirDrift, saveBloodPanel, saveEdit, saveTempBody, scheduledDeload, secOpen, sel, setActiveInts, setBldForm, setBodyMetrics, setBpDate, setBpDia, setBpLog, setBpPulse, setBpSys, setCDate, setCMin, setCNote, setCType, setCardioLog, setCiAddPose, setCiCompareA, setCiCompareB, setCiPose, setClearConfirm, setContextLog, setCtxDate, setCtxNote, setCtxTags, setCtxUnits, setDeloadSkips, setEditDraft, setEditingLog, setExpandLog, setExpandedSite, setGlDate, setGlVal, setGlucoseLog, setLockCals, setMDate, setMSite, setMVal, setMViewSite, setMealDay, setMealSlot, setMealTime, setMeasurements, setNC, setNDate, setNF, setNP, setNewBlockConfirm, setNewWt, setNewWtNote, setNutriDayType, setNutrition, setOrmRp, setOrmWt, setPCmp, setPDate, setPDose, setPNote, setPUnit, setPlateTgt, setProgEx, setProgMetric, setProtocolLog, setSel, setShowAddBP, setShowAddBody, setShowAddCardio, setShowAddCtx, setShowAddGl, setShowAddMeas, setShowAddNutri, setShowAddProt, setShowAddTemp, setShowBpLog, setShowCalLog, setShowCtxLog, setShowGlLog, setShowTempLog, setShowWoodLog, setShowWtLog, setSyncCodeInput, setTDate, setTVal, setView, setVolMuscle, setWDate, setWarmWt, setWood, setWtDate, showAddBP, showAddBody, showAddCardio, showAddCtx, showAddGl, showAddMeas, showAddNutri, showAddProt, showAddTemp, showBpLog, showCalLog, showCtxLog, showGlLog, showInt, showTempLog, showWoodLog, showWtLog, skinTempStat, stalls, startBloodPanel, startWorkout, storageBreakdown, strengthRet, syncCode, syncCodeInput, syncNow, tDate, tVal, targetLock, tempBand, tempChartSeries, tempLogList, tempStat, timeOfDay, todayVitals, toggleGrp, toggleSec, tombstone, trainLoad, updBldRow, updSet, upsertVitalsDated, userSetHighVol, userSetPhase, userSetRecovery, userSetWeek, vitalsLog, volMuscle, volParts, volSeries, wDate, warmWt, warmups, week, weekReview, whoopAuthFail, whoopCardio, whoopConnected, whoopData, whoopHistory, whoopLoading, whoopStaleNote, whoopWorkouts, wipData, woodLogList, wr, wtDate };
+  const __appCtx = { BUILD_ID, KEY_SITES, _metricLbl, _prLbl, _unit, acceptTarget, activeInts, activeTarget, actualVol, addBP, addBldRow, addBodyMetric, addCardio, addCheckin, addContext, addExercise, addGlucose, addMeasurement, addNutrition, addProtocol, addSet, alcoholImpact, allDone, analyseProgress, autoReg, bannerColor, bannerName, biomarkers, bldForm, block, bloodCompare, bloodMarkerIndex, bloodsLog, bodyDash, bodyMetrics, bpDate, bpDia, bpLog, bpPulse, bpSeries, bpStats, bpSys, briefing, briefingLoading, burnCheck, bwAt, bwRate, cDate, cMin, cNote, cType, calStats, cancelBloodPanel, cardioLog, cardioMins, cardioSessions, cardioTrend, chartEvents, checkins, ciAddPose, ciAnalysing, ciAnalysis, ciCompareA, ciCompareB, ciPose, clearIntInputs, clearVitalField, clearWip, cloudErr, cloudStatus, condensed, connectSync, contextLog, ctxDate, ctxNote, ctxReasons, ctxTags, ctxUnits, curEx, curSetPhase, curSetWeight, curTarget, curVol, decayModel, delBldRow, delCheckin, delExercise, delSet, deleteBloodPanel, deloadActive, deloadInfo, deloadRebound, disconnectSync, disconnectWhoop, doneToday, dur, durSplit, durations, editBloodPanel, editDraft, editIdx, editingLog, effPhase, effSets, effTargets, exIdx, expandLog, expandedSite, exportData, exportSummary, fetchWhoopData, fmtAgo, genSyncCode, getBriefing, getPeriodReview, getReview, getWhoopCls, glDate, glSeries, glStats, glVal, glucoseLog, goToExercise, goalPhase, grpOpen, highVol, hvActive, hydration, imgOf, importData, intEligible, intFail, intKind, intMyoStr, intPartials, isDeload, lastWeight, latestBP, latestBySite, latestGl, lockCals, logSet, loggedSetsArr, logs, mDate, mSite, mVal, mViewSite, mealDay, mealPlan, mealSlot, mealTime, measSeries, measurements, movementPRs, nC, nDate, nF, nP, newWt, newWtNote, nutriCoach, nutriDayType, nutrition, openBodyEdit, ormHL, ormRp, ormWt, pCmp, pDate, pDose, pNote, pUnit, painData, painRef, painTrend, periodLoading, periodReview, periodScope, plannedVol, plateRes, plateTgt, plateaus, prWeight, prevHist, progChartData, progEx, progHist, progMetric, progRec, protSeries, protocolLog, pullFromCloud, readiness, recFuelReady, recFuelRows, recPerf, recovery, resumeWorkout, review, reviewLoading, rir, rirDrift, rp, saveBloodPanel, saveEdit, saveTempBody, scheduledDeload, secOpen, sel, sess, setActiveInts, setBldForm, setBodyMetrics, setBpDate, setBpDia, setBpLog, setBpPulse, setBpSys, setCDate, setCMin, setCNote, setCType, setCardioLog, setCiAddPose, setCiCompareA, setCiCompareB, setCiPose, setClearConfirm, setCondensed, setContextLog, setCtxDate, setCtxNote, setCtxTags, setCtxUnits, setData, setDeloadSkips, setEditDraft, setEditIdx, setEditingLog, setExpandLog, setExpandedSite, setGlDate, setGlVal, setGlucoseLog, setIntFail, setIntMyoStr, setIntPartials, setLockCals, setMDate, setMSite, setMVal, setMViewSite, setMealDay, setMealSlot, setMealTime, setMeasurements, setNC, setNDate, setNF, setNP, setNewBlockConfirm, setNewWt, setNewWtNote, setNutriDayType, setNutrition, setOrmRp, setOrmWt, setPCmp, setPDate, setPDose, setPNote, setPUnit, setPainData, setPlateTgt, setProgEx, setProgMetric, setProtocolLog, setRir, setRp, setSel, setShowAddBP, setShowAddBody, setShowAddCardio, setShowAddCtx, setShowAddGl, setShowAddMeas, setShowAddNutri, setShowAddProt, setShowAddTemp, setShowBpLog, setShowCalLog, setShowCtxLog, setShowGlLog, setShowSwap, setShowTempLog, setShowWoodLog, setShowWtLog, setSkipConfirm, setSyncCodeInput, setTDate, setTVal, setView, setVolMuscle, setWDate, setWarmWt, setWood, setWt, setWtDate, showAddBP, showAddBody, showAddCardio, showAddCtx, showAddGl, showAddMeas, showAddNutri, showAddProt, showAddTemp, showBpLog, showCalLog, showCtxLog, showGlLog, showInt, showTempLog, showWoodLog, showWtLog, skinTempStat, stalls, startBloodPanel, startWorkout, storageBreakdown, strengthRet, syncCode, syncCodeInput, syncNow, tDate, tVal, targetLock, tempBand, tempChartSeries, tempLogList, tempStat, timeOfDay, todayVitals, toggleGrp, toggleSec, tombstone, totalSets, trainLoad, tryFinish, updBldRow, updSet, upsertVitalsDated, userSetHighVol, userSetPhase, userSetRecovery, userSetWeek, vitalsLog, volMuscle, volParts, volSeries, wDate, warmWt, warmups, week, weekReview, whoopAuthFail, whoopCardio, whoopConnected, whoopData, whoopHistory, whoopLoading, whoopStaleNote, whoopWorkouts, wipData, woodLogList, wr, wt, wtDate };
   return (
     <AppCtx.Provider value={__appCtx}>
 <div className="app">
@@ -2705,308 +2708,11 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
 
       {view === 'home' && <ProgramView />}
 
-      {view === 'session' && sess && (
-        <div className="screen">
-          <button className="back-btn" onClick={() => setView('home')}>&#8592; Back</button>
-          <div className="s-hdr">
-            <div className="s-hdr-nm">{sess.name}</div>
-            <div className="s-hdr-foc">{sess.focus}</div>
-            <div className="s-hdr-meta">
-              <span className="mp">{sess.day}</span><span className="mp">{sess.time}</span><span className="mp">{wr.rir}</span>
-              {showInt && <span className="mp acc">Intensifiers ON</span>}
-              {isDeload && <span className="mp warn">Deload</span>}
-            </div>
-          </div>
-          {showInt && (
-            <div className="int-ctrl">
-              <span className="int-ctrl-lbl">Intensifiers active</span>
-              <span className={`int-count${activeInts.size>=sess.maxInt?' full':''}`}>{activeInts.size} / {sess.maxInt}</span>
-            </div>
-          )}
-          <div className="cond-toggle-row">
-            <span className="cond-lbl">Short on time?</span>
-            <button className={`cond-btn${condensed?' on':''}`} onClick={() => setCondensed(c => !c)}>{condensed?'30-min version ON':'Show 30-min version'}</button>
-          </div>
-          <div className="ex-list">
-            {sess.exercises.map((ex, i) => {
-              const adj = getEffSets(ex, week, hvActive);
-              const rec = getProgRec(ex.id, ex, logs, effPhase);
-              return (
-                <div key={ex.id} className={`ex-row${condensed && !CORE_EX[sess.id]?.has(ex.id) ? ' ex-dim' : ''}`}>
-                  <div className="ex-n">{i+1}</div>
-                  <div className="ex-body">
-                    <div className={`ex-nm${ex.opt?' opt':''}`}>{ex.name}{ex.opt?' (opt)':''}{condensed && CORE_EX[sess.id]?.has(ex.id) ? <span className="core-tag">core</span> : null}</div>
-                    <div className="chips">
-                      {adj>ex.sets ? <span className="chip" style={{color:'var(--acc)',borderColor:'rgba(196,255,0,.3)',background:'var(--ag2)'}}>{adj}x (+{adj-ex.sets})</span> : adj<ex.sets ? <span className="chip dl">{adj}x (deload)</span> : <span className="chip">{ex.sets}x</span>}
-                      <span className="chip">{ex.setPlan ? `${ex.setPlan[0].rMin}-${ex.setPlan[0].rMax} reps (top set)` : `${ex.rMin}-${ex.rMax} reps`}</span>
-                      {ex.tempo && <span className="chip">{ex.tempo} tempo</span>}
-                      <span className="chip rir">{ex.rirMin===ex.rirMax?ex.rirMin:`${ex.rirMin}-${ex.rirMax}`} RIR</span>
-                      <span className="chip">{fmt(ex.rest)} rest</span>
-                      {ex.handle && <span className="chip">{ex.handle}</span>}
-                    </div>
-                    {ex.setPlan ? (() => {
-                      // Explicit set-by-set plan. The old free-text 'struct' line disagreed with
-                      // the rep chip (chip showed the whole 6-10 envelope while the note said
-                      // "top set 6-8, back-offs 8-10"), forcing the user to reconcile it mid-set.
-                      const topW = (() => {
-                        const ph = getPrevHist(ex.id, logs, 1)[0];
-                        if (!ph || !ph.sets || !ph.sets.length) return null;
-                        return Math.max(...ph.sets.map(s => s.weight || 0)) || null;
-                      })();
-                      let n = 0;
-                      return (
-                        <div className="setplan">
-                          {ex.setPlan.map((sp, si) => {
-                            const from = n + 1; n += sp.sets; const to = n;
-                            const lbl = sp.sets > 1 ? `Sets ${from}-${to}` : `Set ${from}`;
-                            const load = topW ? Math.round(topW * sp.pct / 2.5) * 2.5 : null;
-                            return (
-                              <div key={si} className="sp-row">
-                                <span className="sp-set">{lbl}</span>
-                                <span className="sp-lbl">{sp.label}</span>
-                                <span className="sp-reps">{sp.rMin}-{sp.rMax}</span>
-                                <span className="sp-load">{sp.pct===1 ? 'top load' : `-${Math.round((1-sp.pct)*100)}%`}{load ? ` \u00b7 ~${load}kg` : ''}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })() : ex.struct ? <div style={{fontSize:10,color:'var(--mut)',marginTop:3}}>{ex.struct}</div> : null}
-                    {ex.avoidFail && <div><span className="chip avd">{ex.avoidReason}</span></div>}
-                    {rec.type==='inc' && <div style={{fontSize:10,color:'var(--ok)',marginTop:4}}>&#9650; Increase weight — all sets hit top range</div>}
-                    {rec.type==='beat' && <div style={{fontSize:10,color:'var(--acc)',marginTop:4}}>&#8594; Beat reps on weaker sets</div>}
-                    {showInt && ex.int && (
-                      <div className="int-tog-row">
-                        <span className="int-tog-desc">{ex.int.label}: {ex.int.desc}</span>
-                        <button
-                          className={`int-tog${activeInts.has(ex.id)?' on':''}`}
-                          disabled={!activeInts.has(ex.id) && activeInts.size>=sess.maxInt}
-                          onClick={() => {const s=new Set(activeInts);s.has(ex.id)?s.delete(ex.id):s.add(ex.id);setActiveInts(s);}}>
-                          {activeInts.has(ex.id)?'ON':'OFF'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="briefing-wrap">
-            <button className="briefing-btn" disabled={briefingLoading} onClick={()=>getBriefing(sel)}>
-              {briefingLoading?'Generating briefing...':'⚡ Get AI Coaching Briefing'}
-            </button>
-            {briefingLoading&&<div className="briefing-loading">Analysing your data...</div>}
-            {briefing&&briefing.session===SESSIONS[sel]?.name&&(
-              <div className="briefing-panel">
-                <div className="briefing-tag">AI Briefing — {briefing.session}</div>
-                <div className="briefing-text">{briefing.text}</div>
-              </div>
-            )}
-          </div>
-          <button className="start-btn" onClick={() => startWorkout(sel)}>Start Workout &#8594;</button>
-        </div>
-      )}
+      {view === 'session' && sess && <SessionView />}
 
-      {view === 'workout' && sess && curEx && (() => {
-        return (
-          <div className="fullscreen">
-            <div className="wk-prog"><div className="wk-prog-fill" style={{width:`${(exIdx/sess.exercises.length)*100}%`}}/></div>
-            <div className="wk-top"><span className="wk-sn">{sess.name} Wk{week}</span><span className="wk-cnt">{exIdx+1}/{sess.exercises.length}</span></div>
-            {progRec && (
-              <div className={`prog-rec ${progRec.type}`}>
-                {progRec.type==='inc'&&'▲'}{progRec.type==='beat'&&'→'}{progRec.type==='keep'&&'→'}{progRec.type==='first'&&'●'} {progRec.msg}
-              </div>
-            )}
-            {curTarget && !curTarget.first && (
-              <div className="target-line">
-                <span className="target-lbl">Today's target</span>
-                <span className="target-val">{curSetPhase ? `${curSetWeight}kg \u00d7 ${curSetPhase.rMin}-${curSetPhase.rMax} reps` : `${curTarget.weight}kg \u00d7 ${curEx.rMin}-${curEx.rMax} reps`}</span>
-                {curSetPhase && <span className="target-phase">{curSetPhase.label}{curSetPhase.pct!==1?` \u00b7 -${Math.round((1-curSetPhase.pct)*100)}% off top set`:' \u00b7 heaviest set of the day'}</span>}
-                <span className="target-note">{curTarget.note}</span>
-              </div>
-            )}
-            <div className="ex-card">
-              <div className="ec-hdr">
-                <div className="ec-nm">{curEx.name}{curEx.opt?' (opt)':''}</div>
-                <div className="ec-meta">
-                  <span className="chip">{effSets} sets</span>
-                  <span className="chip">{curSetPhase ? `${curSetPhase.rMin}-${curSetPhase.rMax} reps` : `${curEx.rMin}-${curEx.rMax} reps`}</span>
-                  <span className="chip rir">{curEx.rirMin===curEx.rirMax?curEx.rirMin:`${curEx.rirMin}-${curEx.rirMax}`} RIR</span>
-                  <span className="chip">{fmt(curEx.rest)} rest</span>
-                  {curEx.handle && <span className="chip">{curEx.handle}</span>}
-                </div>
-              </div>
-              <div className="ec-cues">{curEx.cues.map((c,i) => <span key={i} className="cue">{c}</span>)}</div>
-              {activeInts.has(curEx.id) && curEx.int && (
-                <div className="int-box"><div className="int-lbl">{curEx.int.label}</div><div className="int-txt">{curEx.int.desc}</div></div>
-              )}
-              {curEx.avoidFail && <div className="avd-box">{curEx.avoidReason}</div>}
-              <div className="set-trk">
-                <div className="stl">
-                  <span>{editIdx!==null?`Editing Set ${editIdx+1}`:`Set ${loggedSetsArr.length+1} of ${effSets}`}</span>
-                  <span style={{color:'var(--t3)',fontFamily:'JetBrains Mono,monospace',fontSize:9}}>{loggedSetsArr.length}/{effSets} done</span>
-                </div>
-                <div className="dots">
-                  {Array.from({length:effSets}).map((_,i) => (
-                    <div key={i} className={`dot${i<loggedSetsArr.length?' d':i===loggedSetsArr.length&&editIdx===null?' c':''}`}/>
-                  ))}
-                </div>
-              </div>
-              {loggedSetsArr.length > 0 && (
-                <div className="logged-sets">
-                  {loggedSetsArr.map((s,i) => (
-                    <div key={i} className={`ls-chip${editIdx===i?' ed':''}`}
-                      onClick={() => {if(editIdx===i){setEditIdx(null);clearIntInputs();}else{setEditIdx(i);setWt(s.weight);setRp(s.reps);setRir(s.rir??effWR(week).rirN);
-                        const it=s.intensifier; setIntPartials(it&&it.partialReps?String(it.partialReps):''); setIntMyoStr(it&&it.myoReps?it.myoReps.join(','):''); setIntFail(!!(it&&it.kind==='failure'));}}}>
-                      <span>{s.weight}kg&#215;{s.reps}</span>
-                      <span className="ls-rir">{s.rir}RIR</span>
-                      {s.intensifier && <span className="ls-int">{intBadge(s.intensifier)}</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {prevHist.length > 0 && (
-                <div className="prev-sec">
-                  <div className="prev-lbl">Previous sessions</div>
-                  {prevHist.map((h,i) => {
-                    const vl = volLoad(h.sets);
-                    const older = prevHist[i+1];
-                    const olderVl = older ? volLoad(older.sets) : null;
-                    const pct = (olderVl && olderVl > 0) ? Math.round(((vl - olderVl) / olderVl) * 100) : null;
-                    return (
-                    <div key={i} className="prev-item">
-                      <span className="prev-dt">{fmtShort(h.date)}</span>
-                      <span>{h.sets.map(s=>`${s.weight}\u00d7${s.reps}${s.intensifier?' ('+intBadge(s.intensifier)+')':''}`).join('  ')}</span>
-                      <span className="prev-prog" style={{color:'var(--t3)'}}>{vl.toLocaleString()}kg{pct!==null?` (${pct>=0?'+':''}${pct}%)`:''}</span>
-                      {h.swapped && <span className="prev-prog" style={{color:'var(--t3)'}}>via {h.swapped}</span>}
-                      {i===0 && progRec?.type==='inc' && <span className="prev-prog">add weight</span>}
-                    </div>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="inp-sec">
-                <div className="inp-row">
-                  <div className="inp-grp">
-                    <div className="inp-lbl">Weight kg</div>
-                    <div className="nw">
-                      <button className="nb" onClick={() => setWt(v=>Math.max(0,parseFloat(v||0)-2.5))}>&#8722;</button>
-                      <input className="ni" type="number" inputMode="decimal" value={wt} onChange={e=>setWt(e.target.value)}/>
-                      <button className="nb" onClick={() => setWt(v=>parseFloat(v||0)+2.5)}>+</button>
-                    </div>
-                  </div>
-                  <div className="inp-grp">
-                    <div className="inp-lbl">Reps</div>
-                    <div className="nw">
-                      <button className="nb" onClick={() => setRp(v=>Math.max(1,parseInt(v||1)-1))}>&#8722;</button>
-                      <input className="ni" type="number" inputMode="numeric" value={rp} onChange={e=>setRp(e.target.value)}/>
-                      <button className="nb" onClick={() => setRp(v=>parseInt(v||0)+1)}>+</button>
-                    </div>
-                  </div>
-                </div>
-                <div className="rir-grp">
-                  <div className="inp-lbl">RIR — reps in reserve</div>
-                  <div className="rir-row">
-                    {[0,1,2,3,'4+'].map(r => (
-                      <button key={r} className={`rirb${rir===r?' on':''}`} onClick={() => setRir(r)}>{r}</button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="pain-sec">
-                <div className="pain-lbl">Joint / tendon discomfort</div>
-                <div className="pain-row">
-                  {[[0,'None'],[1,'Niggle'],[2,'Sharp']].map(([v,l]) => {
-                    const sel=(painData[curEx.id]||0)===v;
-                    const extra=v===2?' sharp':v===1?' warn':'';
-                    return <button key={v} className={`painb${sel?' on'+extra:''}`} onClick={()=>{const np={...painData,[curEx.id]:v};setPainData(np);painRef.current=np;}}>{l}</button>;
-                  })}
-                </div>
-              </div>
-              {intEligible && (
-                <div className="int-cap">
-                  <div className="int-cap-hd">{curEx.int.label} · final set{(painData[curEx.id]||0)===2?' — sharp pain flagged, skip if it bites':''}</div>
-                  {(intKind==='partials' || intKind==='partials_failure') && (
-                    <div className="int-cap-row">
-                      <span className="int-cap-lbl">Lengthened partials</span>
-                      <div className="nw sm">
-                        <button className="nb" onClick={()=>setIntPartials(v=>String(Math.max(0,(parseInt(v)||0)-1)))}>&#8722;</button>
-                        <input className="ni" type="number" inputMode="numeric" placeholder="0" value={intPartials} onChange={e=>setIntPartials(e.target.value)}/>
-                        <button className="nb" onClick={()=>setIntPartials(v=>String((parseInt(v)||0)+1))}>+</button>
-                      </div>
-                    </div>
-                  )}
-                  {intKind==='myo' && (
-                    <div className="int-cap-row">
-                      <span className="int-cap-lbl">Mini-set reps</span>
-                      <input className="ni wide" type="text" inputMode="numeric" placeholder="e.g. 5,4,3,3" value={intMyoStr} onChange={e=>setIntMyoStr(e.target.value)}/>
-                    </div>
-                  )}
-                  {(intKind==='failure' || intKind==='partials_failure') && (
-                    <button className={`int-cap-fail${intFail?' on':''}`} onClick={()=>setIntFail(v=>!v)}>{intFail?'\u2713 Taken to failure':'Mark taken to failure'}</button>
-                  )}
-                  <div className="int-cap-note">Recorded separately — never counts toward your working reps, e1RM or progression.</div>
-                </div>
-              )}
-              {curEx.orm && parseInt(rp)>0 && parseFloat(wt)>0 && (
-                <div className="onerm-box">
-                  <span className="orm-lbl">Est. 1RM</span>
-                  <span className="orm-val">{epley(totalLoad(curEx.id, parseFloat(wt), bwAt, new Date().toISOString()), parseInt(rp))}kg</span>
-                </div>
-              )}
-              <div className="log-area">
-                <button className={`log-btn${editIdx!==null?' upd':''}`} onClick={logSet}>
-                  {editIdx!==null?`Update Set ${editIdx+1}`:`Log Set ${loggedSetsArr.length+1}`}
-                </button>
-              </div>
-            </div>
-            <div className="wk-nav">
-              <button className="wnb" disabled={exIdx===0} onClick={() => goToExercise(exIdx-1)}>Back</button>
-              <button className="wnb" onClick={() => setShowSwap(true)}>Swap</button>
-              <button className="wnb" onClick={() => setSkipConfirm(true)}>Skip</button>
-              <button className="wnb fin" onClick={() => tryFinish(setData)}>End</button>
-            </div>
-          </div>
-        );
-      })()}
+      {view === 'workout' && sess && curEx && <WorkoutView />}
 
-      {view === 'complete' && (
-        <div className="done-view">
-          <div className="done-icon">&#9889;</div>
-          <div className="done-title">Session Done</div>
-          <div className="done-sub">{sess?.name} — Week {week}</div>
-          <div className="done-grid">
-            <div className="done-stat"><div className="dsv">{totalSets}</div><div className="dsl">Sets Logged</div></div>
-            <div className="done-stat"><div className="dsv">{dur}</div><div className="dsl">Minutes</div></div>
-            <div className="done-stat"><div className="dsv">{Object.keys(setData).length}</div><div className="dsl">Exercises</div></div>
-            <div className="done-stat"><div className="dsv">{week}</div><div className="dsl">Week</div></div>
-          </div>
-          {ormHL.length > 0 && (
-            <div className="done-orms">
-              <div className="done-orms-lbl">Estimated 1RMs today</div>
-              {ormHL.map((o,i) => (
-                <div key={i} className="done-orm-row">
-                  <span className="done-orm-nm">{o.name}</span>
-                  <span className="done-orm-val">{o.orm}kg</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="review-wrap">
-            <button className="review-btn" disabled={reviewLoading} onClick={getReview}>
-              {reviewLoading ? 'Reviewing your session...' : '⚡ Get AI Session Review'}
-            </button>
-            {reviewLoading && <div className="review-loading">Comparing today against your history...</div>}
-            {review && (
-              <div className="review-panel">
-                <div className="review-tag">Coach Review</div>
-                <div className="review-text">{review}</div>
-              </div>
-            )}
-          </div>
-          <button className="done-home" onClick={() => setView('home')}>Back to Program</button>
-        </div>
-      )}
+      {view === 'complete' && <CompleteView />}
 
       {view === 'progress' && <ProgressView />}
       {view === 'history' && <HistoryView />}
