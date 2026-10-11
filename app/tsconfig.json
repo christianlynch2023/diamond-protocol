@@ -1,6 +1,6 @@
 {
-  // Phase 3a: TypeScript starts loose and gets stricter step by step.
-  // lib/ and data/ are TypeScript; screens (.jsx) are not type-checked yet (checkJs: false).
+  // Phase 3b: lib/ and data/ are TypeScript under full strict mode.
+  // Screens (.jsx) are not type-checked yet (checkJs: false); they move to TypeScript next.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -12,8 +12,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "strict": false,
-    "noImplicitAny": false,
+    "strict": true,
     "types": []
   },
   "include": ["src"]

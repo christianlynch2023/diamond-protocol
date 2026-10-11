@@ -2,6 +2,7 @@
 import { DLW, EX_DEF_BY_ID, EX_MUSCLE, MUSCLES, ORM_IDS, SESSIONS, effWR, rirDefaultFor } from '../data/programme';
 import { fmtShort } from './format';
 import { epley, totalLoad } from './training';
+import type { BwResolver, SessionLog, WhoopDay } from '../types';
 
 // ---- Strength-retention index (the cut KPI) ----
 // For each `orm` compound: compare best e1RM in the trailing 21 days vs the 21 days before
@@ -16,7 +17,7 @@ import { epley, totalLoad } from './training';
 // toward adherence or week-completeness. reps>0 is the work marker rather than weight, so
 // bodyweight sets still count; a genuine or even deliberately abbreviated session clears the
 // bar of 3 easily, while an accidental empty finish scores 0.
-export function sessionRealSets(log) {
+export function sessionRealSets(log: SessionLog | null | undefined): number {
   if (!log || !Array.isArray(log.exercises)) return 0;
   let n = 0;
   for (const e of log.exercises) {
@@ -26,12 +27,12 @@ export function sessionRealSets(log) {
   return n;
 }
 
-export function sessionPerformed(log) { return sessionRealSets(log) >= 3; }
+export function sessionPerformed(log: SessionLog | null | undefined): boolean { return sessionRealSets(log) >= 3; }
 
-export function computeActualVolume(logs, block) {
+export function computeActualVolume(logs: SessionLog[] | null | undefined, block?: number | null) {
   const rows = (logs||[]).filter(s => s && s.week && (block==null || s.block===block) && Array.isArray(s.exercises));
   if (!rows.length) return null;
-  const byWeek = {}, deloadWeeks = new Set(), sessionsByWeek = {};
+  const byWeek: Record<number, Record<string, number>> = {}, deloadWeeks = new Set<number>(), sessionsByWeek: Record<number, Set<string>> = {};
   for (const s of rows) {
     const w = s.week;
     // A deload week is half volume by design — including it in the average would read as
@@ -42,7 +43,7 @@ export function computeActualVolume(logs, block) {
     for (const e of s.exercises) {
       if (!e || !Array.isArray(e.sets) || !e.sets.length) continue;
       // A swapped exercise logs under its own id; fall back to the id it replaced.
-      const m = EX_MUSCLE[e.id] || EX_MUSCLE[e.origId];
+      const m = EX_MUSCLE[e.id] || EX_MUSCLE[e.origId as string];
       if (!m) continue;
       const n = e.sets.filter(st => st && (st.reps||0) > 0).length;
       if (!n) continue;
@@ -58,9 +59,9 @@ export function computeActualVolume(logs, block) {
   // always dropped the newest week, so a single fully-completed week reported 0 completed weeks
   // and the whole card stayed hidden. The latest week is still excluded while it's in progress.
   const SESSIONS_PER_WEEK = 4;
-  const weekComplete = w => (sessionsByWeek[w] ? sessionsByWeek[w].size : 0) >= SESSIONS_PER_WEEK;
+  const weekComplete = (w: number) => (sessionsByWeek[w] ? sessionsByWeek[w].size : 0) >= SESSIONS_PER_WEEK;
   const done = weeks.filter(w => !deloadWeeks.has(w) && (w !== latest || weekComplete(latest)));
-  const avg = {};
+  const avg: Record<string, number> = {};
   if (done.length) {
     for (const mus of Object.keys(MUSCLES)) {
       let t=0; for (const w of done) t += (byWeek[w][mus]||0);
@@ -79,9 +80,9 @@ export function computeActualVolume(logs, block) {
 // was paused and resumed hours later logs an inflated time. Anything over OUTLIER_MIN is
 // excluded from averages (but still plotted, flagged) so one abandoned session can't skew
 // the picture. Averages are per session TYPE, since Upper 3 is legitimately shorter than Lower.
-export function computeDurations(logs, limit = 20) {
+export function computeDurations(logs: SessionLog[] | null | undefined, limit = 20) {
   const OUTLIER_MIN = 150;
-  const rows = (logs||[]).filter(s => s && typeof s.duration === 'number' && s.duration > 0);
+  const rows = (logs||[]).filter((s): s is SessionLog & { duration: number } => s && typeof s.duration === 'number' && s.duration > 0);
   if (!rows.length) return null;
   const recent = rows.slice(0, limit).reverse();   // logs are newest-first; chart oldest->newest
   const series = recent.map(s => ({
@@ -90,7 +91,7 @@ export function computeDurations(logs, limit = 20) {
     name: s.sessionName || (SESSIONS[s.sessionId] && SESSIONS[s.sessionId].name) || '?',
     outlier: s.duration > OUTLIER_MIN
   }));
-  const byType = {};
+  const byType: Record<string, { name: string; durs: number[]; excluded: number; planned: string | null }> = {};
   for (const s of rows) {
     const key = s.sessionId || 'unknown';
     const name = s.sessionName || (SESSIONS[key] && SESSIONS[key].name) || 'Unknown';
@@ -98,7 +99,7 @@ export function computeDurations(logs, limit = 20) {
     if (s.duration > OUTLIER_MIN) { rec.excluded++; continue; }
     rec.durs.push(s.duration);
   }
-  const types = [];
+  const types: { key: string; name: string; avg: number; med: number; n: number; min: number; max: number; excluded: number; planned: string | null }[] = [];
   for (const key in byType) {
     const r = byType[key];
     if (!r.durs.length) continue;
@@ -116,8 +117,8 @@ export function computeDurations(logs, limit = 20) {
 }
 
 
-export function computeStalls(logs, minSessions = 3, bwAt = null) {
-  const byEx = {};
+export function computeStalls(logs: SessionLog[] | null | undefined, minSessions = 3, bwAt: BwResolver | null = null) {
+  const byEx: Record<string, { name: string; pts: { t: number; e1rm: number }[] }> = {};
   for (const l of (logs||[])) {
     if (l.deload === true) continue;
     if (l.deload == null && DLW.has(l.week)) continue;
@@ -168,8 +169,8 @@ export function computeStalls(logs, minSessions = 3, bwAt = null) {
 // goal includes joint longevity, the pattern that matters is WHICH exercises repeatedly
 // produce pain — a lift that niggles once is noise, one that niggles most sessions is a
 // signal to change the movement, not to push through it.
-export function computePainTrend(logs, minSessions = 3) {
-  const byEx = {};
+export function computePainTrend(logs: SessionLog[] | null | undefined, minSessions = 3) {
+  const byEx: Record<string, { name: string; pts: { t: number; pain: number }[] }> = {};
   for (const l of (logs||[])) {
     const t = new Date(l.date).getTime();
     if (isNaN(t)) continue;
@@ -180,7 +181,7 @@ export function computePainTrend(logs, minSessions = 3) {
       rec.pts.push({ t, pain: ex.pain || 0 });
     }
   }
-  const flagged = [];
+  const flagged: { id: string; name: string; sessions: number; painCount: number; sharpCount: number; rate: number; dir: string; severity: string }[] = [];
   let totalSessions = 0, painSessions = 0;
   for (const pid in byEx) {
     const rec = byEx[pid];
@@ -211,9 +212,9 @@ export function computePainTrend(logs, minSessions = 3) {
 // substantial methodological criticism — the predictive claims have not replicated well.
 // It is used here purely descriptively: "this week vs your recent norm". It is NOT an
 // injury forecast and the card says so.
-export function computeTrainingLoad(logs, weeks = 8) {
+export function computeTrainingLoad(logs: SessionLog[] | null | undefined, weeks = 8) {
   const dayMs = 86400000, now = Date.now();
-  const buckets = [];
+  const buckets: { weeksAgo: number; tonnage: number; sessions: number }[] = [];
   for (let w = 0; w < weeks; w++) {
     const hi = now - w*7*dayMs, lo = hi - 7*dayMs;
     let tonnage = 0, sessions = 0;
@@ -239,10 +240,10 @@ export function computeTrainingLoad(logs, weeks = 8) {
 }
 
 
-export function computeStrengthRetention(logs, bwAt) {
+export function computeStrengthRetention(logs: SessionLog[], bwAt?: BwResolver | null) {
   const dayMs=86400000, nowTs=Date.now();
   const recentStart=nowTs-21*dayMs, priorStart=nowTs-42*dayMs;
-  const byEx={};
+  const byEx: Record<string, { name: string; recent: number; prior: number }> = {};
   for (const l of logs) {
     const t=new Date(l.date).getTime();
     if (isNaN(t) || t<priorStart || t>nowTs) continue;
@@ -261,7 +262,7 @@ export function computeStrengthRetention(logs, bwAt) {
       if (best>rec[win]) rec[win]=best;
     }
   }
-  const lifts=[];
+  const lifts: { name: string; pct: number; recent: number; prior: number }[] = [];
   for (const id in byEx) {
     const r=byEx[id];
     if (r.recent>0 && r.prior>0) lifts.push({name:r.name, pct:+(((r.recent-r.prior)/r.prior)*100).toFixed(1), recent:Math.round(r.recent), prior:Math.round(r.prior)});
@@ -276,15 +277,15 @@ export function computeStrengthRetention(logs, bwAt) {
 // Compares best e1RM on tracked compounds in the 7 days AFTER a deload week against the 7
 // days BEFORE it. Positive = the deload bought you strength. Repeatedly negative/flat means
 // deloads are costing you a week — real evidence for the take-vs-train-through decision.
-export function computeDeloadRebound(logs, bwAt) {
-  const isDeloadLog = l => l.deload === true || (l.deload == null && DLW.has(l.week));
-  const deloadWeeks = {};
+export function computeDeloadRebound(logs: SessionLog[], bwAt?: BwResolver | null) {
+  const isDeloadLog = (l: SessionLog) => l.deload === true || (l.deload == null && DLW.has(l.week));
+  const deloadWeeks: Record<string, { block: number; week: number }> = {};
   for (const l of logs) { if (isDeloadLog(l)) { const k=(l.block||1)+'-'+l.week; deloadWeeks[k]={block:l.block||1, week:l.week}; } }
   // Best e1RM per LIFT (keyed by slot id), not one global maximum. Comparing a global max
   // before against a global max after could pair a pre-deload RDL with a post-deload leg press
   // and call the difference "rebound". Pairing by lift measures the same movement either side.
-  const bestByEx = (arr) => {
-    const m = {};
+  const bestByEx = (arr: SessionLog[]) => {
+    const m: Record<string, number> = {};
     for (const l of arr) for (const ex of (l.exercises||[])) {
       if (!ex.sets || !ex.sets.length) continue;
       const pid=ex.origId||ex.id;
@@ -294,7 +295,7 @@ export function computeDeloadRebound(logs, bwAt) {
     }
     return m;
   };
-  const out = [];
+  const out: { block: number; week: number; pct: number; lifts: number }[] = [];
   for (const k in deloadWeeks) {
     const { block, week } = deloadWeeks[k];
     const before = logs.filter(l => (l.block||1)===block && l.week===week-1 && !isDeloadLog(l));
@@ -303,7 +304,7 @@ export function computeDeloadRebound(logs, bwAt) {
     const B=bestByEx(before), A=bestByEx(after);
     // One paired % delta per lift present on BOTH sides, then average those — so a lift missing
     // from either week is simply skipped rather than distorting the comparison.
-    const deltas=[];
+    const deltas: number[] = [];
     for (const pid in A) { if (B[pid]>0) deltas.push(((A[pid]-B[pid])/B[pid])*100); }
     if (!deltas.length) continue;
     const pct = deltas.reduce((s,d)=>s+d,0)/deltas.length;
@@ -322,8 +323,8 @@ export function computeDeloadRebound(logs, bwAt) {
 // floor-aware, so a protected 1-RIR lift on a 0-RIR week is NOT flagged as easy — that is the
 // prescription, not sandbagging. A residual positive drift can still be pain, technique or a
 // wrong default, so the wording below stays non-accusatory.
-export function computeRirDrift(logs, block) {
-  const byWeek = {};
+export function computeRirDrift(logs: SessionLog[], block: number) {
+  const byWeek: Record<number, { sum: number; n: number; target: number }> = {};
   for (const l of logs) {
     if ((l.block||1) !== block) continue;
     const dl = l.deload === true || (l.deload == null && DLW.has(l.week));
@@ -356,11 +357,11 @@ export function computeRirDrift(logs, block) {
 // Compares WHOOP's measured daily expenditure (COMPLETED cycles only) against the empirical
 // maintenance derived from intake vs weight trend. Agreement raises confidence in both; a
 // large gap means one of them is wrong and the empirical figure should be trusted.
-export function computeBurnCheck(whoopHistory, tdee) {
+export function computeBurnCheck(whoopHistory: WhoopDay[] | null | undefined, tdee: number | null | undefined) {
   if (!tdee) return null;
-  const finals = (whoopHistory||[]).filter(h => h.dayCalFinal && h.dayCal > 0).slice(-14);
+  const finals = (whoopHistory||[]).filter(h => h.dayCalFinal && (h.dayCal as number) > 0).slice(-14);
   if (finals.length < 5) return null;
-  const avg = Math.round(finals.reduce((s,h)=>s+h.dayCal,0)/finals.length);
+  const avg = Math.round(finals.reduce((s,h)=>s+(h.dayCal as number),0)/finals.length);
   const gap = avg - tdee;
   return { avg, tdee, gap, days: finals.length, agree: Math.abs(gap) <= 250 };
 }

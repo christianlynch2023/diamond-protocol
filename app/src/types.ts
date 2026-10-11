@@ -13,7 +13,7 @@ export interface Synced {
 export interface SetEntry {
   weight: number;
   reps: number;
-  rir?: number | null;
+  rir?: number | string | null;   // a number, or the text '4+' from the RIR picker
   [extra: string]: unknown;
 }
 
@@ -90,8 +90,8 @@ export interface WhoopDay {
 }
 
 export interface WhoopWorkout {
-  start: string | null;
-  end: string | null;
+  start: string;            // workouts without a start are filtered out by the parser
+  end: string;              // falls back to start when WHOOP gives no end
   strain: number | null;
   avgHr: number | null;
   maxHr: number | null;
@@ -105,3 +105,78 @@ export interface WhoopWorkout {
 
 /** Returns the user's bodyweight nearest to a date. */
 export type BwResolver = (dateStr?: string) => number;
+
+// ---- Programme definitions (data/programme.ts) ----
+export interface WeekRule { rir: string; rirN: number; i: boolean; }
+export interface Phase { weeks: number[]; name: string; color: string; }
+export interface SetPlanStep { label: string; sets: number; rMin: number; rMax: number; pct: number; }
+export interface IntensifierDef { kind: string; label: string; desc: string; }
+
+export interface ExerciseDef {
+  id: string;
+  name: string;
+  sets: number;
+  tempo: string;
+  struct?: string;
+  setPlan?: SetPlanStep[] | null;
+  rMin: number;
+  rMax: number;
+  rirMin: number;
+  rirMax: number;
+  rest: number;
+  handle: string;
+  cues: string[];
+  avoidFail: boolean;
+  int: IntensifierDef | null;
+  orm: boolean;
+  avoidReason?: string;
+  origId?: string;          // set on a swapped-in alternative
+}
+
+export interface SessionDef {
+  id: string; name: string; focus: string; day: string; time: string; maxInt: number;
+  exercises: ExerciseDef[];
+}
+
+export interface MuscleDef { name: string; min: number; max: number; optional?: boolean; }
+/** Primary muscle and secondary muscle(s) an exercise trains. */
+export interface MuscleMap { p: string; s?: string | string[]; }
+export interface AltExercise { name: string; rMin: number; rMax: number; rirMin?: number; }
+
+/** An intensifier recorded on a set. */
+export interface Intensifier {
+  kind: 'partials' | 'failure' | 'myo';
+  partialReps?: number;
+  failure?: boolean;
+  myoReps?: number[];
+}
+
+/** The progression engine's verdict for an exercise. */
+export interface ProgRec { type: 'inc' | 'beat' | 'keep' | 'first'; msg: string; wt?: number; }
+
+/** The subset of today's parsed WHOOP data that readiness reads. */
+export interface WhoopToday {
+  cachedAt?: number;
+  recovery?: number | null;
+  respRate?: number | null;
+  sleep?: number | null;
+  sleepDebt?: number | null;
+  [extra: string]: unknown;
+}
+
+export interface DeloadReadiness {
+  level: string;
+  msg: string;
+  rRec?: number | null;
+  bRec?: number | null;
+  rHrv?: number | null;
+  bHrv?: number | null;
+  [extra: string]: unknown;
+}
+
+export interface BPReading extends Synced { date: string; sys: number; dia: number; pulse?: number | null; }
+
+/** One exercise from one session, tagged with a bucket (recovery band, time of day, alcohol). */
+export interface PerfRow { pid: string; e1rm: number; bucket: string; sid: string; date: string; }
+
+export interface ContextEntry extends Synced { date: string; units?: number; tags?: string[]; [extra: string]: unknown; }

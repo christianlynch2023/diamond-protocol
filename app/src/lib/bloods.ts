@@ -5,7 +5,7 @@ import type { BloodFlag } from '../types';
 // or "HCT" picks up the unit, range and group already used for it in earlier panels.
 export const BLOOD_GROUPS = ['Hormones','Thyroid','Lipids','Liver','Kidney','Metabolic','Iron','Prostate & vitamins','Full blood count','Other'];
 
-export const BLOOD_ALIAS_KEYS = {
+export const BLOOD_ALIAS_KEYS: Record<string, string> = {
   totaltestosterone:'testosterone', estradiol:'oestradiol', ft4:'freet4', ft3:'freet3',
   estimatedglomerularfiltrationrate:'egfr', totalcholesterolhdlratio:'tchdlratio', cholesterolhdlratio:'tchdlratio',
   rbc:'redbloodcells', wbc:'whitebloodcells', meancellvolume:'mcv', meancellhaemoglobin:'mch',

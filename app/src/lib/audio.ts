@@ -1,8 +1,8 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
 
-export let _audioCtx = null;
+export let _audioCtx: AudioContext | null = null;
 
-export function getAudioCtx() {
+export function getAudioCtx(): AudioContext | null {
   try {
     if (!_audioCtx) _audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     if (_audioCtx.state === 'suspended') _audioCtx.resume();
@@ -21,7 +21,7 @@ export function primeAudio() {
   } catch(e) {}
 }
 
-export function vibrate(pattern) {
+export function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch(e) {}
 }
 

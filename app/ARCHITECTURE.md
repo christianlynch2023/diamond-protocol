@@ -41,8 +41,14 @@ which App calls each render; imported variables are read-only, so never assign `
 Screens get state from `useApp()`. To give a screen something new, add it to `__appCtx` just above
 App's `return`. Screens must never assign to App variables; they call the setters instead.
 
-## TypeScript (Phase 3a)
-`lib/` and `data/` are TypeScript; screens are still JavaScript. `npm run build` runs the type
-check first (`tsc -p .`), so a type error stops the build and nothing broken reaches Netlify.
-`npm run typecheck` runs the check on its own. The config starts loose (`strict: false`);
-about 130 errors stand between it and full strict mode, mostly in the analytics files (Phase 3b).
+## TypeScript
+`lib/` and `data/` are TypeScript under **full strict mode** (Phase 3b); screens are still JavaScript.
+`npm run build` runs the type check first (`tsc -p .`), so a type error stops the build and nothing
+broken reaches Netlify. `npm run typecheck` runs the check on its own.
+
+Domain types live in `src/types.ts`. Raw WHOOP API data is deliberately typed `any` at the parsing
+boundary; everything after parsing is typed.
+
+Phase 3b changed types only, with one exception: a one-word fix in `lib/associations.ts`
+(`x.sdate` -> `x.date`). Strict mode found that the recovery-vs-performance scatter read a field that
+was never set, so it had always received zero points and never rendered.

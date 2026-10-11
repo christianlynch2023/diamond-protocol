@@ -1,12 +1,13 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
 import { bpCategory } from './health';
+import type { BPReading, DeloadReadiness, SessionLog, WhoopDay, WhoopToday } from '../types';
 
-export function computeDeloadReadiness(history, week) {
+export function computeDeloadReadiness(history: WhoopDay[] | null | undefined, week: number): DeloadReadiness {
   if (!history || history.length < 6) return { level: 'unknown', msg: 'Need about a week of WHOOP data to assess fatigue.' };
   const sorted = [...history].sort((x, y) => x.date < y.date ? -1 : 1);
   const recent = sorted.slice(-7);
   const base = sorted.length >= 14 ? sorted.slice(-14, -7) : sorted.slice(0, -7);
-  const avg = (arr, k) => { const v = arr.map(e => e[k]).filter(n => n != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const avg = (arr: WhoopDay[], k: 'recovery' | 'hrv'): number | null => { const v = arr.map(e => e[k]).filter((n): n is number => n != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
   const rRec = avg(recent, 'recovery'), bRec = avg(base, 'recovery');
   const rHrv = avg(recent, 'hrv'), bHrv = avg(base, 'hrv');
   // §5.6: recovery-down, recovery-low and HRV-down are all the SAME autonomic domain — WHOOP
@@ -34,7 +35,7 @@ export function computeDeloadReadiness(history, week) {
 }
 
 
-export function computeReadiness(recovery, whoopData, deloadInfo, logs, week, whoopHistory, latestBP, deloadActive, ctxReasons) {
+export function computeReadiness(recovery: string, whoopData: WhoopToday | null | undefined, deloadInfo: DeloadReadiness | null | undefined, logs: SessionLog[] | null | undefined, week: number, whoopHistory: WhoopDay[] | null | undefined, latestBP: BPReading | null | undefined, deloadActive: boolean, ctxReasons: string[] | null | undefined) {
   const lastLog = logs && logs[0];
   // Pain only counts if it is recent. Previously a sharp-pain flag from the last logged
   // workout capped readiness indefinitely, even after months away.
@@ -84,7 +85,7 @@ export function computeReadiness(recovery, whoopData, deloadInfo, logs, week, wh
   // Cumulative-fatigue + illness signals from the richer WHOOP feed
   const sd = whoopStale ? null : whoopData?.sleepDebt;
   if (sd != null && sd >= 2) { minor++; factors.push('sleep debt ' + sd + 'h'); }
-  const rrVals = (whoopHistory || []).map(h => h.respRate).filter(v => v != null);
+  const rrVals = (whoopHistory || []).map(h => h.respRate).filter((v): v is number => v != null);
   if (!whoopStale && whoopData?.respRate != null && rrVals.length >= 5) {
     const baseArr = rrVals.slice(0, -1).slice(-14);
     const baseAvg = baseArr.reduce((a, b) => a + b, 0) / baseArr.length;
@@ -119,7 +120,7 @@ export function computeReadiness(recovery, whoopData, deloadInfo, logs, week, wh
     }
   }
 
-  const META = {
+  const META: Record<string, { title: string; cls: string; action: string }> = {
     green_push:     { title: 'Green \u00b7 Push',        cls: 'green', action: 'Full session. Push your top sets and add load wherever your targets call for it. Intensifiers on if this week programmes them.' },
     green_standard: { title: 'Green \u00b7 Standard',    cls: 'green', action: 'Full session as planned. Hit your targets with honest reps in reserve, no extra volume.' },
     amber:          { title: 'Amber \u00b7 Modify',      cls: 'amber', action: deloadWk ? 'Deload week. Keep the main lifts light, cut accessory volume, and stay well short of failure.' : 'Train, but modify. Keep your main compounds, trim one or two isolation sets, and stay a rep or two shy of failure.' },

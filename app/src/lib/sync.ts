@@ -44,7 +44,7 @@ export function legacyId(e: Record<string, any>, kind: string, index?: number): 
   return 'lg_' + kind + '_' + hh.toString(36);
 }
 
-export function ensureIds<T extends Synced>(arr: T[] | null | undefined, kind: string): T[] {
+export function ensureIds<T extends Synced>(arr: T[] | null | undefined, kind: string): T[] | null | undefined {
   if (!Array.isArray(arr)) return arr;
   let changed = false;
   const out = arr.map((e, i) => {

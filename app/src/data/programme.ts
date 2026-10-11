@@ -1,6 +1,7 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
+import type { AltExercise, ExerciseDef, Intensifier, MuscleDef, MuscleMap, Phase, SessionDef, WeekRule } from '../types';
 
-export const PHASES = [
+export const PHASES: Phase[] = [
   {weeks:[1,2,3],name:"Accumulation 1",color:"normal"},
   {weeks:[4],name:"Deload",color:"deload"},
   {weeks:[5,6,7],name:"Accumulation 2",color:"normal"},
@@ -9,7 +10,7 @@ export const PHASES = [
   {weeks:[12],name:"Resensitise",color:"deload"},
 ];
 
-export const WR = {
+export const WR: Record<number, WeekRule> = {
   1:{rir:"2 RIR",rirN:2,i:false},2:{rir:"1-2 RIR",rirN:2,i:false},3:{rir:"1 RIR",rirN:1,i:false},
   4:{rir:"3-4 RIR",rirN:4,i:false},5:{rir:"2 RIR",rirN:2,i:false},6:{rir:"1-2 RIR",rirN:2,i:false},
   7:{rir:"1 RIR",rirN:1,i:false},8:{rir:"3-4 RIR",rirN:4,i:false},9:{rir:"0-1 RIR",rirN:1,i:true},
@@ -18,33 +19,33 @@ export const WR = {
 
 export const DLW = new Set([4,8,12]);
 
-export let _deloadNow = null;
+export let _deloadNow: boolean | null = null;
 // App sets this each render. Imported bindings are read-only, so writes go through a setter.
-export function setDeloadNow(v) { _deloadNow = v; }
+export function setDeloadNow(v: boolean | null) { _deloadNow = v; }
  // resolved deload state for the current week; App writes it each render
 // Single resolver for the week's RIR prescription. WR is keyed by week number alone, so a
 // scheduled deload week trained through would still hand back "3-4 RIR" and default every
 // logged set to an easy value. When a deload week is trained through, mirror the block's own
 // logic (week 2 / week 6) at 1-2 RIR rather than inventing a new intensity peak at 1 RIR —
 // four escalating weeks with no let-up is a fatigue trap, especially in a deficit.
-export const TRAINED_THROUGH_WR = { rir: "1-2 RIR", rirN: 2, i: false };
+export const TRAINED_THROUGH_WR: WeekRule = { rir: "1-2 RIR", rirN: 2, i: false };
 
 
 // Default logged RIR for a specific exercise. The week schedule sets the session-wide
 // target, but an exercise's own rirMin is a floor, not a suggestion: avoidFail lifts
 // declare 1-2 RIR because failure there is a tendon risk, and the global 0 RIR of weeks
 // 10-11 must not override it. Taking the max respects both (deload's 3-4 RIR still wins).
-export const rirDefaultFor = (ex, weekRirN) => {
+export const rirDefaultFor = (ex: { rirMin?: number } | null | undefined, weekRirN: number): number => {
   const floor = (ex && typeof ex.rirMin === 'number') ? ex.rirMin : 0;
   return Math.max(weekRirN, floor);
 };
 
-export const effWR = (week, dl = (_deloadNow == null ? DLW.has(week) : _deloadNow)) => {
+export const effWR = (week: number, dl: boolean = (_deloadNow == null ? DLW.has(week) : _deloadNow)): WeekRule => {
   const base = WR[week] || WR[1];
   return (DLW.has(week) && !dl) ? TRAINED_THROUGH_WR : base;
 };
 
-export const SESSIONS = {
+export const SESSIONS: Record<string, SessionDef> = {
   upperA:{id:"upperA",name:"Upper 1",focus:"Horizontal Push & Back Thickness",day:"Saturday",time:"80-90 min",maxInt:2,exercises:[
     {id:"ua1",name:"RO-T8 Flat Press",sets:4,tempo:"3-1-1",struct:"1 top set 6-8, then back-offs 8-10",setPlan:[{label:"Top set",sets:1,rMin:6,rMax:8,pct:1.0},{label:"Back-off",sets:3,rMin:8,rMax:10,pct:0.90}],rMin:6,rMax:10,rirMin:1,rirMax:2,rest:180,handle:"RO-T8",cues:["Flat bench, handles at mid-chest","Neutral/semi-pronated grip","Elbows 30-45 not flared","Deep stretch, press to just short of lockout"],avoidFail:false,int:null,orm:true},
     {id:"ua2",name:"Kaz Chest-Supported Row",sets:4,tempo:"3-1-1",struct:"1 top set 8-10, then back-offs 10-12",setPlan:[{label:"Top set",sets:1,rMin:8,rMax:10,pct:1.0},{label:"Back-off",sets:3,rMin:10,rMax:12,pct:0.90}],rMin:8,rMax:12,rirMin:1,rirMax:2,rest:150,handle:"Small KAZ",cues:["Chest firmly on pad","Drive elbows back and slightly out","Pull to lower ribs, squeeze","Stop 1 RIR - no jerking"],avoidFail:true,avoidReason:"Stop at 1 RIR - no form breakdown",int:null,orm:false},
@@ -100,9 +101,9 @@ export const ALL_EX = Object.values(SESSIONS).flatMap(s => s.exercises.map(e => 
 // Map every slot id to its full exercise definition (carries rirMin / avoidFail).
 // Logged exercises only store {id,name,sets}, so anything needing an exercise's RIR floor
 // after the fact (e.g. RIR-drift analysis, P0.3) resolves it through here.
-export const EX_DEF_BY_ID = Object.values(SESSIONS).reduce((m, s) => { for (const e of s.exercises) m[e.id] = e; return m; }, {});
+export const EX_DEF_BY_ID = Object.values(SESSIONS).reduce<Record<string, ExerciseDef>>((m, s) => { for (const e of s.exercises) m[e.id] = e; return m; }, {});
 
-export const DEF_INTS = {
+export const DEF_INTS: Record<string, Set<string>> = {
   upperA: new Set(["ua5"]),
   lowerA: new Set(["la5","la6"]),
   upperB: new Set(["ub9","ub4"]),
@@ -113,9 +114,9 @@ export const DEF_INTS = {
 // Build the intensifier result object from the capture inputs, per the exercise's kind.
 // Returns null if nothing meaningful was entered. partialReps / myoReps live OUTSIDE set.reps
 // so every rep-based analytic (epley, tonnage, getProgRec) ignores them automatically.
-export function buildIntensifier(kind, { partials, myoStr, fail }) {
+export function buildIntensifier(kind: string | null | undefined, { partials, myoStr, fail }: { partials?: string; myoStr?: string; fail?: boolean }): Intensifier | null {
   if (!kind) return null;
-  if (kind === 'partials') { const v = parseInt(partials) || 0; return v > 0 ? { kind:'partials', partialReps:v } : null; }
+  if (kind === 'partials') { const v = parseInt(partials as string) || 0; return v > 0 ? { kind:'partials', partialReps:v } : null; }
   if (kind === 'failure')  { return fail ? { kind:'failure' } : null; }
   if (kind === 'myo')      {
     // Split on commas/whitespace (NOT every non-digit — that turned "-3" into "3"). Reject
@@ -126,14 +127,14 @@ export function buildIntensifier(kind, { partials, myoStr, fail }) {
   if (kind === 'partials_failure') {
     // If BOTH were entered, keep both — partials as its own field, failure as a flag on the
     // same event — instead of silently dropping the failure.
-    const v = parseInt(partials) || 0;
+    const v = parseInt(partials as string) || 0;
     if (v > 0) return fail ? { kind:'partials', partialReps:v, failure:true } : { kind:'partials', partialReps:v };
     return fail ? { kind:'failure' } : null;
   }
   return null;
 }
 
-export function intBadge(it) {
+export function intBadge(it: Intensifier | null | undefined): string | null {
   if (!it) return null;
   if (it.kind === 'partials') return '+' + it.partialReps + 'p' + (it.failure ? '\u00b7F' : '');
   if (it.kind === 'failure')  return 'F';
@@ -142,7 +143,7 @@ export function intBadge(it) {
 }
 
 
-export const MUSCLES = {
+export const MUSCLES: Record<string, MuscleDef> = {
   chest:    {name:'Chest',      min:10, max:18},
   lats:     {name:'Lats',min:10, max:18},
   midBack:  {name:'Mid/Upper Back',min:8, max:16},
@@ -159,7 +160,7 @@ export const MUSCLES = {
   adductors:{name:'Adductors',  min:4,  max:12, optional:true},
 };
 
-export const EX_MUSCLE = {
+export const EX_MUSCLE: Record<string, MuscleMap> = {
   ua1:{p:'chest',s:'triceps'}, ua2:{p:'midBack',s:'biceps'}, ua3:{p:'chest',s:'triceps'},
   ua4:{p:'midBack',s:['rearDelt','biceps']}, ua5:{p:'sideDelt'}, ua6:{p:'triceps'}, ua7:{p:'calves'}, ua8:{p:'rearDelt'},
   la1:{p:'quads',s:['glutes','adductors']},
@@ -205,7 +206,7 @@ export const EX_MUSCLE = {
 })();
 
 
-export const getPhase = w => PHASES.find(p => p.weeks.includes(w)) || PHASES[0];
+export const getPhase = (w: number): Phase => PHASES.find(p => p.weeks.includes(w)) || PHASES[0];
 
 export const RAMP_EX = new Set(['ua3','ua4','ua5','ub3','ub4','ub5']);
    // accessories only — ub1 (weighted pull-up) removed: ramping a heavy compound contradicts the ramp's purpose and stacks elbow/biceps tendon load
@@ -215,7 +216,7 @@ export const RAMP_P2 = new Set([3,7]);
 
 export const HIGHVOL_EX = new Set(['ua5','ub4','ua8','ub5','ub7','ua6','ub8','la6','lb5','la7','lb7','ua7','lb6']);
 
-export const getEffSets = (ex, week, hv, dl = (_deloadNow == null ? DLW.has(week) : _deloadNow)) => {
+export const getEffSets = (ex: { id: string; sets: number }, week: number, hv: boolean, dl: boolean = (_deloadNow == null ? DLW.has(week) : _deloadNow)): number => {
   let s = ex.sets;
   // floor, not round: rounding 3->2 and 5->3 made the advertised 50% deload land nearer 60%.
   if (dl) return Math.max(1, Math.floor(s * 0.5));
@@ -225,10 +226,10 @@ export const getEffSets = (ex, week, hv, dl = (_deloadNow == null ? DLW.has(week
 };
 
 
-export const ORM_IDS = (() => { const s=new Set(); for(const k in SESSIONS) for(const e of SESSIONS[k].exercises) if(e.orm) s.add(e.id); return s; })();
+export const ORM_IDS = (() => { const s=new Set<string>(); for(const k in SESSIONS) for(const e of SESSIONS[k].exercises) if(e.orm) s.add(e.id); return s; })();
 
 
-export const ALT_BY_MUSCLE = {
+export const ALT_BY_MUSCLE: Record<string, AltExercise[]> = {
   // Each alternative carries its OWN rep range so a swap no longer inherits the base lift's
   // scheme (e.g. a leg extension inheriting a heavy 6-8 press top-set). rirMin marks connective-
   // tissue lifts that should stay shy of failure regardless of the week's target.
@@ -247,7 +248,7 @@ export const ALT_BY_MUSCLE = {
   adductors:[{name:'Adductor Machine',rMin:12,rMax:20},{name:'Copenhagen Plank',rMin:8,rMax:12,rirMin:1}],
 };
 
-export const CORE_EX = {
+export const CORE_EX: Record<string, Set<string>> = {
   upperA: new Set(['ua1','ua2','ua3']),
   lowerA: new Set(['la1','la3']),
   upperB: new Set(['ub2','ub1','ub9']),

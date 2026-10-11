@@ -1,14 +1,15 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
 import { DLW } from '../data/programme';
 import { epley, totalLoad } from './training';
+import type { BwResolver, ContextEntry, PerfRow, SessionLog, WhoopDay } from '../types';
 
 // Does training on low recovery actually cost performance? Splits sessions by the WHOOP
 // recovery recorded that day and compares mean e1RM per lift, normalised so lifts with big
 // absolute loads don't dominate. This is descriptive, not causal — a low-recovery day may
 // coincide with a deload or a bad night — but it either supports or undermines the
 // green-recovery veto with the user's own data instead of an assumption.
-export function computeRecoveryPerformance(logs, whoopHistory, bwAt = null) {
-  const recByDate = {};
+export function computeRecoveryPerformance(logs: SessionLog[], whoopHistory: WhoopDay[] | null | undefined, bwAt: BwResolver | null = null) {
+  const recByDate: Record<string, number> = {};
   for (const h of (whoopHistory||[])) if (h && h.date && h.recovery != null) recByDate[h.date] = h.recovery;
   if (!Object.keys(recByDate).length) return null;
   const rows = perfRows(logs, l => {
@@ -22,16 +23,16 @@ export function computeRecoveryPerformance(logs, whoopHistory, bwAt = null) {
   // One point PER SESSION for the scatter: mean relative e1RM across that session's lifts,
   // paired with the day's recovery. Per-exercise points would cluster by session and
   // overstate how much independent evidence there is.
-  const meanBy = {};
+  const meanBy: Record<string, any> = {};   // lists of e1RMs, then replaced by their mean
   for (const x of rows) (meanBy[x.pid] = meanBy[x.pid] || []).push(x.e1rm);
-  for (const k in meanBy) { const a = meanBy[k]; meanBy[k] = a.reduce((p,q)=>p+q,0)/a.length; }
-  const bySession = {};
+  for (const k in meanBy) { const a: number[] = meanBy[k]; meanBy[k] = a.reduce((p,q)=>p+q,0)/a.length; }
+  const bySession: Record<string, { rels: number[]; sdate: string }> = {};
   for (const x of rows) {
     const m = meanBy[x.pid]; if (!m) continue;
     const rel = (x.e1rm/m - 1) * 100;
-    (bySession[x.sid] = bySession[x.sid] || { rels: [], sdate: x.sdate }).rels.push(rel);
+    (bySession[x.sid] = bySession[x.sid] || { rels: [], sdate: x.date }).rels.push(rel);
   }
-  const points = [];
+  const points: { x: number; y: number }[] = [];
   for (const sid in bySession) {
     const rec = recByDate[(bySession[sid].sdate||'').slice(0,10)];
     const rl = bySession[sid].rels;
@@ -80,16 +81,16 @@ export const PERF_MIN_VERDICT = 8;
 
 export interface BucketStats { n: number; sessions: number; mean: number | null; provisional: boolean }
 
-export function relPerfByBucket(rows, minSessions = PERF_MIN_SHOW): Record<string, BucketStats> | null {
+export function relPerfByBucket(rows: PerfRow[], minSessions = PERF_MIN_SHOW): Record<string, BucketStats> | null {
   if (!rows.length) return null;
   try {
     // §5.1: detrend each lift against its OWN linear progression before bucketing. Normalising
     // against the all-time mean let long-term strength gains leak into the buckets — recent
     // sessions being stronger is progression, not a recovery/time-of-day/alcohol effect. Residual =
     // actual e1RM vs the lift's fitted trend at that date, so buckets reflect deviation FROM trend.
-    const byPid = {};
+    const byPid: Record<string, PerfRow[]> = {};
     for (const r of rows) (byPid[r.pid] = byPid[r.pid] || []).push(r);
-    const acc = {};
+    const acc: Record<string, { n: number; sum: number; sids: Set<string> }> = {};
     for (const pid in byPid) {
       const pr = byPid[pid].filter(r => r.date).sort((a,b)=> a.date < b.date ? -1 : 1);
       const n = pr.length;
@@ -129,8 +130,8 @@ export function relPerfByBucket(rows, minSessions = PERF_MIN_SHOW): Record<strin
 
 
 // One row per exercise per non-deload session, tagged by a caller-supplied bucket.
-export function perfRows(logs, bucketFn, bwAt = null) {
-  const rows = [];
+export function perfRows(logs: SessionLog[] | null | undefined, bucketFn: (l: SessionLog) => string | null, bwAt: BwResolver | null = null): PerfRow[] {
+  const rows: PerfRow[] = [];
   for (const l of (logs||[])) {
     if (l.deload === true || (l.deload == null && DLW.has(l.week))) continue;
     const bucket = bucketFn(l);
@@ -164,8 +165,8 @@ export const TOD_BANDS = [
 ];
 
 
-export function computeTimeOfDay(logs, bwAt = null) {
-  const startMins = {};   // band -> list of start times in minutes, for the real average
+export function computeTimeOfDay(logs: SessionLog[], bwAt: BwResolver | null = null) {
+  const startMins: Record<string, number[]> = {};   // band -> list of start times in minutes, for the real average
   const rows = perfRows(logs, l => {
     const end = new Date(l.date).getTime();
     if (isNaN(end)) return null;
@@ -195,7 +196,7 @@ export function computeTimeOfDay(logs, bwAt = null) {
     });
 
   // Compare the two most-used bands, not a preset pair.
-  const ranked = bands.filter(b => b.mean != null).sort((a,b) => b.sessions - a.sessions);
+  const ranked = bands.filter((b): b is typeof b & { mean: number } => b.mean != null).sort((a,b) => b.sessions - a.sessions);
   let verdict = null, gap = null, better = null, worse = null, provisional = false;
   if (ranked.length >= 2) {
     const [a, b] = ranked.slice(0, 2);
@@ -216,10 +217,10 @@ export function computeTimeOfDay(logs, bwAt = null) {
 
 // Alcohol vs lifting. A session counts as "after drinking" if units were logged that day or
 // the day before — alcohol's effect on sleep and recovery carries into the next day.
-export function computeAlcoholImpact(logs, contextLog, bwAt = null) {
-  const drinkDays = new Set();
+export function computeAlcoholImpact(logs: SessionLog[], contextLog: ContextEntry[] | null | undefined, bwAt: BwResolver | null = null) {
+  const drinkDays = new Set<string>();
   for (const c of (contextLog||[])) {
-    if (!c || !(c.units > 0)) continue;
+    if (!c || !((c.units as number) > 0)) continue;
     const d = (c.date||'').slice(0,10);
     if (d) drinkDays.add(d);
   }
@@ -258,19 +259,19 @@ export const CTX_TAGS = [
   {id:'stress', label:'High stress'},
 ];
 
-export function ctxForDate(contextLog, dateStr) {
+export function ctxForDate(contextLog: ContextEntry[] | null | undefined, dateStr: string): ContextEntry | null {
   return (contextLog||[]).find(c => (c.date||'').slice(0,10) === dateStr) || null;
 }
 
 // Alcohol suppresses REM and drops HRV for 24-48h, so yesterday counts as well as today.
-export function recentCtx(contextLog) {
+export function recentCtx(contextLog: ContextEntry[] | null | undefined): string[] | null {
   const d = new Date();
-  const day = n => { const x=new Date(d); x.setDate(x.getDate()-n); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
+  const day = (n: number) => { const x=new Date(d); x.setDate(x.getDate()-n); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
   const today = ctxForDate(contextLog, day(0)), yest = ctxForDate(contextLog, day(1));
-  const reasons = [];
-  const pick = (c, when) => {
+  const reasons: string[] = [];
+  const pick = (c: ContextEntry | null, when: string) => {
     if (!c) return;
-    if (c.units > 0) reasons.push(`alcohol ${c.units}u ${when}`);
+    if ((c.units as number) > 0) reasons.push(`alcohol ${c.units}u ${when}`);
     (c.tags||[]).forEach(t => { const m=CTX_TAGS.find(x=>x.id===t); if(m) reasons.push(m.label.toLowerCase()+' '+when); });
   };
   pick(today, 'today'); pick(yest, 'yesterday');

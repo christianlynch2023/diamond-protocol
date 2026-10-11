@@ -1,10 +1,10 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
 
-export const fmt = s => { const m=Math.floor(s/60), sc=s%60; return m>0 ? `${m}:${String(sc).padStart(2,'0')}` : `${s}s`; };
+export const fmt = (s: number): string => { const m=Math.floor(s/60), sc=s%60; return m>0 ? `${m}:${String(sc).padStart(2,'0')}` : `${s}s`; };
 
-export const fmtDate = iso => new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' ' + new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+export const fmtDate = (iso: string | number | Date): string => new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' ' + new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 
-export const fmtShort = iso => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+export const fmtShort = (iso: string | number | Date): string => new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 
 // Freshness of a dated reading, for the Today tiles: how old it is, and whether it's stale
 // enough that it shouldn't be treated as "current". Prevents old weight/BP/glucose values

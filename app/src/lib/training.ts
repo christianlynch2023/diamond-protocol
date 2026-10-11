@@ -1,6 +1,6 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
 import { DLW, EX_MUSCLE, _deloadNow } from '../data/programme';
-import type { BodyMetric, BwResolver, SessionLog, SetEntry } from '../types';
+import type { BodyMetric, BwResolver, ExerciseDef, MuscleMap, ProgRec, SessionLog, SetEntry, SetPlanStep } from '../types';
 
 export const epley = (w: number, r: number): number => r<=1 ? w : Math.round(w*(1+r/30));
 
@@ -19,12 +19,12 @@ export const BW_LOADED = new Set(['ub1']);
 // readings are untouched (display, edit and export still see every entry); only the trend series
 // derived here is de-duplicated.
 export function dailyMedianWeights(metrics: BodyMetric[] | null | undefined) {
-  const byDay = {};
+  const byDay: Record<string, number[]> = {};
   for (const m of (metrics||[])) {
-    if (!m || !(m.weight > 0)) continue;
+    if (!m || !((m.weight as number) > 0)) continue;
     const t = new Date(m.date).getTime(); if (isNaN(t)) continue;
     const day = new Date(m.date).toISOString().slice(0,10);
-    (byDay[day] = byDay[day] || []).push(m.weight);
+    (byDay[day] = byDay[day] || []).push(m.weight as number);
   }
   return Object.keys(byDay).map(day => {
     const ws = byDay[day].slice().sort((a,b)=>a-b);
@@ -35,13 +35,13 @@ export function dailyMedianWeights(metrics: BodyMetric[] | null | undefined) {
 
 export function makeBwResolver(bodyMetrics: BodyMetric[] | null | undefined): BwResolver | null {
   const pts = (bodyMetrics||[])
-    .filter(m => m && m.weight > 0)
-    .map(m => ({ t: new Date(m.date).getTime(), w: m.weight }))
+    .filter(m => m && (m.weight as number) > 0)
+    .map(m => ({ t: new Date(m.date).getTime(), w: m.weight as number }))
     .filter(m => !isNaN(m.t))
     .sort((a,b) => a.t - b.t);
   if (!pts.length) return null;
   return (dateStr) => {
-    const t = new Date(dateStr).getTime();
+    const t = new Date(dateStr as string).getTime();   // no date -> Invalid Date -> latest weight
     if (isNaN(t)) return pts[pts.length-1].w;
     let best = pts[0], bestGap = Math.abs(t - pts[0].t);
     for (const p of pts) { const g = Math.abs(t - p.t); if (g < bestGap) { best = p; bestGap = g; } }
@@ -64,8 +64,8 @@ export function totalLoad(exId: string, weight: number, bwAt?: BwResolver | null
 // points being outliers on either edge, so the trend reflects the real body of the data.
 // Direction-invariant: (wj-wi)/(tj-ti) is the same regardless of point order, so callers may
 // pass points in any order; only zero-time-gap pairs are skipped.
-export function theilSenSlope(pts) {
-  const slopes = [];
+export function theilSenSlope(pts: { t: number; w: number }[]): number | null {
+  const slopes: number[] = [];
   for (let i = 0; i < pts.length; i++) {
     for (let j = i + 1; j < pts.length; j++) {
       const dt = pts[j].t - pts[i].t;
@@ -89,17 +89,17 @@ export const sessionVol = (log: SessionLog | null | undefined): number => (log &
 
 
 
-export function calcPlates(target, bar=20) {
+export function calcPlates(target: number, bar = 20) {
   const avail = [25,20,15,10,5,2.5,1.25];
   const perSide = (target - bar) / 2;
   if (perSide < 0) return {ok:false, plates:[]};
-  let rem = perSide; const plates = [];
+  let rem = perSide; const plates: { kg: number; count: number }[] = [];
   for (const p of avail) { const n=Math.floor(rem/p+0.001); if(n>0){plates.push({kg:p,count:n});rem-=n*p;} }
   return {ok:rem<0.1, plates};
 }
 
 
-export function calcWarmups(working) {
+export function calcWarmups(working: number) {
   if (!working || working <= 20) return [];
   const res = [{wt:20,reps:10,pct:"Bar"}];
   const pcts = working<=60?[0.5,0.75]:working<=100?[0.5,0.65,0.8]:[0.4,0.55,0.7,0.85];
@@ -111,10 +111,10 @@ export function calcWarmups(working) {
 // Substituted exercises are logged under a generated id (sub_<baseId>_<name>) which is NOT
 // in EX_MUSCLE. Without falling back to origId, every set done on a swapped exercise
 // contributed ZERO to volume, heat map, autoregulation and plateau detection.
-export function exMuscle(ex) { return EX_MUSCLE[ex.origId || ex.id] || EX_MUSCLE[ex.id]; }
+export function exMuscle(ex: { id: string; origId?: string }): MuscleMap | undefined { return EX_MUSCLE[ex.origId || ex.id] || EX_MUSCLE[ex.id]; }
 
-export function weekMuscleVolume(logs, wk, block) {
-  const v = {};
+export function weekMuscleVolume(logs: SessionLog[], wk: number, block?: number | null): Record<string, number> {
+  const v: Record<string, number> = {};
   for (const l of logs) {
     if (l.week !== wk) continue;
     if (block != null && (l.block||1) !== block) continue;
@@ -128,8 +128,8 @@ export function weekMuscleVolume(logs, wk, block) {
   return v;
 }
 
-export function weeklyVolumeSeries(logs, muscle, block) {
-  const byWeek = {};
+export function weeklyVolumeSeries(logs: SessionLog[], muscle: string, block?: number | null) {
+  const byWeek: Record<number, number> = {};
   for (const l of logs) {
     if (block != null && (l.block||1) !== block) continue;
     for (const ex of (l.exercises || [])) {
@@ -151,14 +151,14 @@ export function weeklyVolumeSeries(logs, muscle, block) {
 //  C2: top-set/back-off lifts are judged PER SLOT against each slot's own rMax. With a single
 //      envelope rMax, a correctly capped top set (e.g. 6-8 under an envelope of 10) could never
 //      satisfy "every set hit rMax", so the engine only rewarded breaking the prescription.
-export function getProgRec(exId, exOrRMax, logs, phase) {
+export function getProgRec(exId: string, exOrRMax: number | { rMax: number; setPlan?: SetPlanStep[] | null }, logs: SessionLog[], phase: string): ProgRec {
   const isObj = exOrRMax && typeof exOrRMax === 'object';
   const rMax = isObj ? exOrRMax.rMax : exOrRMax;
   const setPlan = isObj ? exOrRMax.setPlan : null;
   // Expand setPlan into a per-set cap array; extra logged sets (e.g. HV +1) inherit the last cap.
-  const capsFor = (nSets) => {
+  const capsFor = (nSets: number): number[] | null => {
     if (!setPlan || !setPlan.length) return null;
-    const caps = [];
+    const caps: number[] = [];
     for (const sp of setPlan) for (let i = 0; i < sp.sets; i++) caps.push(sp.rMax);
     while (caps.length < nSets) caps.push(caps.length ? caps[caps.length - 1] : rMax);
     return caps;
@@ -170,7 +170,7 @@ export function getProgRec(exId, exOrRMax, logs, phase) {
   // deliberately dropped weight (or just moved up), that is a new working load and an older
   // sweep at a different load must not carry over.
   const N = 3;
-  const recent = [];
+  const recent: { top: number; hit: boolean[]; all: boolean; some: boolean }[] = [];
   for (const s of logs) {
     if (s.deload === true) continue;                       // C1
     if (s.deload == null && DLW.has(s.week)) continue;     // C1 (flag missing on older logs)
@@ -200,7 +200,7 @@ export function getProgRec(exId, exOrRMax, logs, phase) {
 
 
 export function getPrevHist(exId: string, logs: SessionLog[], limit = 3, exactOnly = false) {
-  const res = [];
+  const res: { date: string; sets: SetEntry[]; week: number; swapped: string | null }[] = [];
   for (const s of logs) {
     // C1: skip deload sessions. getTarget reads getPrevHist(...,1)[0] as "last working set",
     // so including a deload made the week after a deload prescribe ~85% loads as the new baseline.
@@ -219,7 +219,7 @@ export function getPrevHist(exId: string, logs: SessionLog[], limit = 3, exactOn
 }
 
 
-export function getIncrement(ex) {
+export function getIncrement(ex: { name?: string }): number {
   const n = (ex.name || '').toLowerCase();
   if (n.includes('pull-up') || n.includes('chin')) return 1.25;
   if (n.includes('db ') || n.includes('dumbbell')) return 2;
@@ -227,7 +227,7 @@ export function getIncrement(ex) {
   return 2.5;
 }
 
-export function getTarget(ex, logs, week, phase, histId, dl = (_deloadNow == null ? DLW.has(week) : _deloadNow)) {
+export function getTarget(ex: ExerciseDef, logs: SessionLog[], week: number, phase: string, histId?: string, dl: boolean = (_deloadNow == null ? DLW.has(week) : _deloadNow)) {
   // histId lets a substituted exercise read its own logged history. Without it, a swap
   // inherited the base exercise's loads (e.g. machine press targeted at RO-T8 weights).
   const _hid = histId || ex.id;

@@ -3,7 +3,7 @@
 export const MEAS_SITES = ['Waist','Chest','Shoulders','Neck','Hips','Left Arm','Right Arm','Left Forearm','Right Forearm','Left Thigh','Right Thigh','Left Calf','Right Calf'];
 
 
-export function bpCategory(sys, dia) {
+export function bpCategory(sys: number, dia: number): { label: string; cls: 'red' | 'amber' | 'green' } {
   if (sys >= 180 || dia >= 120) return { label: 'Crisis - seek care', cls: 'red' };
   if (sys >= 140 || dia >= 90) return { label: 'High (Stage 2)', cls: 'red' };
   if (sys >= 130 || dia >= 80) return { label: 'High (Stage 1)', cls: 'amber' };
@@ -12,7 +12,7 @@ export function bpCategory(sys, dia) {
 }
 
 
-export function glucoseCategory(g) {
+export function glucoseCategory(g: number) {
   // Fasting glucose in mmol/L. Thresholds: normal <5.6, impaired/watch 5.6-6.9, high >=7.0
   if (g >= 7.0) return { label: 'High - review', cls: 'red' };
   if (g >= 5.6) return { label: 'Watch (impaired fasting)', cls: 'amber' };
@@ -54,6 +54,6 @@ export const PK_ESTERS = [
   { label:'DHB propionate',      match:['dhb prop','1-test prop','dihydroboldenone prop'], name:'DHB / 1-testosterone propionate', hl:1.5, conf:'v.low',    src:'NO human PK \u2014 inferred from propionate ester' },
 ];
 
-export function pkFor(compound){ const c=String(compound||'').toLowerCase(); return PK_ESTERS.find(p=>p.match.some(m=>c.includes(m)))||null; }
+export function pkFor(compound: unknown){ const c=String(compound||'').toLowerCase(); return PK_ESTERS.find(p=>p.match.some(m=>c.includes(m)))||null; }
 
 export const DECAY_COLORS = ['#c4ff00','#4a9eff','#ff8c00','#00e87a','#ff4444','#a479e2','#f691b2','#43d692'];

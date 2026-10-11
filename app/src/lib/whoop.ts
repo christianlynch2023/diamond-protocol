@@ -6,8 +6,8 @@ import type { SessionLog, WhoopDay, WhoopWorkout } from '../types';
 // storing it as the day's expenditure is what produced the systematically-low ~1,500 kcal
 // "avg out". A completed cycle carries the true full-day burn.
 export function parseWhoopCycles(raw: any): WhoopDay[] {
-  const records = raw?.records || raw?.data || [];
-  const localDay = ts => { const d = new Date(ts); return isNaN(d.getTime()) ? null : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+  const records: any[] = raw?.records || raw?.data || [];
+  const localDay = (ts: string | number) => { const d = new Date(ts); return isNaN(d.getTime()) ? null : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
   return records.map(c => {
     const s = c.score || c;
     const end = c.end || c.during?.upper || null;
@@ -17,12 +17,12 @@ export function parseWhoopCycles(raw: any): WhoopDay[] {
     const kcal = s.kilojoule != null ? Math.round(s.kilojoule / 4.184) : null;
     if (kcal == null || kcal <= 0) return null;
     return { date, dayCal: kcal, dayCalFinal: true, strain: s.strain != null ? Math.round(s.strain*10)/10 : null };
-  }).filter(Boolean);
+  }).filter(Boolean) as WhoopDay[];
 }
 
 
 export function parseWhoopHistory(rec: any): WhoopDay[] {
-  const records = rec?.records || rec?.data || [];
+  const records: any[] = rec?.records || rec?.data || [];
   return records.map(r => {
     const s = r.score || r;
     // Local date, not a UTC slice, so it lines up with sleep history and localToday().
@@ -38,14 +38,14 @@ export function parseWhoopHistory(rec: any): WhoopDay[] {
       spo2: s.spo2_percentage != null ? Math.round(s.spo2_percentage*10)/10 : null,
       skinTemp: s.skin_temp_celsius != null ? Math.round(s.skin_temp_celsius*10)/10 : null,
     };
-  }).filter(x => x && x.recovery != null);
+  }).filter(x => x && x.recovery != null) as WhoopDay[];
 }
 
 // One entry per night from the sleep feed: main sleeps only, scored only, dated by the local
 // day you woke up (matches the recovery date). Previously only the latest night was kept, and
 // only on days the app was opened.
 export function parseWhoopSleeps(raw: any): WhoopDay[] {
-  const records = raw?.records || raw?.data || [];
+  const records: any[] = raw?.records || raw?.data || [];
   const out = [];
   for (const r of records) {
     if (!r || r.nap) continue;
@@ -89,7 +89,7 @@ export function mergeHistory(a: WhoopDay[] | null | undefined, b: WhoopDay[] | n
 
 
 export function parseWhoopWorkouts(raw: any): WhoopWorkout[] {
-  const records = raw?.records || raw?.data || [];
+  const records: any[] = raw?.records || raw?.data || [];
   return records.map(w => {
     const s = w.score || w;
     return {
