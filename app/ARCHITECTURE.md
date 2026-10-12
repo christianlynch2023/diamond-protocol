@@ -62,3 +62,16 @@ etc., see `types.ts`). Number inputs that also hold typed text (weight, reps, RI
 **Fixes found by typing.** 3b: the recovery-vs-performance scatter read a field that was never set and
 never rendered (`x.sdate` -> `x.date`). 3d: deload rebound rows printed "+x% · →kg" because the per-lift
 method has no single before/after weight; they now read "+x% · N lifts".
+
+## Tests (Phase 4)
+`tests/` holds the automated tests (Node's built-in test runner, run with `tsx`). `npm test` runs them;
+`npm run build` runs them after the type checks and before `vite build`, so a failing test stops the
+deploy. 38 tests cover sync merges and deletes, blood flags and ranges, WHOOP parsing (naps, local dates,
+merging feeds), the progression engine (per-slot caps, deload sessions ignored), bodyweight helpers,
+the per-lift detrend, the recovery scatter, alcohol split and deload rebound.
+
+Each fixed bug has a test named after it. The suite was checked by putting 8 known bugs back one at a
+time; every one made the suite fail. It also passes in timezones from UTC-11 to UTC+14.
+
+To add a test: write `tests/<area>.test.ts` using `describe`/`it` from `node:test` and
+`assert` from `node:assert/strict`, then import it in `tests/all.test.ts`.
