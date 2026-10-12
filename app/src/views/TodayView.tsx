@@ -1,6 +1,6 @@
 // TodayView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
-import { useApp } from '../appContext.js';
+import { useApp } from '../appContext';
 import { SESSIONS, getPhase } from '../data/programme';
 import { freshInfo } from '../lib/format';
 import { bpCategory, glucoseCategory } from '../lib/health';

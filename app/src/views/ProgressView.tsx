@@ -1,7 +1,7 @@
 // ProgressView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
-import { useApp } from '../appContext.js';
-import { RecoveryFuelStrip, SVGBars, SVGChart, SVGScatter } from '../components/charts.jsx';
+import { useApp } from '../appContext';
+import { RecoveryFuelStrip, SVGBars, SVGChart, SVGScatter } from '../components/charts';
 import { ALL_EX, MUSCLES } from '../data/programme';
 import { fmtShort } from '../lib/format';
 import { bpCategory } from '../lib/health';
@@ -188,7 +188,7 @@ export default function ProgressView() {
                   xLabel="recovery %" yLabel="e1RM vs own avg" xMin={0} xMax={100}
                   bands={[{from:0,to:34,color:'#ff4444'},{from:34,to:67,color:'#ffd24a'},{from:67,to:100,color:'#00e87a'}]}/>
               )}
-              {[['high','Green (67%+)',recPerf.high,recPerf.highN],['mid','Yellow (34-66%)',recPerf.mid,recPerf.midN],['low','Red (under 34%)',recPerf.low,recPerf.lowN]].map(([k,lbl,v,n])=>(
+              {([['high','Green (67%+)',recPerf.high,recPerf.highN],['mid','Yellow (34-66%)',recPerf.mid,recPerf.midN],['low','Red (under 34%)',recPerf.low,recPerf.lowN]] as [string, string, any, any][]).map(([k,lbl,v,n])=>(
                 <div key={k} className="st-row">
                   <span className="st-name">{lbl}</span>
                   <span className="st-e1">{n} session{n===1?'':'s'}</span>
@@ -358,7 +358,7 @@ export default function ProgressView() {
                 {deloadRebound.events.map((e,i)=>(
                   <div key={i} className="ar-row">
                     <span className="ar-mus" style={{textTransform:'none'}}>Block {e.block} · wk {e.week}</span>
-                    <span className={`ar-chip ${e.pct>=1?'add':e.pct<=-1?'back':'hold'}`}>{e.pct>0?'+':''}{e.pct}% · {e.before}→{e.after}kg</span>
+                    <span className={`ar-chip ${e.pct>=1?'add':e.pct<=-1?'back':'hold'}`}>{e.pct>0?'+':''}{e.pct}% · {e.lifts} lift{e.lifts===1?'':'s'}</span>
                   </div>
                 ))}
               </div>
@@ -513,13 +513,13 @@ export default function ProgressView() {
                       const base = v.slice(0, -7).map(h => h[k]);
                       return { now: avg(v.slice(-7).map(h => h[k])), base: base.length >= 3 ? avg(base) : null };
                     };
-                    const metrics = [
+                    const metrics = ([
                       ['sleepHrs', 'Sleep', 'h', 1, '#a479e2'],
                       ['rhr', 'Resting HR', ' bpm', 0, '#ff6b6b'],
                       ['skinTemp', 'Skin temp', '\u00b0C', 1, '#e0b020'],
                       ['spo2', 'SpO\u2082', '%', 1, '#4a9eff'],
                       ['respRate', 'Resp. rate', ' rpm', 1, '#00e87a'],
-                    ].map(([k, label, unit, dp, color]) => ({ k, label, unit, dp, color, data: series(k), c: cmp(k) }))
+                    ] as [string, string, string, number, string][]).map(([k, label, unit, dp, color]) => ({ k, label, unit, dp, color, data: series(k), c: cmp(k) }))
                      .filter(m => m.data.length >= 3);
                     if (!metrics.length) return null;
                     const st = H.filter(h => h && Number.isFinite(h.skinTemp));

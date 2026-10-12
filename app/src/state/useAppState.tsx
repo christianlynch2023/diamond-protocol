@@ -1,32 +1,23 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ALT_BY_MUSCLE, DLW, EX_MUSCLE, MUSCLES, SESSIONS, buildIntensifier, effWR, getEffSets, getPhase, rirDefaultFor, setDeloadNow } from './data/programme';
-import { computeAlcoholImpact, computeRecoveryPerformance, computeTimeOfDay, recentCtx } from './lib/associations';
-import { playChime, primeAudio } from './lib/audio';
-import { BLOOD_GROUPS, bloodAutoFlag, bloodNormKey } from './lib/bloods';
-import { fmt, fmtShort, localToday, parseNum } from './lib/format';
-import { DECAY_COLORS, bpCategory, glucoseCategory, pkFor } from './lib/health';
-import { computeDeloadReadiness, computeReadiness } from './lib/readiness';
-import { computeActualVolume, computeBurnCheck, computeDeloadRebound, computeDurations, computePainTrend, computeRirDrift, computeStalls, computeStrengthRetention, computeTrainingLoad, sessionPerformed } from './lib/sessions';
-import { IDB, LS } from './lib/storage';
-import { usePersistentState } from './lib/hooks.js';
-import { ensureIds, legacyId, live, mergeByKey, mergeLogs, newId, pruneTombstones } from './lib/sync';
-import { calcPlates, calcWarmups, dailyMedianWeights, epley, exMuscle, getPrevHist, getProgRec, getTarget, makeBwResolver, totalLoad, weekMuscleVolume, weeklyVolumeSeries } from './lib/training';
-import { mergeHistory, parseWhoopCycles, parseWhoopHistory, parseWhoopSleeps, parseWhoopWorkouts } from './lib/whoop';
-import { RootBoundary } from './components/RootBoundary.jsx';
-import { AppCtx } from './appContext.js';
-import BodyView from './views/BodyView.jsx';
-import HistoryView from './views/HistoryView.jsx';
-import MealsView from './views/MealsView.jsx';
-import PrivacyView from './views/PrivacyView.jsx';
-import ProgramView from './views/ProgramView.jsx';
-import ProgressView from './views/ProgressView.jsx';
-import TodayView from './views/TodayView.jsx';
-import ToolsView from './views/ToolsView.jsx';
-import CompleteView from './views/CompleteView.jsx';
-import SessionView from './views/SessionView.jsx';
-import WorkoutView from './views/WorkoutView.jsx';
+// All of App's state, effects and handlers, as one hook (Phase 3d).
+// App calls it once per render, exactly where this code used to run, so hook order is unchanged.
+// Its return type is the type of everything the screens read through useApp().
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { DLW, EX_MUSCLE, MUSCLES, SESSIONS, buildIntensifier, effWR, getEffSets, getPhase, rirDefaultFor, setDeloadNow } from '../data/programme';
+import { usePersistentState } from '../hooks';
+import { computeAlcoholImpact, computeRecoveryPerformance, computeTimeOfDay, recentCtx } from '../lib/associations';
+import { playChime, primeAudio } from '../lib/audio';
+import { BLOOD_GROUPS, bloodAutoFlag, bloodNormKey } from '../lib/bloods';
+import { fmtShort, localToday, parseNum } from '../lib/format';
+import { DECAY_COLORS, bpCategory, glucoseCategory, pkFor } from '../lib/health';
+import { computeDeloadReadiness, computeReadiness } from '../lib/readiness';
+import { computeActualVolume, computeBurnCheck, computeDeloadRebound, computeDurations, computePainTrend, computeRirDrift, computeStalls, computeStrengthRetention, computeTrainingLoad, sessionPerformed } from '../lib/sessions';
+import { IDB, LS } from '../lib/storage';
+import { ensureIds, legacyId, live, mergeByKey, mergeLogs, newId, pruneTombstones } from '../lib/sync';
+import { calcPlates, calcWarmups, dailyMedianWeights, epley, exMuscle, getPrevHist, getProgRec, getTarget, makeBwResolver, totalLoad, weekMuscleVolume, weeklyVolumeSeries } from '../lib/training';
+import { mergeHistory, parseWhoopCycles, parseWhoopHistory, parseWhoopSleeps, parseWhoopWorkouts } from '../lib/whoop';
+import type { ActiveTarget, BPReading, BloodForm, BloodPanel, BodyMetric, CardioEntry, CheckinPhoto, ContextEntry, GlucoseReading, Measurement, NutritionEntry, ProtocolEntry, SessionLog, SetEntry, SubstituteEntry, VitalsEntry, WhoopDay, WhoopWorkout } from '../types';
 
-function App() {
+export function useAppState() {
 
   // ── WHOOP INTEGRATION ─────────────────────────────────
   // Unguarded JSON.parse in a useState initialiser: a truncated/corrupt whoop_cache threw
@@ -35,8 +26,8 @@ function App() {
   const [whoopAuthFail, setWhoopAuthFail] = useState(false);
   const [whoopStaleNote, setWhoopStaleNote] = useState(false);  // last refresh failed, showing cache
   const [whoopLoading, setWhoopLoading] = useState(false);
-  const [whoopHistory, setWhoopHistory] = usePersistentState('whoop_history', []);
-  const [whoopWorkouts, setWhoopWorkouts] = usePersistentState('whoop_workouts', []);
+  const [whoopHistory, setWhoopHistory] = usePersistentState<WhoopDay[]>('whoop_history', []);
+  const [whoopWorkouts, setWhoopWorkouts] = usePersistentState<WhoopWorkout[]>('whoop_workouts', []);
   const whoopConnected = !!LS.get('whoop_access_token');
 
   const getWhoopCls = score => score >= 67 ? 'gr' : score >= 34 ? 'yw' : 'rd';
@@ -50,7 +41,7 @@ function App() {
   };
 
   const parseWhoop = data => {
-    const r = { recovery:null, hrv:null, rhr:null, sleep:null, strain:null, spo2:null, skinTemp:null, respRate:null, sleepConsistency:null, sleepEfficiency:null, sleepHrs:null, deepHrs:null, remHrs:null, sleepDebt:null, dayCal:null };
+    const r: any = { recovery:null, hrv:null, rhr:null, sleep:null, strain:null, spo2:null, skinTemp:null, respRate:null, sleepConsistency:null, sleepEfficiency:null, sleepHrs:null, deepHrs:null, remHrs:null, sleepDebt:null, dayCal:null };
     // Recovery score, HRV, RHR, SpO2 and skin temp live on the /recovery feed (WHOOP v2)
     const recRec = data?.recovery?.records?.[0] || data?.recovery?.data?.[0];
     if (recRec) {
@@ -100,7 +91,7 @@ function App() {
   // WHOOP data itself went stale and was correctly nulled by the freshness guard.
   // WHOOP recovery reaches readiness properly via whoopData.recovery (freshness-gated).
 
-  const fetchWhoopData = async (token, allowRefresh = true) => {
+  const fetchWhoopData = async (token?, allowRefresh = true) => {
     const t = token || LS.get('whoop_access_token');
     if (!t) return;
     setWhoopLoading(true);
@@ -140,7 +131,7 @@ function App() {
       const wos = parseWhoopWorkouts(raw.workouts);
       // Merge, don't replace: the endpoint returns a recent page, so a wholesale replace
       // silently deleted all older locally-stored workouts.
-      if (wos.length) { setWhoopWorkouts(prev => { const m={}; [...(prev||[]), ...wos].forEach(w=>{ const k=(w.id!=null?String(w.id):(w.start||'')+'|'+(w.strain||'')); if(k) m[k]=w; }); return Object.values(m).sort((a,b)=>((a.start||'')<(b.start||'')?1:-1)).slice(0,200); }); }
+      if (wos.length) { setWhoopWorkouts(prev => { const m: Record<string, any>={}; [...(prev||[]), ...wos].forEach(w=>{ const k=(w.id!=null?String(w.id):(w.start||'')+'|'+(w.strain||'')); if(k) m[k]=w; }); return Object.values(m).sort((a,b)=>((a.start||'')<(b.start||'')?1:-1)).slice(0,200); }); }
     } catch(e) {
       const cached = LS.get('whoop_cache');
       if (cached) { try { setWhoopData(JSON.parse(cached)); setWhoopStaleNote(true); } catch(e) { LS.del('whoop_cache'); } }
@@ -189,7 +180,7 @@ function App() {
       if (at) {
         LS.set('whoop_access_token', at);
         if (rt) LS.set('whoop_refresh_token', rt);
-        LS.set('whoop_expires_at', String(Date.now() + parseInt(ei||3600)*1000));
+        LS.set('whoop_expires_at', String(Date.now() + parseInt((ei||3600) as any)*1000));
         window.history.replaceState(null, '', window.location.pathname);
         fetchWhoopData(at);
       }
@@ -208,12 +199,12 @@ function App() {
   const [view, setView]         = useState('home');
   const [mealDay, setMealDay]   = usePersistentState('meal_day', 'train');   // 'train' | 'rest' (remembered)
   const [mealTime, setMealTime] = usePersistentState('meal_time', 'am');     // session time: 'am' (5am) | 'pm' (8pm)
-  const [week, setWeek]         = useState(() => LS.getJSON('dp_cfg', {}).week || 1);
-  const [block, setBlock]       = useState(() => LS.getJSON('dp_cfg', {}).block || 1);
+  const [week, setWeek]         = useState(() => LS.getJSON<any>('dp_cfg', {}).week || 1);
+  const [block, setBlock]       = useState(() => LS.getJSON<any>('dp_cfg', {}).block || 1);
   const [newBlockConfirm, setNewBlockConfirm] = useState(false);
-  const [recovery, setRecovery] = useState(() => LS.getJSON('dp_cfg', {}).rec || 'normal');
+  const [recovery, setRecovery] = useState(() => LS.getJSON<any>('dp_cfg', {}).rec || 'normal');
   const [sel, setSel]           = useState(null);
-  const [logs, setLogs]         = useState(() => LS.getJSON('dp_logs', []));
+  const [logs, setLogs]         = useState<SessionLog[]>(() => LS.getJSON('dp_logs', []));
   const [wipData, setWipData]   = useState(() => LS.getJSON('dp_wip', null));
   const [expandLog, setExpandLog] = useState(null);
   const [progEx, setProgEx]     = useState(null);
@@ -222,22 +213,22 @@ function App() {
   const [activeInts, setActiveInts] = useState(new Set());
   const [exIdx, setExIdx]       = useState(0);
   const [curSet, setCurSet]     = useState(0);
-  const [setData, setSetData]   = useState({});
-  const [painData, setPainData] = useState({});
-  const [subMap, setSubMap] = useState({});
+  const [setData, setSetData]   = useState<Record<string, SetEntry[]>>({});
+  const [painData, setPainData] = useState<Record<string, any>>({});
+  const [subMap, setSubMap] = useState<Record<string, SubstituteEntry>>({});
   const [showSwap, setShowSwap] = useState(false);
   const [reviseMode, setReviseMode] = useState(false);
   const [finishModal, setFinishModal] = useState(false);
   const [editingLog, setEditingLog] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
   const [condensed, setCondensed] = useState(false);
-  const [highVol, setHighVol] = useState(() => LS.getJSON('dp_cfg', {}).highVol || false);
-  const [goalPhase, setGoalPhase] = useState(() => LS.getJSON('dp_cfg', {}).phase || 'bulk');
+  const [highVol, setHighVol] = useState(() => LS.getJSON<any>('dp_cfg', {}).highVol || false);
+  const [goalPhase, setGoalPhase] = useState(() => LS.getJSON<any>('dp_cfg', {}).phase || 'bulk');
   const GOAL_LABEL = { bulk:'muscle gain in a slight surplus', maintain:'maintenance / recomposition at roughly maintenance calories', cut:'fat loss in a caloric deficit' };
   const phaseLine = `CURRENT GOAL: ${GOAL_LABEL[goalPhase]||GOAL_LABEL.bulk}.` + (goalPhase==='cut' ? ' Priority is RETAINING muscle. Progression is welcome when recovery is good and the reps are there \u2014 take it when it comes \u2014 but never force it: holding loads while bodyweight drops is also success, and stalls are expected, not failures to fix. Keep volume around maintenance, protect recovery, and flag if protein looks low or the deficit seems too steep to hold muscle.' : goalPhase==='maintain' ? ' Progression is welcome but not forced; maintaining strength or a slow recomp is the aim.' : ' A small surplus supports growth, so drive progression where recovery allows.');
-  const [wt, setWt]             = useState(60);
-  const [rp, setRp]             = useState(8);
-  const [rir, setRir]           = useState(1);
+  const [wt, setWt]             = useState<any>(60);
+  const [rp, setRp]             = useState<any>(8);
+  const [rir, setRir]           = useState<any>(1);
   const [editIdx, setEditIdx]   = useState(null);
   // Intensifier capture (final-set-only). Stored in SEPARATE fields on the set (partialReps /
   // myoReps), never folded into reps, so e1RM / volume / progression ignore them by construction.
@@ -257,7 +248,7 @@ function App() {
   // Locked weekly calorie target. Declared here (early) rather than beside targetLock/effTargets
   // because the cloud-sync effect and Clear/export/import all reference it, and the sync effect's
   // dependency array — which is evaluated during render — sits above those definitions.
-  const [activeTarget, setActiveTarget] = usePersistentState('active_target', null);
+  const [activeTarget, setActiveTarget] = usePersistentState<ActiveTarget | null>('active_target', null);
   const [skipConfirm, setSkipConfirm] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const startRef = useRef(null);
@@ -270,25 +261,25 @@ function App() {
   const [timerMsg, setTimerMsg] = useState('');
   const afterRef = useRef(null);
   const endRef = useRef(0);
-  const [plateTgt, setPlateTgt] = useState(100);
-  const [warmWt, setWarmWt]     = useState(100);
-  const [ormWt, setOrmWt]       = useState(100);
-  const [ormRp, setOrmRp]       = useState(5);
+  const [plateTgt, setPlateTgt] = useState<any>(100);
+  const [warmWt, setWarmWt]     = useState<any>(100);
+  const [ormWt, setOrmWt]       = useState<any>(100);
+  const [ormRp, setOrmRp]       = useState<any>(5);
   const [briefing, setBriefing]       = useState(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [review, setReview]           = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
-  const [bodyMetricsRaw, setBodyMetrics] = usePersistentState('body_metrics', []);
+  const [bodyMetricsRaw, setBodyMetrics] = usePersistentState<BodyMetric[]>('body_metrics', []);
   const bodyMetrics = useMemo(()=>live(bodyMetricsRaw),[bodyMetricsRaw]);
-  const [protocolLogRaw, setProtocolLog] = usePersistentState('protocol_log', []);
+  const [protocolLogRaw, setProtocolLog] = usePersistentState<ProtocolEntry[]>('protocol_log', []);
   const protocolLog = useMemo(()=>live(protocolLogRaw),[protocolLogRaw]);
-  const [measurementsRaw, setMeasurements] = usePersistentState('body_measurements', []);
+  const [measurementsRaw, setMeasurements] = usePersistentState<Measurement[]>('body_measurements', []);
   const measurements = useMemo(()=>live(measurementsRaw),[measurementsRaw]);
-  const [checkins, setCheckins] = useState(() => { try { return JSON.parse(LS.get('checkin_photos') || '[]'); } catch(e) { return []; } });
+  const [checkins, setCheckins] = useState<CheckinPhoto[]>(() => { try { return JSON.parse(LS.get('checkin_photos') || '[]'); } catch(e) { return []; } });
   // Photo image data lives in IndexedDB; this in-memory cache is hydrated from it on mount so every
   // reader (display, compare, AI, export) stays synchronous. imgOf falls back to any base64 still on
   // the record (un-migrated or IDB-unavailable), so a photo always resolves.
-  const [photoImg, setPhotoImg] = useState({});
+  const [photoImg, setPhotoImg] = useState<Record<string, string>>({});
   const imgOf = c => (c && (photoImg[c.id] != null ? photoImg[c.id] : c.img)) || null;
   // 'all' shows every pose grouped by check-in date; the pose names act as filters.
   const [ciPose, setCiPose] = useState('all');
@@ -310,31 +301,31 @@ function App() {
   const [showCalLog, setShowCalLog] = useState(false);
   const [expandedWeek, setExpandedWeek] = useState(null);
   const [nutriDayType, setNutriDayType] = useState(() => { const d=new Date().getDay(); return [2,4,6,0].includes(d)?'train':'rest'; }); // Tue/Thu/Sat/Sun train
-  const [nutritionRaw, setNutrition] = usePersistentState('nutrition_log', []);
+  const [nutritionRaw, setNutrition] = usePersistentState<NutritionEntry[]>('nutrition_log', []);
   const nutrition = useMemo(()=>live(nutritionRaw),[nutritionRaw]);
   const [nP, setNP] = useState('');
   const [nC, setNC] = useState('');
   const [nF, setNF] = useState('');
   const [showAddNutri, setShowAddNutri] = useState(false);
-  const [cardioLogRaw, setCardioLog] = usePersistentState('cardio_log', []);
+  const [cardioLogRaw, setCardioLog] = usePersistentState<CardioEntry[]>('cardio_log', []);
   const cardioLog = useMemo(()=>live(cardioLogRaw),[cardioLogRaw]);
   const [cType, setCType] = useState('Zone 2');
   const [cMin, setCMin] = useState('');
   const [cNote, setCNote] = useState('');
   const [showAddCardio, setShowAddCardio] = useState(false);
-  const [bpLogRaw, setBpLog] = usePersistentState('bp_log', []);
+  const [bpLogRaw, setBpLog] = usePersistentState<BPReading[]>('bp_log', []);
   const bpLog = useMemo(()=>live(bpLogRaw),[bpLogRaw]);
   const [bpSys, setBpSys] = useState('');
   const [bpDia, setBpDia] = useState('');
   const [bpPulse, setBpPulse] = useState('');
-  const [glucoseLogRaw, setGlucoseLog] = usePersistentState('glucose_log', []);
+  const [glucoseLogRaw, setGlucoseLog] = usePersistentState<GlucoseReading[]>('glucose_log', []);
   const glucoseLog = useMemo(()=>live(glucoseLogRaw),[glucoseLogRaw]);
-  const [contextLogRaw, setContextLog] = usePersistentState('context_log', []);
+  const [contextLogRaw, setContextLog] = usePersistentState<ContextEntry[]>('context_log', []);
   const contextLog = useMemo(()=>live(contextLogRaw),[contextLogRaw]);
   // Waking temp + morning-wood: one combined daily store (one entry/day, keyed by date).
   // These are the only genuinely new inputs the dashboard adds; everything else it reads
   // from stores that already exist and already sync.
-  const [vitalsLogRaw, setVitalsLog] = usePersistentState('vitals_log', []);
+  const [vitalsLogRaw, setVitalsLog] = usePersistentState<VitalsEntry[]>('vitals_log', []);
   const vitalsLog = useMemo(()=>live(vitalsLogRaw),[vitalsLogRaw]);
   const [tVal, setTVal] = useState('');
   const [tDate, setTDate] = useState(localToday());
@@ -384,7 +375,7 @@ function App() {
   // No scenario input — this is purely a picture of what has already been administered.
   const decayModel = useMemo(() => {
     const events = protocolLog.map(e => {
-      const pk = pkFor(e.compound); const dose = parseFloat(e.dose);
+      const pk = pkFor(e.compound); const dose = parseFloat(e.dose as any);
       const t = e && e.date ? new Date(e.date).getTime() : NaN;
       const u = String(e && e.unit || '').toLowerCase();
       if (!pk || !Number.isFinite(dose) || dose <= 0 || !Number.isFinite(t)) return null;
@@ -432,13 +423,13 @@ function App() {
     const med = xs.length%2 ? xs[(xs.length-1)/2] : (xs[xs.length/2-1]+xs[xs.length/2])/2;
     return { lo:+(med-0.2).toFixed(2), hi:+(med+0.2).toFixed(2) };
   },[vitalsLog]);
-  const [bloodsLogRaw, setBloodsLog] = usePersistentState('bloods_log', []);
+  const [bloodsLogRaw, setBloodsLog] = usePersistentState<BloodPanel[]>('bloods_log', []);
   // P0.7: default is empty and there is NO resurrection effect. Blood panels are user data —
   // added in-app or restored via Tools → Import (see bloods-backup.json). Deleting one now sticks.
   const bloodsLog = useMemo(()=>live(bloodsLogRaw),[bloodsLogRaw]);
   // In-app panel entry. The draft is persisted so an app reload mid-entry does not lose it.
   // Shape: { editId, date, provider, note, rows:[{k,v,unit,ref,g,flag}], err }
-  const [bldForm, setBldForm] = usePersistentState('bloods_draft', null);
+  const [bldForm, setBldForm] = usePersistentState<BloodForm | null>('bloods_draft', null);
   // Newest known unit / range / group for every marker name, used to pre-fill new entries.
   const bloodMarkerIndex = useMemo(() => {
     const idx = {};
@@ -520,7 +511,7 @@ function App() {
       const norm = k => { const s = String(k||'').toLowerCase().replace(/[^a-z0-9]/g,''); return ALIAS[s] || s; };
       const panels = (bloodsLog||[]).filter(p=>p&&p.date).slice().sort((a,b)=> a.date<b.date?1:-1);
       const dates = panels.map(p=>p.date);
-      const rows = {};
+      const rows: Record<string, any> = {};
       for (const p of panels) for (const g of (p.groups||[])) for (const m of (g.m||[])) {
         if (!m || m.k==null) continue;
         const nk = norm(m.k); if (!nk) continue;
@@ -533,7 +524,7 @@ function App() {
       const SUP = {'⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9'};
       const normUnit = u => String(u || '').toLowerCase().replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, c => SUP[c]).replace(/µ|μ/g, 'u').replace(/\s|\*|\^|x(?=10)/g, '').replace(/miu/g, 'mu').replace(/iu\//g, 'u/');
       const arr = Object.values(rows).map(r => {
-        const units = new Set(Object.values(r.cells).map(c => normUnit(c && c.unit)).filter(Boolean));
+        const units = new Set((Object.values(r.cells) as any[]).map(c => normUnit(c && c.unit)).filter(Boolean));
         return { ...r, n: Object.keys(r.cells).length, unitMismatch: units.size > 1 };
       });
       const multi = arr.filter(r => r.n >= 2).sort((a,b) => (b.n - a.n) || a.label.localeCompare(b.label));
@@ -554,7 +545,7 @@ function App() {
     return { avg, n:src.length, delta };
   },[vitalsLog, todayVitals]);
   const [ctxUnits, setCtxUnits] = useState('');
-  const [ctxTags, setCtxTags] = useState([]);
+  const [ctxTags, setCtxTags] = useState<string[]>([]);
   const [ctxNote, setCtxNote] = useState('');
   const [ctxDate, setCtxDate] = useState(localToday());
   const [showAddCtx, setShowAddCtx] = useState(false);
@@ -589,7 +580,7 @@ function App() {
   const [cloudStatus, setCloudStatus] = useState('idle');
   const [cloudErr, setCloudErr] = useState('');
   const [cfgUpdatedAt, setCfgUpdatedAt] = usePersistentState('cfg_updated_at', 0);
-  const [deloadSkips, setDeloadSkips] = usePersistentState('deload_skips', {});
+  const [deloadSkips, setDeloadSkips] = usePersistentState<Record<string, boolean>>('deload_skips', {});
   const BUILD_ID = (typeof window !== 'undefined' && window.DP_BUILD) || 'unknown';   // single source of truth is the early BUILD stamp (top of file); bump it per deploy until build-time injection lands (P3)
   const [schemaV, setSchemaV] = usePersistentState('schema_v', 0);
   // ONE-TIME migration: stamp immutable ids onto pre-existing records and persist them.
@@ -853,11 +844,11 @@ function App() {
   const importData = () => {
     const input=document.createElement('input'); input.type='file'; input.accept='.json';
     input.onchange = e => {
-      const file=e.target.files[0]; if(!file)return;
+      const file=(e.target as HTMLInputElement).files[0]; if(!file)return;
       const reader=new FileReader();
       reader.onload = ev => {
         try {
-          const data=JSON.parse(ev.target.result);
+          const data=JSON.parse(ev.target.result as string);
           // Validate this is actually a Diamond backup BEFORE touching state — import replaces
           // the live arrays, so a random or malformed file would silently wipe good data.
           const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
@@ -874,7 +865,7 @@ function App() {
           const notFuture = d => new Date(d).getTime() <= Date.now() + 86400000;
           const num = x => (typeof x === 'number' && isFinite(x)) ? x : null;
           const rejected = {};
-          const clean = (name, arr, ok) => {
+          const clean = (name, arr, ok?) => {
             const seen = new Set(); const kept = []; let dropped = 0;
             for (const r of (Array.isArray(arr) ? arr : [])) {
               if (!isObj(r) || (ok && !ok(r))) { dropped++; continue; }
@@ -1042,7 +1033,7 @@ function App() {
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.onerror = reject;
-      img.src = e.target.result;
+      img.src = e.target.result as string;
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
@@ -1165,7 +1156,7 @@ function App() {
   const getPeriodReview = async (scope) => {
     setPeriodScope(scope); setPeriodReview(null); setPeriodLoading(true);
     const ph = getPhase(week);
-    const fmtVol = v => Object.keys(v).length ? Object.entries(v).map(([m,s]) => `${MUSCLES[m]?.name||m} ${Math.round(s*10)/10}`).join(', ') : 'none';
+    const fmtVol = (v: Record<string, number>) => Object.keys(v).length ? Object.entries(v).map(([m,s]) => `${MUSCLES[m]?.name||m} ${Math.round(s*10)/10}`).join(', ') : 'none';
     const bw = bodyMetrics.length >= 2 ? `${bodyMetrics[bodyMetrics.length-1].weight}kg to ${bodyMetrics[0].weight}kg` : (bodyMetrics.length===1?`${bodyMetrics[0].weight}kg`:'not logged');
     const recTrend = (deloadInfo?.level && deloadInfo.level!=='unknown') ? deloadInfo.msg : 'insufficient WHOOP history';
     const protAvg = avg7('protein'); const calAvg = avg7('calories');
@@ -1312,7 +1303,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const saveBloodPanel = () => {
     const f = bldForm; if (!f) return;
     const fail = (err) => setBldForm(x => x ? { ...x, err } : x);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '') || isNaN(new Date(f.date + 'T12:00:00'))) return fail('Enter a valid draw date.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date || '') || isNaN(new Date(f.date + 'T12:00:00') as any)) return fail('Enter a valid draw date.');
     if (f.date > localToday()) return fail('The draw date cannot be in the future.');
     const filled = f.rows.filter(r => String(r.k).trim() && String(r.v).trim());
     if (!filled.length) return fail('Enter at least one marker with a value.');
@@ -1332,7 +1323,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const dateLbl = new Date(f.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     const provider = String(f.provider || '').trim() || 'Manual';
     const now = Date.now();
-    const base = { date: f.date, label: dateLbl + ' \u00b7 ' + provider, groups, updatedAt: now };
+    const base: any = { date: f.date, label: dateLbl + ' \u00b7 ' + provider, groups, updatedAt: now };
     if (String(f.note || '').trim()) base.note = String(f.note).trim();
     if (f.gaps && f.gaps.length) base.gaps = f.gaps;
     if (f.editId) {
@@ -1433,7 +1424,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   };
 
 
-  const pullFromCloud = async (code) => {
+  const pullFromCloud = async (code?) => {
     const c = code || syncCode || LS.get('sync_code');
     if (!c) return false;
     setCloudStatus('syncing');
@@ -1522,7 +1513,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     } catch (e) { setCloudStatus('error'); return false; }
   };
 
-  const syncNow = async (codeArg) => {
+  const syncNow = async (codeArg?) => {
     const c = codeArg || syncCode || LS.get('sync_code');
     if (!c) return;
     setCloudStatus('syncing');
@@ -1792,7 +1783,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const _lwDateStr = _lw && _lw.date ? String(_lw.date).slice(0,10) : null;
     const _todayStr = localToday();
     const weightAgeDays = _lwDateStr
-      ? Math.max(0, Math.round((new Date(_todayStr+'T12:00:00') - new Date(_lwDateStr+'T12:00:00')) / dayMs))
+      ? Math.max(0, Math.round(((new Date(_todayStr+'T12:00:00') as any) - (new Date(_lwDateStr+'T12:00:00') as any)) / dayMs))
       : Infinity;
     if (weightAgeDays > 10) return { ok:false, reason:'stale_weight', ageDays:isFinite(weightAgeDays)?weightAgeDays:null };
     const winStart=anchor-21*dayMs;   // 21d not 14d: more weigh-ins dilute day-to-day water swings
@@ -2008,7 +1999,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const intEligible = !!(showInt && baseEx && !subMap[baseEx.id] && activeInts.has(baseEx.id) && intKind && intTargetSlot === effSets-1 && !DLW.has(week));
   const R=88, CIRC=2*Math.PI*R;
   const dashOff=CIRC*(1-(timerTotal>0?timerSecs/timerTotal:0));
-  const totalSets=Object.values(setData).reduce((a,s)=>a+s.length,0);
+  const totalSets=(Object.values(setData) as any[]).reduce((a,s)=>a+s.length,0);
   const dur=startRef.current?Math.round((Date.now()-startRef.current)/60000):0;
   // bwAt must be declared BEFORE ormHL: ormHL's e1 passes bwAt into totalLoad during render, and a
   // const referenced before its declaration throws a TDZ ReferenceError. ormHL only reduces once a
@@ -2038,7 +2029,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   // before, so nothing here can affect prescribed loads. Deload sessions excluded from PRs.
   const movementPRs = useMemo(() => {
     try {
-      const byName = {};
+      const byName: Record<string, any> = {};
       for (const l of (logs||[])) {
         // isDeloadLog is local to computeDeloadRebound and not in scope here. Calling it threw
         // inside this try/catch, so the Lifetime movement PRs card silently never rendered.
@@ -2221,7 +2212,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     const build = (dt, isTrain) => {
       const P = dt.protein, C = dt.carb, F = dt.fat;
       // Fractions per meal: [protein, carb, fat]
-      const layout = !isTrain
+      const layout: [string, number, number, number][] = !isTrain
         ? [ ['Breakfast',        .28, .25, .30],
             ['Lunch',            .28, .30, .35],
             ['Snack',            .16, .15, .10],
@@ -2376,7 +2367,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   // True 7-CALENDAR-DAY window: dedupe by date, reject future dates. Previously this was
   // 'the last 7 records', which could silently span 3 weeks and was still labelled a 7-day avg.
   const avg7=(k)=>{
-    const now=Date.now(); const by={};
+    const now=Date.now(); const by: Record<string, any>={};
     (nutrition||[]).forEach(n=>{ const d=(n.date||'').slice(0,10); if(!d) return; const a=(now-new Date(d+'T12:00:00').getTime())/86400000; if(a>=0&&a<=7&&!(d in by)) by[d]=n; });
     const rows=Object.values(by); if(!rows.length) return null;
     return Math.round(rows.reduce((a,n)=>a+(n[k]||0),0)/rows.length);
@@ -2467,7 +2458,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     return { avg, inRange, n:l7.length };
   }, [glucoseLog]);
   const calStats = useMemo(() => {
-    const _now=Date.now(); const _by={};
+    const _now=Date.now(); const _by: Record<string, any>={};
     (nutrition||[]).forEach(n=>{ const d=(n.date||'').slice(0,10); if(!d) return; const a=(_now-new Date(d+'T12:00:00').getTime())/86400000; if(a>=0&&a<=7&&!(d in _by)) _by[d]=n; });
     const l7 = Object.values(_by); if (!l7.length) return null;
     const avgCal = Math.round(l7.reduce((a,n)=>a+(n.calories||0),0)/l7.length);
@@ -2578,167 +2569,53 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
-  // Everything the screens use, shared through AppCtx (see appContext.js).
-  const __appCtx = { BUILD_ID, KEY_SITES, _metricLbl, _prLbl, _unit, acceptTarget, activeInts, activeTarget, actualVol, addBP, addBldRow, addBodyMetric, addCardio, addCheckin, addContext, addExercise, addGlucose, addMeasurement, addNutrition, addProtocol, addSet, alcoholImpact, allDone, analyseProgress, autoReg, bannerColor, bannerName, biomarkers, bldForm, block, bloodCompare, bloodMarkerIndex, bloodsLog, bodyDash, bodyMetrics, bpDate, bpDia, bpLog, bpPulse, bpSeries, bpStats, bpSys, briefing, briefingLoading, burnCheck, bwAt, bwRate, cDate, cMin, cNote, cType, calStats, cancelBloodPanel, cardioLog, cardioMins, cardioSessions, cardioTrend, chartEvents, checkins, ciAddPose, ciAnalysing, ciAnalysis, ciCompareA, ciCompareB, ciPose, clearIntInputs, clearVitalField, clearWip, cloudErr, cloudStatus, condensed, connectSync, contextLog, ctxDate, ctxNote, ctxReasons, ctxTags, ctxUnits, curEx, curSetPhase, curSetWeight, curTarget, curVol, decayModel, delBldRow, delCheckin, delExercise, delSet, deleteBloodPanel, deloadActive, deloadInfo, deloadRebound, disconnectSync, disconnectWhoop, doneToday, dur, durSplit, durations, editBloodPanel, editDraft, editIdx, editingLog, effPhase, effSets, effTargets, exIdx, expandLog, expandedSite, exportData, exportSummary, fetchWhoopData, fmtAgo, genSyncCode, getBriefing, getPeriodReview, getReview, getWhoopCls, glDate, glSeries, glStats, glVal, glucoseLog, goToExercise, goalPhase, grpOpen, highVol, hvActive, hydration, imgOf, importData, intEligible, intFail, intKind, intMyoStr, intPartials, isDeload, lastWeight, latestBP, latestBySite, latestGl, lockCals, logSet, loggedSetsArr, logs, mDate, mSite, mVal, mViewSite, mealDay, mealPlan, mealSlot, mealTime, measSeries, measurements, movementPRs, nC, nDate, nF, nP, newWt, newWtNote, nutriCoach, nutriDayType, nutrition, openBodyEdit, ormHL, ormRp, ormWt, pCmp, pDate, pDose, pNote, pUnit, painData, painRef, painTrend, periodLoading, periodReview, periodScope, plannedVol, plateRes, plateTgt, plateaus, prWeight, prevHist, progChartData, progEx, progHist, progMetric, progRec, protSeries, protocolLog, pullFromCloud, readiness, recFuelReady, recFuelRows, recPerf, recovery, resumeWorkout, review, reviewLoading, rir, rirDrift, rp, saveBloodPanel, saveEdit, saveTempBody, scheduledDeload, secOpen, sel, sess, setActiveInts, setBldForm, setBodyMetrics, setBpDate, setBpDia, setBpLog, setBpPulse, setBpSys, setCDate, setCMin, setCNote, setCType, setCardioLog, setCiAddPose, setCiCompareA, setCiCompareB, setCiPose, setClearConfirm, setCondensed, setContextLog, setCtxDate, setCtxNote, setCtxTags, setCtxUnits, setData, setDeloadSkips, setEditDraft, setEditIdx, setEditingLog, setExpandLog, setExpandedSite, setGlDate, setGlVal, setGlucoseLog, setIntFail, setIntMyoStr, setIntPartials, setLockCals, setMDate, setMSite, setMVal, setMViewSite, setMealDay, setMealSlot, setMealTime, setMeasurements, setNC, setNDate, setNF, setNP, setNewBlockConfirm, setNewWt, setNewWtNote, setNutriDayType, setNutrition, setOrmRp, setOrmWt, setPCmp, setPDate, setPDose, setPNote, setPUnit, setPainData, setPlateTgt, setProgEx, setProgMetric, setProtocolLog, setRir, setRp, setSel, setShowAddBP, setShowAddBody, setShowAddCardio, setShowAddCtx, setShowAddGl, setShowAddMeas, setShowAddNutri, setShowAddProt, setShowAddTemp, setShowBpLog, setShowCalLog, setShowCtxLog, setShowGlLog, setShowSwap, setShowTempLog, setShowWoodLog, setShowWtLog, setSkipConfirm, setSyncCodeInput, setTDate, setTVal, setView, setVolMuscle, setWDate, setWarmWt, setWood, setWt, setWtDate, showAddBP, showAddBody, showAddCardio, showAddCtx, showAddGl, showAddMeas, showAddNutri, showAddProt, showAddTemp, showBpLog, showCalLog, showCtxLog, showGlLog, showInt, showTempLog, showWoodLog, showWtLog, skinTempStat, stalls, startBloodPanel, startWorkout, storageBreakdown, strengthRet, syncCode, syncCodeInput, syncNow, tDate, tVal, targetLock, tempBand, tempChartSeries, tempLogList, tempStat, timeOfDay, todayVitals, toggleGrp, toggleSec, tombstone, totalSets, trainLoad, tryFinish, updBldRow, updSet, upsertVitalsDated, userSetHighVol, userSetPhase, userSetRecovery, userSetWeek, vitalsLog, volMuscle, volParts, volSeries, wDate, warmWt, warmups, week, weekReview, whoopAuthFail, whoopCardio, whoopConnected, whoopData, whoopHistory, whoopLoading, whoopStaleNote, whoopWorkouts, wipData, woodLogList, wr, wt, wtDate };
-  return (
-    <AppCtx.Provider value={__appCtx}>
-<div className="app">
-      {storageFail && (
-        <div style={{position:'sticky',top:0,zIndex:9999,background:'rgba(255,68,68,0.14)',borderBottom:'1px solid rgba(255,68,68,0.5)',color:'#ff9a9a',fontFamily:"'JetBrains Mono',monospace",fontSize:11,padding:'8px 12px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
-          <span>Storage write failed ({storageFail}). Your device storage may be full or blocked — recent changes might not survive a reload. Export a backup, then free space.</span>
-          <button onClick={()=>setStorageFail(null)} style={{background:'none',border:'1px solid rgba(255,68,68,0.5)',color:'#ff9a9a',borderRadius:6,padding:'3px 8px',cursor:'pointer',flexShrink:0}}>Dismiss</button>
-        </div>
-      )}
-      {timerOn && (
-        <div className="timer-ov">
-          <div className="t-lbl">Rest Period</div>
-          <div className="t-ring">
-            <svg width="200" height="200" viewBox="0 0 200 200">
-              <circle className="t-track" cx="100" cy="100" r={R}/>
-              <circle className="t-fill" cx="100" cy="100" r={R} strokeDasharray={CIRC} strokeDashoffset={dashOff}/>
-            </svg>
-            <div className="t-ctr"><div className="t-secs">{fmt(timerSecs)}</div><div className="t-unit">remaining</div></div>
-          </div>
-          <div className="t-msg">{timerMsg}</div>
-          <button className="t-skip" onClick={skipTimer}>Skip Rest</button>
-        </div>
-      )}
-
-      {editBody && editBodyDraft && (() => {
-        const cfg = BODY_TYPES[editBody.type];
-        const dv = cfg.dateOnly ? (editBodyDraft.date||'') : (editBodyDraft.date||'').slice(0,10);
-        const setDate = (val) => setEditBodyDraft(d => ({...d, date: cfg.dateOnly ? val : `${val}T12:00:00.000Z`}));
-        return (
-          <div className="modal-ov">
-            <div className="modal">
-              <div className="modal-title">{cfg.title}</div>
-              {cfg.ro && cfg.ro.map(([k,lbl])=>(<div key={k} className="modal-sub">{lbl}: {editBodyDraft[k]}</div>))}
-              <div className="ebody-grid">
-                <div className="ebody-f"><label>Date</label><input type="date" value={dv} onChange={e=>setDate(e.target.value)}/></div>
-                {cfg.fields.map(([k,lbl,kind])=>(
-                  <div key={k} className="ebody-f"><label>{lbl}</label>
-                    <input type={kind==='num'?'number':'text'} inputMode={kind==='num'?'decimal':'text'} value={editBodyDraft[k]==null?'':editBodyDraft[k]} onChange={e=>setEditBodyDraft(d=>({...d,[k]:e.target.value}))}/>
-                  </div>
-                ))}
-              </div>
-              <div className="modal-btns">
-                <button className="mbt danger" onClick={()=>{ cfg.setter(prev=>prev.map(e => ((e.id||'')===editBody.id) ? {...e, deletedAt: Date.now(), updatedAt: Date.now()} : e)); setEditBody(null); setEditBodyDraft(null); }}>Delete</button>
-                <button className="mbt ghost" onClick={()=>{setEditBody(null);setEditBodyDraft(null);}}>Cancel</button>
-                <button className="mbt go" onClick={saveBodyEdit}>Save</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {newBlockConfirm && (
-        <div className="modal-ov">
-          <div className="modal">
-            <div className="modal-title">Start Block {block+1}?</div>
-            <div className="modal-sub">This begins a fresh 12-week wave at Week 1. Your logged sessions stay in History tagged Block {block}, and your working weights carry forward &#8212; nothing is reset or deleted.</div>
-            <div className="modal-btns">
-              <button className="mbt ghost" onClick={()=>setNewBlockConfirm(false)}>Cancel</button>
-              <button className="mbt go" onClick={startNewBlock}>Start Block {block+1}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {finishModal && (() => {
-        const sess=SESSIONS[sel];
-        const undone=sess.exercises.map((ex,i)=>({ex,i})).filter(({ex})=>{ if(ex.opt) return false; const eid=subMap[ex.id]?subMap[ex.id].id:ex.id; return !(setData[eid]&&setData[eid].length>0); });
-        return (
-          <div className="modal-ov">
-            <div className="modal">
-              <div className="modal-title">Finish session?</div>
-              <div className="modal-sub">You haven't logged {undone.length} exercise{undone.length>1?'s':''} yet. Jump to one to do it now, or finish anyway.</div>
-              <div className="swap-list">
-                {undone.map(({ex,i})=>(<button key={i} className="swap-opt" onClick={()=>goToExercise(i)}>{(subMap[ex.id]&&subMap[ex.id].name)||ex.name}</button>))}
-              </div>
-              <div className="modal-btns">
-                <button className="mbt ghost" onClick={()=>setFinishModal(false)}>Keep going</button>
-                <button className="mbt danger" onClick={()=>{setFinishModal(false); saveAndFinish(setData);}}>Finish anyway</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {skipConfirm && (
-        <div className="modal-ov">
-          <div className="modal">
-            <div className="modal-title">Skip Exercise?</div>
-            <div className="modal-sub">Skip {curEx?.name}? Unlogged sets will not be saved.</div>
-            <div className="modal-btns">
-              <button className="mbt ghost" onClick={() => setSkipConfirm(false)}>Cancel</button>
-              <button className="mbt danger" onClick={doSkipEx}>Skip</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showSwap && curEx && (
-        <div className="modal-ov">
-          <div className="modal">
-            <div className="modal-title">Swap Exercise</div>
-            <div className="modal-sub">Replace {curEx.name} with another option for the same muscle. Your set and rep scheme carries over; it tracks as its own lift.</div>
-            <div className="swap-list">
-              {(ALT_BY_MUSCLE[EX_MUSCLE[baseEx?.id]?.p] || []).filter(o => o.name !== curEx.name).map((o, i) => (
-                <button key={i} className="swap-opt" onClick={() => applySwap(o)}>{o.name}</button>
-              ))}
-            </div>
-            <div className="modal-btns"><button className="mbt ghost" onClick={() => setShowSwap(false)}>Cancel</button></div>
-          </div>
-        </div>
-      )}
-
-      {clearConfirm && (
-        <div className="modal-ov">
-          <div className="modal">
-            <div className="modal-title">Clear All Data?</div>
-            <div className="modal-sub">This permanently deletes everything — workout history, logs, settings, and all health metrics (bodyweight, measurements, nutrition, BP, cardio, protocol). Export a backup first if you want to keep your data.</div>
-            <div className="modal-btns">
-              <button className="mbt ghost" onClick={() => setClearConfirm(false)}>Cancel</button>
-              <button className="mbt danger" onClick={clearAllData}>Clear Everything</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {view === 'today' && <TodayView />}
-
-      {view === 'home' && <ProgramView />}
-
-      {view === 'session' && sess && <SessionView />}
-
-      {view === 'workout' && sess && curEx && <WorkoutView />}
-
-      {view === 'complete' && <CompleteView />}
-
-      {view === 'progress' && <ProgressView />}
-      {view === 'history' && <HistoryView />}
-
-      {view === 'meals' && <MealsView />}
-      {view === 'privacy' && <PrivacyView />}
-      {view === 'tools' && <ToolsView />}
-
-
-      {view==='body'&&<BodyView />}
-
-      {restFlash && <div className="rest-flash"><div className="rest-flash-txt">REST OVER</div></div>}
-      {view !== 'workout' && view !== 'complete' && (
-        <div className="bnav">
-          {[['today','&#128197;','Today'],['meals','&#127869;','Meals'],['home','&#127947;','Program'],['progress','&#128200;','Progress'],['history','&#128203;','History'],['body','&#9878;','Body'],['privacy','&#128274;','Privacy'],['tools','&#128295;','Tools']].map(([v,icon,label]) => (
-            <div key={v} className={`bn${view===v?' on':''}`} onClick={() => setView(v)}>
-              <span className="bn-ic" dangerouslySetInnerHTML={{__html:icon}}/>
-              <span className="bn-lb">{label}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-    </AppCtx.Provider>
-  );
+  return {
+    BODY_TYPES, BUILD_ID, CIRC, KEY_SITES, R, _metricLbl, _prLbl, _unit, acceptTarget, activeInts, activeTarget,
+    actualVol, addBP, addBldRow, addBodyMetric, addCardio, addCheckin, addContext, addExercise, addGlucose,
+    addMeasurement, addNutrition, addProtocol, addSet, alcoholImpact, allDone, analyseProgress, applySwap, autoReg,
+    bannerColor, bannerName, baseEx, biomarkers, bldForm, block, bloodCompare, bloodMarkerIndex, bloodsLog,
+    bodyDash, bodyMetrics, bpDate, bpDia, bpLog, bpPulse, bpSeries, bpStats, bpSys, briefing, briefingLoading,
+    burnCheck, bwAt, bwRate, cDate, cMin, cNote, cType, calStats, cancelBloodPanel, cardioLog, cardioMins,
+    cardioSessions, cardioTrend, chartEvents, checkins, ciAddPose, ciAnalysing, ciAnalysis, ciCompareA, ciCompareB,
+    ciPose, clearAllData, clearConfirm, clearIntInputs, clearVitalField, clearWip, cloudErr, cloudStatus,
+    condensed, connectSync, contextLog, ctxDate, ctxNote, ctxReasons, ctxTags, ctxUnits, curEx, curSetPhase,
+    curSetWeight, curTarget, curVol, dashOff, decayModel, delBldRow, delCheckin, delExercise, delSet,
+    deleteBloodPanel, deloadActive, deloadInfo, deloadRebound, disconnectSync, disconnectWhoop, doSkipEx,
+    doneToday, dur, durSplit, durations, editBloodPanel, editBody, editBodyDraft, editDraft, editIdx, editingLog,
+    effPhase, effSets, effTargets, exIdx, expandLog, expandedSite, exportData, exportSummary, fetchWhoopData,
+    finishModal, fmtAgo, genSyncCode, getBriefing, getPeriodReview, getReview, getWhoopCls, glDate, glSeries,
+    glStats, glVal, glucoseLog, goToExercise, goalPhase, grpOpen, highVol, hvActive, hydration, imgOf, importData,
+    intEligible, intFail, intKind, intMyoStr, intPartials, isDeload, lastWeight, latestBP, latestBySite, latestGl,
+    lockCals, logSet, loggedSetsArr, logs, mDate, mSite, mVal, mViewSite, mealDay, mealPlan, mealSlot, mealTime,
+    measSeries, measurements, movementPRs, nC, nDate, nF, nP, newBlockConfirm, newWt, newWtNote, nutriCoach,
+    nutriDayType, nutrition, openBodyEdit, ormHL, ormRp, ormWt, pCmp, pDate, pDose, pNote, pUnit, painData,
+    painRef, painTrend, periodLoading, periodReview, periodScope, plannedVol, plateRes, plateTgt, plateaus,
+    prWeight, prevHist, progChartData, progEx, progHist, progMetric, progRec, protSeries, protocolLog,
+    pullFromCloud, readiness, recFuelReady, recFuelRows, recPerf, recovery, restFlash, resumeWorkout, review,
+    reviewLoading, rir, rirDrift, rp, saveAndFinish, saveBloodPanel, saveBodyEdit, saveEdit, saveTempBody,
+    scheduledDeload, secOpen, sel, sess, setActiveInts, setBldForm, setBodyMetrics, setBpDate, setBpDia, setBpLog,
+    setBpPulse, setBpSys, setCDate, setCMin, setCNote, setCType, setCardioLog, setCiAddPose, setCiCompareA,
+    setCiCompareB, setCiPose, setClearConfirm, setCondensed, setContextLog, setCtxDate, setCtxNote, setCtxTags,
+    setCtxUnits, setData, setDeloadSkips, setEditBody, setEditBodyDraft, setEditDraft, setEditIdx, setEditingLog,
+    setExpandLog, setExpandedSite, setFinishModal, setGlDate, setGlVal, setGlucoseLog, setIntFail, setIntMyoStr,
+    setIntPartials, setLockCals, setMDate, setMSite, setMVal, setMViewSite, setMealDay, setMealSlot, setMealTime,
+    setMeasurements, setNC, setNDate, setNF, setNP, setNewBlockConfirm, setNewWt, setNewWtNote, setNutriDayType,
+    setNutrition, setOrmRp, setOrmWt, setPCmp, setPDate, setPDose, setPNote, setPUnit, setPainData, setPlateTgt,
+    setProgEx, setProgMetric, setProtocolLog, setRir, setRp, setSel, setShowAddBP, setShowAddBody,
+    setShowAddCardio, setShowAddCtx, setShowAddGl, setShowAddMeas, setShowAddNutri, setShowAddProt, setShowAddTemp,
+    setShowBpLog, setShowCalLog, setShowCtxLog, setShowGlLog, setShowSwap, setShowTempLog, setShowWoodLog,
+    setShowWtLog, setSkipConfirm, setStorageFail, setSyncCodeInput, setTDate, setTVal, setView, setVolMuscle,
+    setWDate, setWarmWt, setWood, setWt, setWtDate, showAddBP, showAddBody, showAddCardio, showAddCtx, showAddGl,
+    showAddMeas, showAddNutri, showAddProt, showAddTemp, showBpLog, showCalLog, showCtxLog, showGlLog, showInt,
+    showSwap, showTempLog, showWoodLog, showWtLog, skinTempStat, skipConfirm, skipTimer, stalls, startBloodPanel,
+    startNewBlock, startWorkout, storageBreakdown, storageFail, strengthRet, subMap, syncCode, syncCodeInput,
+    syncNow, tDate, tVal, targetLock, tempBand, tempChartSeries, tempLogList, tempStat, timeOfDay, timerMsg,
+    timerOn, timerSecs, todayVitals, toggleGrp, toggleSec, tombstone, totalSets, trainLoad, tryFinish, updBldRow,
+    updSet, upsertVitalsDated, userSetHighVol, userSetPhase, userSetRecovery, userSetWeek, view, vitalsLog,
+    volMuscle, volParts, volSeries, wDate, warmWt, warmups, week, weekReview, whoopAuthFail, whoopCardio,
+    whoopConnected, whoopData, whoopHistory, whoopLoading, whoopStaleNote, whoopWorkouts, wipData, woodLogList, wr,
+    wt, wtDate
+  };
 }
 
-export { App, RootBoundary };
+export type AppState = ReturnType<typeof useAppState>;

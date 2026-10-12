@@ -1,6 +1,6 @@
 // MealsView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
-import { useApp } from '../appContext.js';
+import { useApp } from '../appContext';
 import { MEAL_PLAN } from '../data/mealPlan';
 
 export default function MealsView() {

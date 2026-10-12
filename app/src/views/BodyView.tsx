@@ -1,7 +1,7 @@
 // BodyView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
-import { useApp } from '../appContext.js';
-import { SVGChart, Sparkline } from '../components/charts.jsx';
+import { useApp } from '../appContext';
+import { SVGChart, Sparkline } from '../components/charts';
 import { CTX_TAGS } from '../lib/associations';
 import { BLOOD_GROUPS, bloodAutoFlag } from '../lib/bloods';
 import { fmtShort, localToday } from '../lib/format';
@@ -883,7 +883,7 @@ export default function BodyView() {
                     <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.5 }}>
                       {f.editId ? 'Change any value, then save.' : 'Marker names, units and ranges are copied from your latest panel. Fill in the values you have; rows left blank are skipped.'} Flags work themselves out from the range unless you set one.
                     </div>
-                    <datalist id="bld-markers">{Object.values(bloodMarkerIndex).map(m => <option key={m.k} value={m.k} />)}</datalist>
+                    <datalist id="bld-markers">{(Object.values(bloodMarkerIndex) as any[]).map(m => <option key={m.k} value={m.k} />)}</datalist>
                     {f.rows.map((r, i) => (
                       <div key={i} style={{ borderTop: '1px solid var(--bdr)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

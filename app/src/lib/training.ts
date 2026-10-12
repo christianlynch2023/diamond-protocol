@@ -153,7 +153,7 @@ export function weeklyVolumeSeries(logs: SessionLog[], muscle: string, block?: n
 //      satisfy "every set hit rMax", so the engine only rewarded breaking the prescription.
 export function getProgRec(exId: string, exOrRMax: number | { rMax: number; setPlan?: SetPlanStep[] | null }, logs: SessionLog[], phase: string): ProgRec {
   const isObj = exOrRMax && typeof exOrRMax === 'object';
-  const rMax = isObj ? exOrRMax.rMax : exOrRMax;
+  const rMax = isObj ? (exOrRMax as { rMax: number }).rMax : (exOrRMax as number);
   const setPlan = isObj ? exOrRMax.setPlan : null;
   // Expand setPlan into a per-set cap array; extra logged sets (e.g. HV +1) inherit the last cap.
   const capsFor = (nSets: number): number[] | null => {

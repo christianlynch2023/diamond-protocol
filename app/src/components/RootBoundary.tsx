@@ -4,7 +4,7 @@ import React from 'react';
 // Top-level error boundary. Without this, any render exception unmounts the whole tree and the
 // screen goes black with no clue and no recovery. This catches it, shows the actual message, and
 // gives a way back — the in-progress session lives in dp_wip, so it is offered for resume on reload.
-export class RootBoundary extends React.Component {
+export class RootBoundary extends React.Component<{ children?: any }, { err: any; info: any }> {
   constructor(p){ super(p); this.state={ err:null, info:null }; }
   static getDerivedStateFromError(err){ return { err }; }
   componentDidCatch(err, info){ this.setState({ info }); try{ console.error('Diamond crash:', err, info); }catch(e){} }

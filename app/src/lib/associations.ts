@@ -79,6 +79,12 @@ export const PERF_MIN_SHOW = 3;
 export const PERF_MIN_VERDICT = 8;
 
 
+/** computeAlcoholImpact's result: the 'after' and 'clear' buckets plus the verdict. */
+export interface AlcoholImpact {
+  after: BucketStats; clear: BucketStats; verdict: string | null; gap: number | null;
+  provisional: boolean; minVerdict: number; total: number; drinkDays: number;
+}
+
 export interface BucketStats { n: number; sessions: number; mean: number | null; provisional: boolean }
 
 export function relPerfByBucket(rows: PerfRow[], minSessions = PERF_MIN_SHOW): Record<string, BucketStats> | null {
@@ -245,7 +251,7 @@ export function computeAlcoholImpact(logs: SessionLog[], contextLog: ContextEntr
     } else provisional = true;
   }
   return { ...r, verdict, gap, provisional, minVerdict: PERF_MIN_VERDICT,
-           total: new Set(rows.map(x=>x.sid)).size, drinkDays: drinkDays.size };
+           total: new Set(rows.map(x=>x.sid)).size, drinkDays: drinkDays.size } as AlcoholImpact;
 }
 
 

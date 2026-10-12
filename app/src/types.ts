@@ -14,7 +14,7 @@ export interface SetEntry {
   weight: number;
   reps: number;
   rir?: number | string | null;   // a number, or the text '4+' from the RIR picker
-  [extra: string]: unknown;
+  [extra: string]: any;
 }
 
 export interface ExerciseLog {
@@ -23,7 +23,7 @@ export interface ExerciseLog {
   name: string;
   sets: SetEntry[];
   pain?: number;
-  [extra: string]: unknown;
+  [extra: string]: any;
 }
 
 export interface SessionLog extends Synced {
@@ -38,14 +38,14 @@ export interface SessionLog extends Synced {
   deload?: boolean;
   hv?: boolean;
   exercises: ExerciseLog[];
-  [extra: string]: unknown;
+  [extra: string]: any;
 }
 
 export interface BodyMetric extends Synced {
   date: string;
   weight?: number | null;
   bodyFat?: number | null;
-  [extra: string]: unknown;
+  [extra: string]: any;
 }
 
 export type BloodFlag = 'ok' | 'high' | 'low' | 'watch';
@@ -86,10 +86,11 @@ export interface WhoopDay {
   sleepDebt?: number | null;
   strain?: number | null;
   dayCal?: number | null;
-  [extra: string]: unknown;
+  [extra: string]: any;
 }
 
 export interface WhoopWorkout {
+  id?: string | number;     // present on workouts stored by older versions
   start: string;            // workouts without a start are filtered out by the parser
   end: string;              // falls back to start when WHOOP gives no end
   strain: number | null;
@@ -131,6 +132,7 @@ export interface ExerciseDef {
   orm: boolean;
   avoidReason?: string;
   origId?: string;          // set on a swapped-in alternative
+  opt?: boolean;            // optional exercise: not counted as unfinished at session end (none set it today)
 }
 
 export interface SessionDef {
@@ -161,7 +163,7 @@ export interface WhoopToday {
   respRate?: number | null;
   sleep?: number | null;
   sleepDebt?: number | null;
-  [extra: string]: unknown;
+  [extra: string]: any;
 }
 
 export interface DeloadReadiness {
@@ -171,12 +173,27 @@ export interface DeloadReadiness {
   bRec?: number | null;
   rHrv?: number | null;
   bHrv?: number | null;
-  [extra: string]: unknown;
+  [extra: string]: any;
 }
 
-export interface BPReading extends Synced { date: string; sys: number; dia: number; pulse?: number | null; }
+export interface BPReading extends Synced { date: string; sys: number; dia: number; pulse?: number | null; [extra: string]: any; }
 
 /** One exercise from one session, tagged with a bucket (recovery band, time of day, alcohol). */
 export interface PerfRow { pid: string; e1rm: number; bucket: string; sid: string; date: string; }
 
-export interface ContextEntry extends Synced { date: string; units?: number; tags?: string[]; [extra: string]: unknown; }
+export interface ContextEntry extends Synced { date: string; units?: number; tags?: string[]; [extra: string]: any; }
+
+// ---- Stored records, as created by the app (state/useAppState.tsx) ----
+// Known fields are typed; anything older or rarer passes through the index signature.
+export interface GlucoseReading extends Synced { date: string; value: number; [extra: string]: any; }
+export interface CardioEntry extends Synced { date: string; modality: string; minutes: number; note?: string; [extra: string]: any; }
+export interface Measurement extends Synced { date: string; site: string; value: number; [extra: string]: any; }
+export interface ProtocolEntry extends Synced { date: string; compound: string; dose: number; unit: string; notes?: string; [extra: string]: any; }
+export interface NutritionEntry extends Synced { date: string; calories?: number; protein?: number; carbs?: number; fat?: number; [extra: string]: any; }
+export interface VitalsEntry extends Synced { date: string; temp?: number | null; wood?: any; [extra: string]: any; }
+export interface CheckinPhoto { id: number; date: string; pose: string; week?: number; phase?: string; weight?: number | null; waist?: number | null; img?: any; [extra: string]: any; }
+export interface ActiveTarget { cals: number; protein: number; fat: number; carb: number; tdee?: number; manual?: boolean; setAt?: number; [extra: string]: any; }
+export interface BloodFormRow { k: string; v: string; unit: string; ref: string; g: string; flag: string; }
+export interface BloodForm { editId: string | null; date: string; provider: string; note: string; rows: BloodFormRow[]; err: string; gaps?: string[] | null; }
+/** A swapped-in exercise, keyed by the id of the exercise it replaces. */
+export interface SubstituteEntry { id: string; name: string; rMin?: number; rMax?: number; setPlan?: null; rirMin?: number; }

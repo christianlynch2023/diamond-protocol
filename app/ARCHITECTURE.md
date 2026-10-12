@@ -1,28 +1,30 @@
 # Diamond Protocol: code map
 
-`src/main.jsx` starts the app. `src/boot.js` handles icon, manifest, build stamp and service worker.
+`src/main.tsx` starts the app. `src/boot.js` handles icon, manifest, build stamp and service worker.
 
 | File | What lives there |
 |---|---|
-| `src/App.jsx` | Owns all state, effects, timers, modals and overlays. Shares state with every screen via `AppCtx` |
-| `src/appContext.js` | `AppCtx` and `useApp()`: how screens read App's state |
-| `src/views/TodayView.jsx` | Today tab |
-| `src/views/ProgramView.jsx` | Program tab |
-| `src/views/ProgressView.jsx` | Progress tab |
-| `src/views/HistoryView.jsx` | History tab |
-| `src/views/BodyView.jsx` | Body tab (weight, measurements, bloods, BP, glucose, photos) |
-| `src/views/MealsView.jsx` | Meals tab |
-| `src/views/PrivacyView.jsx` | Privacy tab |
-| `src/views/ToolsView.jsx` | Tools tab |
-| `src/views/SessionView.jsx` | Session preview before you start |
-| `src/views/WorkoutView.jsx` | The live workout: logging sets, swap, skip, end |
-| `src/views/CompleteView.jsx` | Session complete screen |
-| `src/components/charts.jsx` | SVGChart, SVGBars, SVGScatter, Sparkline, RecoveryFuelStrip |
-| `src/components/RootBoundary.jsx` | Crash screen shown if the app errors |
+| `src/App.tsx` | Thin shell: calls `useAppState()`, renders the current screen, modals, overlays and nav |
+| `src/state/useAppState.tsx` | All of the app's state, effects, timers and handlers, as one hook. Its return type *is* `AppState` |
+| `src/appContext.ts` | `AppCtx` and `useApp()`: how screens read the app's state, fully typed as `AppState` |
+| `src/views/TodayView.tsx` | Today tab |
+| `src/views/ProgramView.tsx` | Program tab |
+| `src/views/ProgressView.tsx` | Progress tab |
+| `src/views/HistoryView.tsx` | History tab |
+| `src/views/BodyView.tsx` | Body tab (weight, measurements, bloods, BP, glucose, photos) |
+| `src/views/MealsView.tsx` | Meals tab |
+| `src/views/PrivacyView.tsx` | Privacy tab |
+| `src/views/ToolsView.tsx` | Tools tab |
+| `src/views/SessionView.tsx` | Session preview before you start |
+| `src/views/WorkoutView.tsx` | The live workout: logging sets, swap, skip, end |
+| `src/views/CompleteView.tsx` | Session complete screen |
+| `src/components/charts.tsx` | SVGChart, SVGBars, SVGScatter, Sparkline, RecoveryFuelStrip |
+| `src/components/RootBoundary.tsx` | Crash screen shown if the app errors |
 | `src/data/programme.ts` | Sessions, exercises, weekly RIR plan, deload weeks, muscle map, phases |
 | `src/data/mealPlan.ts` | The cut meal plan |
 | `src/lib/storage.ts` | localStorage helpers and the IndexedDB photo store |
-| `src/lib/hooks.js` | `usePersistentState` (stays JavaScript until the screens get React types) |
+| `src/hooks.ts` | `usePersistentState`: React state that saves itself to localStorage |
+| `src/globals.d.ts`, `src/assets.d.ts` | Declarations for the build stamp on `window` and for CSS imports |
 | `src/types.ts` | Shapes of stored data: SessionLog, SetEntry, BloodPanel, WhoopDay, BodyMetric |
 | `src/lib/sync.ts` | IDs, tombstones and merge rules used by cloud sync and import |
 | `src/lib/training.ts` | e1RM, bodyweight, volume, plates, warm-ups, progression targets |
@@ -42,13 +44,21 @@ Screens get state from `useApp()`. To give a screen something new, add it to `__
 App's `return`. Screens must never assign to App variables; they call the setters instead.
 
 ## TypeScript
-`lib/` and `data/` are TypeScript under **full strict mode** (Phase 3b); screens are still JavaScript.
-`npm run build` runs the type check first (`tsc -p .`), so a type error stops the build and nothing
-broken reaches Netlify. `npm run typecheck` runs the check on its own.
+Everything is TypeScript except `boot.js`. Two checks run before every build:
 
-Domain types live in `src/types.ts`. Raw WHOOP API data is deliberately typed `any` at the parsing
-boundary; everything after parsing is typed.
+| Check | Covers | Level |
+|---|---|---|
+| `tsconfig.json` | `lib/`, `data/`, `types.ts` (pure logic, no React) | full strict |
+| `tsconfig.app.json` | everything, including the state hook and the screens | loose for now |
 
-Phase 3b changed types only, with one exception: a one-word fix in `lib/associations.ts`
-(`x.sdate` -> `x.date`). Strict mode found that the recovery-vs-performance scatter read a field that
-was never set, so it had always received zero points and never rendered.
+`npm run build` runs both, then `vite build`; a type error stops the build. `npm run typecheck`
+runs the checks alone.
+
+**How the screens are typed (Phase 3d).** `useAppState()` returns every value the screens use, and
+`AppState = ReturnType<typeof useAppState>`, so each screen's `useApp()` values are typed from their
+declarations automatically. Stored lists are declared with their record types (`usePersistentState<BPReading[]>`
+etc., see `types.ts`). Number inputs that also hold typed text (weight, reps, RIR incl. '4+') are `any`.
+
+**Fixes found by typing.** 3b: the recovery-vs-performance scatter read a field that was never set and
+never rendered (`x.sdate` -> `x.date`). 3d: deload rebound rows printed "+x% · →kg" because the per-lift
+method has no single before/after weight; they now read "+x% · N lifts".

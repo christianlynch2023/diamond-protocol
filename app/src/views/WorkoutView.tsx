@@ -1,6 +1,6 @@
 // WorkoutView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
-import { useApp } from '../appContext.js';
+import { useApp } from '../appContext';
 import { effWR, intBadge } from '../data/programme';
 import { fmt, fmtShort } from '../lib/format';
 import { epley, totalLoad, volLoad } from '../lib/training';

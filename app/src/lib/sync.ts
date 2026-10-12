@@ -57,7 +57,7 @@ export function ensureIds<T extends Synced>(arr: T[] | null | undefined, kind: s
 
 export function live<T extends Synced>(arr: T[] | null | undefined): T[] { return (arr || []).filter(e => e && !e.deletedAt); }
 
-export function pruneTombstones<T extends Synced>(arr: T[] | null | undefined, days: number): T[] {
+export function pruneTombstones<T extends Synced>(arr: T[] | null | undefined, days?: number): T[] {   // default 90 days
   const cut = Date.now() - (days || 90) * 86400000;
   return (arr || []).filter(e => !e.deletedAt || e.deletedAt > cut);
 }

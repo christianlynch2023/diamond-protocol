@@ -1,0 +1,20 @@
+{
+  // Check for the whole app, including screens and App (Phase 3c).
+  // Starts loose, as lib/ did in Phase 3a; it gets stricter as App's state gets typed.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "types": []
+  },
+  "include": ["src"]
+}

@@ -3,7 +3,7 @@ import './boot.js';
 import './styles.css';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { App, RootBoundary } from './App.jsx';
+import { App, RootBoundary } from './App';
 
 createRoot(document.getElementById('root')).render(
   <RootBoundary>
