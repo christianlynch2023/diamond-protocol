@@ -4,3 +4,4 @@ import './bloods.test';
 import './whoop.test';
 import './training.test';
 import './analytics.test';
+import './ids.test';

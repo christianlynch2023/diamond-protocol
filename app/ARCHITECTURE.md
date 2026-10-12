@@ -66,7 +66,7 @@ method has no single before/after weight; they now read "+x% · N lifts".
 ## Tests (Phase 4)
 `tests/` holds the automated tests (Node's built-in test runner, run with `tsx`). `npm test` runs them;
 `npm run build` runs them after the type checks and before `vite build`, so a failing test stops the
-deploy. 38 tests cover sync merges and deletes, blood flags and ranges, WHOOP parsing (naps, local dates,
+deploy. 42 tests cover sync merges and deletes, ids for records saved before ids existed, blood flags and ranges, WHOOP parsing (naps, local dates,
 merging feeds), the progression engine (per-slot caps, deload sessions ignored), bodyweight helpers,
 the per-lift detrend, the recovery scatter, alcohol split and deload rebound.
 
@@ -75,3 +75,10 @@ time; every one made the suite fail. It also passes in timezones from UTC-11 to 
 
 To add a test: write `tests/<area>.test.ts` using `describe`/`it` from `node:test` and
 `assert` from `node:assert/strict`, then import it in `tests/all.test.ts`.
+
+## Record ids
+New records get a random id (`newId`). Records saved before ids existed get one from `contentIds()` in
+`lib/sync.ts`: built from the record's content (never its position in a list, which differs between
+devices), with identical records on the same day numbered so they stay separate. `ensureIds` (load and
+sync) and `tombstoneWhere` (deletes) both use it, so a record has the same id everywhere and a delete
+on one device carries across.

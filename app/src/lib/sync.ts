@@ -44,13 +44,29 @@ export function legacyId(e: Record<string, any>, kind: string, index?: number): 
   return 'lg_' + kind + '_' + hh.toString(36);
 }
 
+/** Ids for records saved before the app had ids, built from CONTENT, not list position.
+ *  Position differs between devices, so one record could get two ids: duplicates after a merge,
+ *  and deletes that didn't carry across. Identical records (two equal BP readings on one day) are
+ *  numbered in order, so they stay separate: the first gets the plain content id, later ones #1, #2...
+ *  Records that already have an id are left alone. */
+export function contentIds(arr: any[], kind: string): (string | null)[] {
+  const seen = new Map<string, number>();
+  return arr.map(e => {
+    if (!e || e.id) return null;
+    const base = legacyId(e, kind);
+    const n = seen.get(base) || 0; seen.set(base, n + 1);
+    return n === 0 ? base : legacyId(e, kind, n);
+  });
+}
+
 export function ensureIds<T extends Synced>(arr: T[] | null | undefined, kind: string): T[] | null | undefined {
   if (!Array.isArray(arr)) return arr;
   let changed = false;
+  const ids = contentIds(arr, kind);
   const out = arr.map((e, i) => {
     if (!e || e.id) return e;
     changed = true;
-    return { ...e, id: legacyId(e, kind, i), updatedAt: e.updatedAt != null ? e.updatedAt : 0 };
+    return { ...e, id: ids[i] as string, updatedAt: e.updatedAt != null ? e.updatedAt : 0 };
   });
   return changed ? out : arr;
 }
@@ -82,4 +98,14 @@ export function mergeByKey<T extends Synced>(a: T[] | null | undefined, b: T[] |
   const out = order.map(k => map.get(k));
   out.sort((x, y) => (x.date || '') < (y.date || '') ? 1 : -1);
   return out;
+}
+
+/** Marks matching records deleted (a tombstone the cloud merge can see) instead of removing them. */
+export function tombstoneWhere<T extends Synced>(arr: T[], kind: string, predicate: (e: T) => boolean, now: number = Date.now()): T[] {
+  const ids = contentIds(arr, kind);   // same ids ensureIds would give, so the delete matches across devices
+  return arr.map((e, i) => {
+    if (!predicate(e)) return e;
+    const id = e.id || (ids[i] as string);
+    return { ...e, id, deletedAt: now, updatedAt: now };
+  });
 }

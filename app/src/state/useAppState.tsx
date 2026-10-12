@@ -12,7 +12,7 @@ import { DECAY_COLORS, bpCategory, glucoseCategory, pkFor } from '../lib/health'
 import { computeDeloadReadiness, computeReadiness } from '../lib/readiness';
 import { computeActualVolume, computeBurnCheck, computeDeloadRebound, computeDurations, computePainTrend, computeRirDrift, computeStalls, computeStrengthRetention, computeTrainingLoad, sessionPerformed } from '../lib/sessions';
 import { IDB, LS } from '../lib/storage';
-import { ensureIds, legacyId, live, mergeByKey, mergeLogs, newId, pruneTombstones } from '../lib/sync';
+import { ensureIds, legacyId, live, mergeByKey, mergeLogs, newId, pruneTombstones, tombstoneWhere } from '../lib/sync';
 import { calcPlates, calcWarmups, dailyMedianWeights, epley, exMuscle, getPrevHist, getProgRec, getTarget, makeBwResolver, totalLoad, weekMuscleVolume, weeklyVolumeSeries } from '../lib/training';
 import { mergeHistory, parseWhoopCycles, parseWhoopHistory, parseWhoopSleeps, parseWhoopWorkouts } from '../lib/whoop';
 import type { ActiveTarget, BPReading, BloodForm, BloodPanel, BodyMetric, CardioEntry, CheckinPhoto, ContextEntry, GlucoseReading, Measurement, NutritionEntry, ProtocolEntry, SessionLog, SetEntry, SubstituteEntry, VitalsEntry, WhoopDay, WhoopWorkout } from '../types';
@@ -1253,11 +1253,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   // Deletion must write a TOMBSTONE, not just remove the row. A plain filter() was
   // invisible to the cloud merge, so the next pull found the record still present in the
   // cloud snapshot with no local counterpart and RESURRECTED it.
-  const tombstone = (setter, kind) => (predicate) => setter(prev => prev.map(e => {
-    if (!predicate(e)) return e;
-    const id = e.id || legacyId(e, kind);
-    return { ...e, id, deletedAt: Date.now(), updatedAt: Date.now() };
-  }));
+  const tombstone = (setter, kind) => (predicate) => setter(prev => tombstoneWhere(prev, kind, predicate));   // see lib/sync.ts
   // ---- Blood panel entry ----
   const bldEmptyRow = () => ({ k: '', v: '', unit: '', ref: '', g: 'Other', flag: 'auto' });
   const startBloodPanel = () => {
