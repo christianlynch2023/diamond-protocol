@@ -342,7 +342,8 @@ export function useAppState() {
   });
   // Progress tab groups. 17 analytics cards is too many to scan; grouping into three
   // collapsible bands keeps Week in review always visible and the rest one tap away.
-  const [grpClosed, setGrpClosed] = usePersistentState('prog_grp_closed', ['recovery','detail']);
+  // v2 (Phase 5): new sections, so a new key gives everyone the new defaults once. Strength open, Explore closed.
+  const [grpClosed, setGrpClosed] = usePersistentState<string[]>('prog_grp_closed_v2', ['training','recovery','coach']);
   const grpOpen = (id) => !(grpClosed||[]).includes(id);
   const toggleGrp = (id) => setGrpClosed(prev => {
     const arr = Array.isArray(prev) ? prev : [];
@@ -2309,7 +2310,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         'Check-in photos': ['checkin_photos'],
         'WHOOP': ['whoop_access_token','whoop_refresh_token','whoop_expires_at','whoop_cache','whoop_history','whoop_workouts'],
         'Sync & keys': ['sync_code'],
-        'App settings': ['meal_slot','body_sec_closed','prog_grp_closed','meal_day','meal_time'],
+        'App settings': ['meal_slot','body_sec_closed','prog_grp_closed','prog_grp_closed_v2','meal_day','meal_time'],
       };
       const sizeOf = k => { try { const v = localStorage.getItem(k); return v==null ? 0 : new Blob([v]).size; } catch(_) { return 0; } };
       const known = new Set(Object.values(cat).flat());

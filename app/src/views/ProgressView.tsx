@@ -78,6 +78,154 @@ export default function ProgressView() {
               </div>
             </div>
           )}
+          <div className="grp-head" onClick={()=>toggleGrp('strength')}><span className="grp-ttl">Strength</span><span className={'sec-chev'+(grpOpen('strength')?' op':'')}>▾</span></div>
+          {grpOpen('strength') && <>
+
+          <div className="ex-sel-wrap">
+            <div className="ex-sel-lbl">Select Exercise</div>
+            <select className="ex-sel" value={progEx||''} onChange={e=>setProgEx(e.target.value)}>
+              <option value="">Choose an exercise</option>
+              {ALL_EX.map(e => <option key={e.id} value={e.id}>{e.name} ({e.session})</option>)}
+            </select>
+          </div>
+
+          {progEx && progChartData.length > 1 && (
+            <>
+              <div className="metric-tog">
+                {[['e1rm','Est. 1RM'],['weight','Top set'],['volume','Volume']].map(([m,lbl])=>(
+                  <button key={m} className={`mtog-btn${progMetric===m?' on':''}`} onClick={()=>setProgMetric(m)}>{lbl}</button>
+                ))}
+              </div>
+              <div className="chart-area">
+                <div className="chart-lbl">{_metricLbl}</div>
+                <SVGChart data={progChartData} height={130}/>
+              </div>
+              <div className="pstats">
+                <div className="pst"><div className="pst-v">{prWeight}{_unit}</div><div className="pst-l">{_prLbl}</div></div>
+                <div className="pst"><div className="pst-v">{lastWeight}{_unit}</div><div className="pst-l">Last Session</div></div>
+                <div className="pst"><div className="pst-v">{progChartData.length}</div><div className="pst-l">Sessions</div></div>
+              </div>
+            </>
+          )}
+
+          {progEx && (
+            <div className="prog-hist">
+              {progHist.length===0
+                ? <div className="no-data">No data yet.<br/>Log a session to see progress.</div>
+                : progHist.map((h,i) => (
+                    <div key={i} className="ph-row">
+                      <span className="ph-dt">{fmtShort(h.date)}</span>
+                      <div className="ph-sets">{h.sets.map((s,j) => <span key={j} className="ph-s">{s.weight}&#215;{s.reps}</span>)}</div>
+                    </div>
+                  ))
+              }
+            </div>
+          )}
+
+          {!progEx && <div className="empty-msg">Select an exercise above to see your progression chart and history.</div>}
+
+          {stalls && stalls.progressing.length > 0 && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Progressing</span><span className="hm-wk">{stalls.progressing.length} lift{stalls.progressing.length===1?'':'s'}</span></div>
+              {stalls.progressing.slice(0,6).map(s=>(
+                <div key={s.id} className="st-row">
+                  <span className="st-name">{s.name}</span>
+                  <span className="st-e1">{s.bestRecent}<span className="st-u">kg e1RM</span></span>
+                  <span className="st-pct" style={{color:'var(--ok)'}}>+{s.pct}%</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {stalls && stalls.total > 0 && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Stalled lifts</span><span className="hm-wk">{stalls.stalled.length} of {stalls.total}</span></div>
+              {stalls.stalled.length > 0 ? (<>
+              <div className="av-note">Best e1RM in the last 2 sessions vs the sessions before. Deloads excluded. Under 1% improvement = stalled.</div>
+              {stalls.stalled.slice(0,8).map(s=>(
+                <div key={s.id} className="st-row">
+                  <span className="st-name">{s.name}<span className="dur-plan" style={{display:'block',textAlign:'left',minWidth:0,marginTop:1}}>{s.sessionsSincePeak>0?s.sessionsSincePeak+' since peak · now '+s.lastE1rm+'kg vs '+s.peakE1rm+'kg peak':'at peak'}</span></span>
+                  <span className="st-e1">{s.bestRecent}<span className="st-u">kg e1RM</span></span>
+                  <span className="st-pct" style={{color: s.pct < -2 ? 'var(--err)' : 'var(--warn)'}}>{s.pct>0?'+':''}{s.pct}%</span>
+                </div>
+              ))}
+              <div className="av-note" style={{marginTop:9,marginBottom:0}}>Fixes: drop to a back-off set and rebuild, change the rep range, swap to a fresh variation, or check recovery and sleep for that muscle. <b>On a cut a stall is often a win</b> — holding load while losing weight is retention. Act only if a lift stalls <b>and</b> bodyweight is stable.</div>
+              </>) : (
+                <div className="av-note" style={{marginBottom:0}}>No stalled lifts — everything with enough history is still progressing.</div>
+              )}
+            </div>
+          )}
+
+          {strengthRet && (() => {
+            const wrate = bwRate ? bwRate.perWeek : null;
+            const losing = wrate != null && wrate < -0.1;
+            const gaining = wrate != null && wrate > 0.1;
+            const sHeld = strengthRet.avgPct >= -1.5;
+            const sUp = strengthRet.avgPct > 1.5;
+            let verdict, vCls;
+            if (losing && sHeld) { verdict = sUp ? 'Losing weight while strength climbs — consistent with recomp. Strong signal, though estimated strength and scale mass are both noisy.' : 'Weight down, strength broadly held — consistent with retaining muscle and losing mostly fat. Not proof, but a good sign. Stay the course.'; vCls='var(--ok)'; }
+            else if (losing && !sHeld) { verdict = 'Weight AND strength dropping — you may be losing muscle. Check protein, sleep, and consider easing the deficit.'; vCls='var(--err)'; }
+            else if (gaining && sUp) { verdict = 'Weight and strength both up — consistent with a productive gain phase.'; vCls='var(--ok)'; }
+            else if (!losing && !gaining && sUp) { verdict = 'Weight flat, strength up — consistent with a slow recomp.'; vCls='var(--ok)'; }
+            else if (!losing && !gaining && !sHeld) { verdict = 'Weight flat but strength slipping — look at recovery and fuel around sessions.'; vCls='var(--warn)'; }
+            else { verdict = 'Strength holding. Keep watching the trend.'; vCls='var(--t2)'; }
+            return (
+              <div className="ar-card">
+                <div className="hm-head"><span className="hm-ttl">Strength retention</span><span className="hm-wk">21d vs prior 21d · e1RM</span></div>
+                <div style={{display:'flex',alignItems:'baseline',gap:10,marginBottom:6}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:strengthRet.avgPct>=-1.5?'var(--ok)':'var(--err)'}}>{strengthRet.avgPct>0?'+':''}{strengthRet.avgPct}%</span>
+                  {wrate!=null && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'var(--t2)'}}>weight {wrate>0?'+':''}{wrate.toFixed(2)} kg/wk</span>}
+                </div>
+                <div style={{fontSize:12,lineHeight:1.5,color:vCls,marginBottom:8}}>{verdict}</div>
+                <div className="ar-list">
+                  {strengthRet.lifts.map((l,i)=>(
+                    <div key={i} className="ar-row">
+                      <span className="ar-mus" style={{textTransform:'none'}}>{l.name}</span>
+                      <span className={`ar-chip ${l.pct>=1?'add':l.pct<=-2?'back':'hold'}`}>{l.pct>0?'+':''}{l.pct}% · {l.prior}→{l.recent}kg</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="ar-note">On a cut, holding e1RM while weight falls is consistent with losing mostly fat and retaining muscle (not proof — strength estimates are noisy). A drop bigger than ~2-3% across several lifts over 3 weeks is the earliest reliable sign the deficit is costing muscle.</div>
+              </div>
+            );
+          })()}
+
+          {movementPRs.length > 0 && (
+            <div style={{marginTop:16,background:'var(--crd)',border:'1px solid var(--bdr)',borderRadius:12,padding:14}}>
+              <div style={{fontSize:14,fontWeight:800,color:'var(--t)',marginBottom:2}}>Lifetime movement PRs</div>
+              <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.5,marginBottom:10}}>Best estimated 1RM for each movement, pooled across every programme slot it appears in. Read-only &#183; this does not change any session prescription.</div>
+              {movementPRs.map((m,i)=>(
+                <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'6px 0',borderTop:i?'1px solid var(--bdr)':'none'}}>
+                  <span style={{flex:1,fontSize:13,color:'var(--t)',fontWeight:600}}>{m.name}</span>
+                  <span style={{fontSize:13,color:'var(--acc)',fontWeight:800,fontFamily:"'JetBrains Mono',monospace"}}>{m.bestE1RM}kg</span>
+                  <span style={{fontSize:10,color:'var(--t3)',minWidth:118,textAlign:'right',fontFamily:"'JetBrains Mono',monospace"}}>{m.sessions} sess &#183; {fmtShort(m.lastDate)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="ar-card">
+            <div className="hm-head"><span className="hm-ttl">Autoregulation</span><span className="hm-wk">push when earned</span></div>
+            <div className="ar-list">
+              {Object.entries(MUSCLES).map(([key,mus])=>{
+                const a=autoReg[key]; if(!a) return null;
+                return (
+                  <div key={key} className="ar-row">
+                    <span className="ar-mus">{mus.name}</span>
+                    <span className={`ar-chip ${a.cls}`}>{a.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="ar-note">Add freely on isolation work while a muscle is progressing and recovery holds - no ceiling. Push compounds with load, not sets. Stop adding when a muscle stalls 2 sessions. Health markers override: red recovery or rising BP means hold regardless.</div>
+          </div>
+
+          </>}
+
+          {/* Phase 5: everything below is deeper analysis, collapsed by default so Progress leads with what matters today. */}
+          <div className="explore-lbl" style={{fontSize:10,fontWeight:800,letterSpacing:'.14em',textTransform:'uppercase',color:'var(--t3)',margin:'20px 2px 2px'}}>Explore</div>
+          <div style={{fontSize:11,color:'var(--t3)',margin:'0 2px 8px',lineHeight:1.5}}>Deeper analysis. Tap a section to open it.</div>
+
           <div className="grp-head" onClick={()=>toggleGrp('training')}><span className="grp-ttl">Training & volume</span><span className={'sec-chev'+(grpOpen('training')?' op':'')}>▾</span></div>
           {grpOpen('training') && <>
 
@@ -128,317 +276,6 @@ export default function ProgressView() {
             </div>
           )}
 
-          {!(durations && durations.series.length > 1) && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Session length</span><span className="hm-wk">not yet</span></div>
-              <div className="av-note" style={{marginBottom:0}}>Needs at least two completed sessions with a recorded duration.</div>
-            </div>
-          )}
-          {durations && durations.series.length > 1 && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Session length</span><span className="hm-wk">last {durations.series.length} · avg {durations.overall} min</span></div>
-              <SVGBars items={durations.types.map(t=>({label:t.name.replace('Upper','Up').replace('Lower','Low'),value:t.avg,lo:t.min,hi:t.max,sub:t.n+' sess'}))} color="#4a9eff" height={132} unit="min avg"/>
-              {durations.types.map(t=>{
-                return (
-                  <div key={t.key} className="dur-row">
-                    <span className="dur-name">{t.name}</span>
-                    <span className="dur-avg">{t.avg}<span className="st-u">min avg</span></span>
-                    <span className="dur-rng">{t.min}&ndash;{t.max}</span>
-                    {t.planned && <span className="dur-plan">plan {t.planned.replace(' min','')}</span>}
-                  </div>
-                );
-              })}
-              {durSplit && (
-                <div style={{marginTop:10,paddingTop:9,borderTop:'1px solid var(--bdr)'}}>
-                  <div className="mp-hd" style={{marginBottom:6}}>
-                    <span className="mp-ttl">Active vs rest &#183; last {durSplit.n}</span>
-                    <span className="mp-cals">{durSplit.wall} min wall</span>
-                  </div>
-                  <div style={{display:'flex',height:10,borderRadius:5,overflow:'hidden',background:'var(--sur)'}}>
-                    <div style={{width:(durSplit.wall?durSplit.active/durSplit.wall*100:0)+'%',background:'var(--acc)'}}/>
-                    <div style={{width:(durSplit.wall?durSplit.rest/durSplit.wall*100:0)+'%',background:'#4a9eff',opacity:0.6}}/>
-                  </div>
-                  <div style={{display:'flex',gap:14,marginTop:6,fontSize:10.5,color:'var(--t2)'}}>
-                    <span><b style={{color:'var(--acc)'}}>{durSplit.active} min</b> working</span>
-                    <span><b style={{color:'#4a9eff'}}>{durSplit.rest} min</b> resting</span>
-                  </div>
-                  <div className="av-note" style={{marginTop:7,marginBottom:0}}>This is wall-clock time minus logged rest — so it still includes setup, transitions and any unlogged breaks, not just working sets. Read it as session length, not pure effort time. Sessions logged before this was tracked are not included.</div>
-                </div>
-              )}
-              {durations.outliers > 0 && <div className="av-note" style={{marginTop:9,marginBottom:0}}>{durations.outliers} session{durations.outliers===1?'':'s'} over 150 min excluded from averages &#8212; almost certainly paused and resumed rather than genuinely that long.</div>}
-            </div>
-          )}
-
-          </>}
-          <div className="grp-head" onClick={()=>toggleGrp('recovery')}><span className="grp-ttl">Recovery & body</span><span className={'sec-chev'+(grpOpen('recovery')?' op':'')}>▾</span></div>
-          {grpOpen('recovery') && <>
-
-          {!recPerf && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Recovery vs performance</span><span className="hm-wk">not yet</span></div>
-              <div className="av-note" style={{marginBottom:0}}>Needs logged sessions on days with a WHOOP recovery score, across at least two recovery bands. Keep training and syncing &#8212; this fills in on its own.</div>
-            </div>
-          )}
-          {recPerf && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Recovery vs performance</span><span className="hm-wk">{recPerf.totalSessions} lift-sessions</span></div>
-              <div className="av-note">One point per session: WHOOP recovery that morning against mean e1RM relative to each lift's own average. Deloads excluded. Bands mark red / yellow / green.</div>
-              {recPerf.points && recPerf.points.length>=3 && (
-                <SVGScatter points={recPerf.points} color="#00e87a" height={155}
-                  xLabel="recovery %" yLabel="e1RM vs own avg" xMin={0} xMax={100}
-                  bands={[{from:0,to:34,color:'#ff4444'},{from:34,to:67,color:'#ffd24a'},{from:67,to:100,color:'#00e87a'}]}/>
-              )}
-              {([['high','Green (67%+)',recPerf.high,recPerf.highN],['mid','Yellow (34-66%)',recPerf.mid,recPerf.midN],['low','Red (under 34%)',recPerf.low,recPerf.lowN]] as [string, string, any, any][]).map(([k,lbl,v,n])=>(
-                <div key={k} className="st-row">
-                  <span className="st-name">{lbl}</span>
-                  <span className="st-e1">{n} session{n===1?'':'s'}</span>
-                  <span className="st-pct" style={{color: v==null?'var(--t3)': v>0.5?'var(--ok)': v<-0.5?'var(--warn)':'var(--t2)', opacity: recPerf.provisional?0.6:1}}>{v==null?'—':(v>0?'+':'')+v+'%'}</span>
-                </div>
-              ))}
-              <div className="av-note" style={{marginTop:9,marginBottom:0}}>
-                {recPerf.provisional && <><b>Early signal, not a verdict.</b> Gap is {recPerf.gap>0?'+':''}{recPerf.gap}% so far, but at least {recPerf.minVerdict} sessions in each band are needed before that means anything. Keep logging.</>}
-                {recPerf.verdict==='costly' && <>Green days out-perform low days by <b>{recPerf.gap}%</b>. Your recovery score is earning its place &#8212; respecting it is justified.</>}
-                {recPerf.verdict==='negligible' && <>Difference is only <b>{recPerf.gap}%</b> &#8212; within noise. On your data, recovery score is <b>not</b> predicting lift performance, which argues for trusting bar speed and RIR over the number.</>}
-                {recPerf.verdict==='inverse' && <>Low-recovery days score <b>higher</b> ({recPerf.gap}%). Almost certainly confounding &#8212; likely tren suppressing HRV on days you're actually fresh. Treat the recovery number with caution.</>}
-                {!recPerf.verdict && 'Not enough sessions in two recovery bands yet.'}
-              </div>
-            </div>
-          )}
-
-          {!timeOfDay && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Time of day</span><span className="hm-wk">not yet</span></div>
-              <div className="av-note" style={{marginBottom:0}}>Needs sessions logged across at least two time bands before start time can be compared.</div>
-            </div>
-          )}
-          {timeOfDay && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Time of day</span><span className="hm-wk">{timeOfDay.total} sessions</span></div>
-              <div className="av-note">Mean e1RM by when you actually started, relative to each lift&rsquo;s own average. Bands with fewer than 3 sessions show a count but no score.</div>
-              {timeOfDay.bands.map(b=>(
-                <div key={b.k} className="st-row">
-                  <span className="st-name">{b.label}<span className="dur-plan" style={{display:'block',textAlign:'left',minWidth:0,marginTop:1}}>{b.typical?'typically '+b.typical:b.sub}</span></span>
-                  <span className="st-e1">{b.sessions} sess</span>
-                  <span className="st-pct" style={{color: b.mean==null?'var(--t3)': b.mean>0.5?'var(--ok)': b.mean<-0.5?'var(--warn)':'var(--t2)'}}>{b.mean==null?'\u2014':(b.mean>0?'+':'')+b.mean+'%'}</span>
-                </div>
-              ))}
-              <div className="av-note" style={{marginTop:9,marginBottom:0}}>
-                {timeOfDay.provisional && <><b>Early signal, not a verdict.</b> {timeOfDay.better.label} is ahead by {timeOfDay.gap}% so far, but moving your training slot is a real change &#8212; it needs {timeOfDay.minVerdict}+ sessions in each band first ({timeOfDay.better.label} has {timeOfDay.better.sessions}, {timeOfDay.worse.label} has {timeOfDay.worse.sessions}).</>}
-                {timeOfDay.verdict==='clear' && <><b>{timeOfDay.better.label}</b> out-performs <b>{timeOfDay.worse.label}</b> by <b>{timeOfDay.gap}%</b> across your two most-used slots. Put your hardest sessions there where life allows.</>}
-                {timeOfDay.verdict==='nodiff' && <>Only <b>{timeOfDay.gap}%</b> between your two most-used slots &#8212; within noise. Train whenever adherence is easiest; consistency beats the clock.</>}
-                {!timeOfDay.verdict && 'Need 3+ sessions in at least two bands before comparing.'}
-              </div>
-            </div>
-          )}
-
-          {!alcoholImpact && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Alcohol vs lifting</span><span className="hm-wk">not yet</span></div>
-              <div className="av-note" style={{marginBottom:0}}>Needs alcohol units logged in Body &#8594; Context Flags, plus sessions on both drinking and clear days.</div>
-            </div>
-          )}
-          {alcoholImpact && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Alcohol vs lifting</span><span className="hm-wk">{alcoholImpact.drinkDays} day{alcoholImpact.drinkDays===1?'':'s'} logged</span></div>
-              <div className="av-note">Sessions on a drinking day or the day after, vs clear days. Deloads excluded.</div>
-              {[['clear','Clear days'],['after','Within 24h of alcohol']].map(([k,lbl])=>{
-                const b = alcoholImpact[k];
-                if (!b) return null;
-                return (
-                  <div key={k} className="st-row">
-                    <span className="st-name">{lbl}</span>
-                    <span className="st-e1">{b.sessions} session{b.sessions===1?'':'s'}</span>
-                    <span className="st-pct" style={{color: b.mean==null?'var(--t3)': b.mean>0.5?'var(--ok)': b.mean<-0.5?'var(--warn)':'var(--t2)'}}>{b.mean==null?'\u2014':(b.mean>0?'+':'')+b.mean+'%'}</span>
-                  </div>
-                );
-              })}
-              <div className="av-note" style={{marginTop:9,marginBottom:0}}>
-                {alcoholImpact.provisional && <><b>Early signal, not a verdict.</b> Difference is {alcoholImpact.gap>0?'+':''}{alcoholImpact.gap}% so far ({alcoholImpact.after.sessions} sessions after drinking vs {alcoholImpact.clear.sessions} clear). Needs {alcoholImpact.minVerdict}+ in each before drawing a conclusion.</>}
-                {alcoholImpact.verdict==='costly' && <>Lifting is <b>{Math.abs(alcoholImpact.gap)}%</b> down within 24h of drinking. That is your own data, not a general claim &#8212; worth weighing against training days.</>}
-                {alcoholImpact.verdict==='negligible' && <>Difference is <b>{Math.abs(alcoholImpact.gap)}%</b> &#8212; within noise at this sample size. Note that alcohol affects sleep, recovery and protein synthesis whether or not the bar notices.</>}
-                {alcoholImpact.verdict==='inverse' && <>Sessions after drinking score <b>higher</b>, which is almost certainly confounding (weekend sessions, more rest beforehand) rather than a real effect.</>}
-                {!alcoholImpact.verdict && 'Need at least 3 sessions in each group to compare.'}
-              </div>
-            </div>
-          )}
-
-          {painTrend && painTrend.flagged.length > 0 && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Joint pain by lift</span><span className="hm-wk">{painTrend.overallRate}% of exercise-sessions</span></div>
-              <div className="av-note">Which lifts repeatedly produce pain. One niggle is noise; a lift flagging most sessions is telling you to change the movement, not push through it.</div>
-              {painTrend.flagged.slice(0,8).map(p=>(
-                <div key={p.id} className="st-row">
-                  <span className="st-name">{p.name}{p.severity==='sharp'&&<span className="h-pain sharp" style={{marginLeft:6}}>sharp</span>}</span>
-                  <span className="st-e1">{p.painCount}/{p.sessions}</span>
-                  <span className="st-pct" style={{color: p.rate>=60?'var(--err)':p.rate>=30?'var(--warn)':'var(--t2)'}}>{p.rate}%</span>
-                  <span className="dur-plan" style={{color: p.dir==='worsening'?'var(--err)':p.dir==='improving'?'var(--ok)':'var(--t3)'}}>{p.dir==='worsening'?'▲ worse':p.dir==='improving'?'▼ better':'→ flat'}</span>
-                </div>
-              ))}
-              <div className="av-note" style={{marginTop:9,marginBottom:0}}>Anything sharp, or over 60% and worsening, should be swapped for a variation rather than loaded through. Persistent joint pain is worth raising with a physio.</div>
-            </div>
-          )}
-
-          {trainLoad && trainLoad.weeksOfData >= 2 && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Training load</span><span className="hm-wk">weekly tonnage</span></div>
-              <SVGChart data={trainLoad.series.map(b=>({x:b.weeksAgo===0?'now':b.weeksAgo+'w',y:Math.round(b.tonnage/1000)}))} height={110} color="#a479e2"/>
-              <div className="st-row"><span className="st-name">This week</span><span className="st-e1">{Math.round(trainLoad.acute/1000)}k kg</span><span className="st-pct" style={{color:'var(--t2)'}}>{trainLoad.series[trainLoad.series.length-1].sessions} sess</span></div>
-              {trainLoad.chronic!=null && <div className="st-row"><span className="st-name">4-week average</span><span className="st-e1">{Math.round(trainLoad.chronic/1000)}k kg</span><span className="st-pct" style={{color: trainLoad.verdict==='spike'?'var(--warn)':trainLoad.verdict==='drop'?'var(--inf)':'var(--ok)'}}>{trainLoad.ratio}&#215;</span></div>}
-              <div className="av-note" style={{marginTop:9,marginBottom:0}}>
-                {trainLoad.verdict==='spike' && <>This week is <b>{trainLoad.ratio}&#215;</b> your recent norm &#8212; a sharp jump. Not inherently bad, but pair it with a genuinely easier week rather than stacking another.</>}
-                {trainLoad.verdict==='drop' && <>This week is <b>{trainLoad.ratio}&#215;</b> your recent norm. Fine if deliberate (deload, illness, travel); worth a look if not.</>}
-                {trainLoad.verdict==='steady' && <>Load is steady at <b>{trainLoad.ratio}&#215;</b> your 4-week norm &#8212; consistent progression rather than lurching.</>}
-                {!trainLoad.verdict && 'Need a few more weeks before the ratio means anything.'}
-                <br/><span style={{color:'var(--t3)'}}>Descriptive only. Acute:chronic ratios were popularised for injury prediction and that claim has not held up well &#8212; read this as &quot;load vs my norm&quot;, not a risk score.</span>
-              </div>
-            </div>
-          )}
-
-          {stalls && stalls.total > 0 && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Stalled lifts</span><span className="hm-wk">{stalls.stalled.length} of {stalls.total}</span></div>
-              {stalls.stalled.length > 0 ? (<>
-              <div className="av-note">Best e1RM in the last 2 sessions vs the sessions before. Deloads excluded. Under 1% improvement = stalled.</div>
-              {stalls.stalled.slice(0,8).map(s=>(
-                <div key={s.id} className="st-row">
-                  <span className="st-name">{s.name}<span className="dur-plan" style={{display:'block',textAlign:'left',minWidth:0,marginTop:1}}>{s.sessionsSincePeak>0?s.sessionsSincePeak+' since peak · now '+s.lastE1rm+'kg vs '+s.peakE1rm+'kg peak':'at peak'}</span></span>
-                  <span className="st-e1">{s.bestRecent}<span className="st-u">kg e1RM</span></span>
-                  <span className="st-pct" style={{color: s.pct < -2 ? 'var(--err)' : 'var(--warn)'}}>{s.pct>0?'+':''}{s.pct}%</span>
-                </div>
-              ))}
-              <div className="av-note" style={{marginTop:9,marginBottom:0}}>Fixes: drop to a back-off set and rebuild, change the rep range, swap to a fresh variation, or check recovery and sleep for that muscle. <b>On a cut a stall is often a win</b> — holding load while losing weight is retention. Act only if a lift stalls <b>and</b> bodyweight is stable.</div>
-              </>) : (
-                <div className="av-note" style={{marginBottom:0}}>No stalled lifts — everything with enough history is still progressing.</div>
-              )}
-            </div>
-          )}
-
-          {stalls && stalls.progressing.length > 0 && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Progressing</span><span className="hm-wk">{stalls.progressing.length} lift{stalls.progressing.length===1?'':'s'}</span></div>
-              {stalls.progressing.slice(0,6).map(s=>(
-                <div key={s.id} className="st-row">
-                  <span className="st-name">{s.name}</span>
-                  <span className="st-e1">{s.bestRecent}<span className="st-u">kg e1RM</span></span>
-                  <span className="st-pct" style={{color:'var(--ok)'}}>+{s.pct}%</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {burnCheck && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Burn cross-check</span><span className="hm-wk">WHOOP vs empirical</span></div>
-              <div style={{display:'flex',alignItems:'baseline',gap:10,marginBottom:6,fontFamily:"'JetBrains Mono',monospace"}}>
-                <span style={{fontSize:22,fontWeight:700,color:'var(--t)'}}>{burnCheck.avg}</span>
-                <span style={{fontSize:12,color:'var(--t3)'}}>WHOOP</span>
-                <span style={{fontSize:22,fontWeight:700,color:'var(--acc)'}}>{burnCheck.tdee}</span>
-                <span style={{fontSize:12,color:'var(--t3)'}}>empirical</span>
-              </div>
-              <div style={{fontSize:12,lineHeight:1.5,color:burnCheck.agree?'var(--ok)':'var(--warn)'}}>
-                {burnCheck.agree
-                  ? `Within ${Math.abs(burnCheck.gap)} kcal across ${burnCheck.days} completed days — the two independent methods agree, so treat the maintenance figure as solid.`
-                  : `${burnCheck.gap>0?'WHOOP reads '+burnCheck.gap+' kcal HIGHER':'WHOOP reads '+Math.abs(burnCheck.gap)+' kcal LOWER'} than your intake-vs-weight maintenance across ${burnCheck.days} days. Trust the empirical figure — it is derived from what actually happened to your weight. Wearable burn estimates are commonly out by 10-20%.`}
-              </div>
-              <div className="ar-note">Uses only completed WHOOP cycles (true full-day burns), never the in-progress cycle. Needs 5+ complete days, so it fills in over the next week.</div>
-            </div>
-          )}
-          {deloadRebound && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Deload rebound</span><span className="hm-wk">week after vs week before</span></div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:deloadRebound.avg>=1?'var(--ok)':deloadRebound.avg<=-1?'var(--err)':'var(--t2)',marginBottom:6}}>
-                {deloadRebound.avg>0?'+':''}{deloadRebound.avg}%
-              </div>
-              <div style={{fontSize:12,lineHeight:1.5,color:'var(--t2)',marginBottom:8}}>
-                {deloadRebound.avg>=1?'Your deloads are paying off — strength comes back higher than it went in. Keep taking them.'
-                 :deloadRebound.avg<=-1?'Strength is coming back LOWER after deloads. Either the deload is too deep, or you were not fatigued enough to need it. Consider training through the next one.'
-                 :'Flat. Deloads are neither helping nor hurting measurably yet — more events needed before this is decisive.'}
-              </div>
-              <div className="ar-list">
-                {deloadRebound.events.map((e,i)=>(
-                  <div key={i} className="ar-row">
-                    <span className="ar-mus" style={{textTransform:'none'}}>Block {e.block} · wk {e.week}</span>
-                    <span className={`ar-chip ${e.pct>=1?'add':e.pct<=-1?'back':'hold'}`}>{e.pct>0?'+':''}{e.pct}% · {e.lifts} lift{e.lifts===1?'':'s'}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="ar-note">Compares best e1RM on tracked compounds the week after each deload against the week before it. Needs logged sessions either side, so it fills in as blocks complete. Deload weeks themselves are excluded.</div>
-            </div>
-          )}
-          {rirDrift && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">RIR drift</span><span className="hm-wk">logged vs prescribed</span></div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:Math.abs(rirDrift.avg)<=0.5?'var(--ok)':rirDrift.avg>0.5?'var(--warn)':'var(--inf)',marginBottom:6}}>
-                {rirDrift.avg>0?'+':''}{rirDrift.avg}
-              </div>
-              <div style={{fontSize:12,lineHeight:1.5,color:'var(--t2)',marginBottom:8}}>
-                {Math.abs(rirDrift.avg)<=0.5?'Logged effort matches the prescription. Your RIR targets are being hit honestly.'
-                 :rirDrift.avg>0.5?'You are logging further from failure than the effective target by about '+rirDrift.avg.toFixed(1)+' reps. That can be right (pain, technique, a protected lift) — but if not, push closer or check you are not carrying a wrong default RIR.'
-                 :'You are training HARDER than prescribed by about '+Math.abs(rirDrift.avg).toFixed(1)+' reps. Fine occasionally; sustained, it accumulates fatigue faster than the block plans for.'}
-              </div>
-              <div className="ar-list">
-                {rirDrift.rows.slice(-6).map((r,i)=>(
-                  <div key={i} className="ar-row">
-                    <span className="ar-mus" style={{textTransform:'none'}}>Week {r.week} <span style={{color:'var(--t3)'}}>(target {r.target}, {r.n} sets)</span></span>
-                    <span className={`ar-chip ${Math.abs(r.drift)<=0.5?'hold':r.drift>0.5?'back':'load'}`}>{r.drift>0?'+':''}{r.drift}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="ar-note">Positive = logging more reps in reserve than programmed. Negative = training closer to failure than programmed. Deload weeks are compared against their own target, and trained-through weeks against 1-2 RIR.</div>
-            </div>
-          )}
-          {strengthRet && (() => {
-            const wrate = bwRate ? bwRate.perWeek : null;
-            const losing = wrate != null && wrate < -0.1;
-            const gaining = wrate != null && wrate > 0.1;
-            const sHeld = strengthRet.avgPct >= -1.5;
-            const sUp = strengthRet.avgPct > 1.5;
-            let verdict, vCls;
-            if (losing && sHeld) { verdict = sUp ? 'Losing weight while strength climbs — consistent with recomp. Strong signal, though estimated strength and scale mass are both noisy.' : 'Weight down, strength broadly held — consistent with retaining muscle and losing mostly fat. Not proof, but a good sign. Stay the course.'; vCls='var(--ok)'; }
-            else if (losing && !sHeld) { verdict = 'Weight AND strength dropping — you may be losing muscle. Check protein, sleep, and consider easing the deficit.'; vCls='var(--err)'; }
-            else if (gaining && sUp) { verdict = 'Weight and strength both up — consistent with a productive gain phase.'; vCls='var(--ok)'; }
-            else if (!losing && !gaining && sUp) { verdict = 'Weight flat, strength up — consistent with a slow recomp.'; vCls='var(--ok)'; }
-            else if (!losing && !gaining && !sHeld) { verdict = 'Weight flat but strength slipping — look at recovery and fuel around sessions.'; vCls='var(--warn)'; }
-            else { verdict = 'Strength holding. Keep watching the trend.'; vCls='var(--t2)'; }
-            return (
-              <div className="ar-card">
-                <div className="hm-head"><span className="hm-ttl">Strength retention</span><span className="hm-wk">21d vs prior 21d · e1RM</span></div>
-                <div style={{display:'flex',alignItems:'baseline',gap:10,marginBottom:6}}>
-                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:strengthRet.avgPct>=-1.5?'var(--ok)':'var(--err)'}}>{strengthRet.avgPct>0?'+':''}{strengthRet.avgPct}%</span>
-                  {wrate!=null && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'var(--t2)'}}>weight {wrate>0?'+':''}{wrate.toFixed(2)} kg/wk</span>}
-                </div>
-                <div style={{fontSize:12,lineHeight:1.5,color:vCls,marginBottom:8}}>{verdict}</div>
-                <div className="ar-list">
-                  {strengthRet.lifts.map((l,i)=>(
-                    <div key={i} className="ar-row">
-                      <span className="ar-mus" style={{textTransform:'none'}}>{l.name}</span>
-                      <span className={`ar-chip ${l.pct>=1?'add':l.pct<=-2?'back':'hold'}`}>{l.pct>0?'+':''}{l.pct}% · {l.prior}→{l.recent}kg</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="ar-note">On a cut, holding e1RM while weight falls is consistent with losing mostly fat and retaining muscle (not proof — strength estimates are noisy). A drop bigger than ~2-3% across several lifts over 3 weeks is the earliest reliable sign the deficit is costing muscle.</div>
-              </div>
-            );
-          })()}
-          <div className="ar-card">
-            <div className="hm-head"><span className="hm-ttl">Autoregulation</span><span className="hm-wk">push when earned</span></div>
-            <div className="ar-list">
-              {Object.entries(MUSCLES).map(([key,mus])=>{
-                const a=autoReg[key]; if(!a) return null;
-                return (
-                  <div key={key} className="ar-row">
-                    <span className="ar-mus">{mus.name}</span>
-                    <span className={`ar-chip ${a.cls}`}>{a.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="ar-note">Add freely on isolation work while a muscle is progressing and recovery holds - no ceiling. Push compounds with load, not sets. Stop adding when a muscle stalls 2 sessions. Health markers override: red recovery or rising BP means hold regardless.</div>
-          </div>
-          </>}
-          <div className="grp-head" onClick={()=>toggleGrp('detail')}><span className="grp-ttl">Detail & coach review</span><span className={'sec-chev'+(grpOpen('detail')?' op':'')}>▾</span></div>
-          {grpOpen('detail') && <>
-
           <div className="mv-sec">
             <div className="mv-head">
               <span className="mv-ttl">Weekly Volume</span>
@@ -476,6 +313,116 @@ export default function ProgressView() {
                 : <div className="mv-empty">Log at least two weeks to see the trend.</div>}
             </div>
           </div>
+
+          {!(durations && durations.series.length > 1) && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Session length</span><span className="hm-wk">not yet</span></div>
+              <div className="av-note" style={{marginBottom:0}}>Needs at least two completed sessions with a recorded duration.</div>
+            </div>
+          )}
+
+          {durations && durations.series.length > 1 && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Session length</span><span className="hm-wk">last {durations.series.length} · avg {durations.overall} min</span></div>
+              <SVGBars items={durations.types.map(t=>({label:t.name.replace('Upper','Up').replace('Lower','Low'),value:t.avg,lo:t.min,hi:t.max,sub:t.n+' sess'}))} color="#4a9eff" height={132} unit="min avg"/>
+              {durations.types.map(t=>{
+                return (
+                  <div key={t.key} className="dur-row">
+                    <span className="dur-name">{t.name}</span>
+                    <span className="dur-avg">{t.avg}<span className="st-u">min avg</span></span>
+                    <span className="dur-rng">{t.min}&ndash;{t.max}</span>
+                    {t.planned && <span className="dur-plan">plan {t.planned.replace(' min','')}</span>}
+                  </div>
+                );
+              })}
+              {durSplit && (
+                <div style={{marginTop:10,paddingTop:9,borderTop:'1px solid var(--bdr)'}}>
+                  <div className="mp-hd" style={{marginBottom:6}}>
+                    <span className="mp-ttl">Active vs rest &#183; last {durSplit.n}</span>
+                    <span className="mp-cals">{durSplit.wall} min wall</span>
+                  </div>
+                  <div style={{display:'flex',height:10,borderRadius:5,overflow:'hidden',background:'var(--sur)'}}>
+                    <div style={{width:(durSplit.wall?durSplit.active/durSplit.wall*100:0)+'%',background:'var(--acc)'}}/>
+                    <div style={{width:(durSplit.wall?durSplit.rest/durSplit.wall*100:0)+'%',background:'#4a9eff',opacity:0.6}}/>
+                  </div>
+                  <div style={{display:'flex',gap:14,marginTop:6,fontSize:10.5,color:'var(--t2)'}}>
+                    <span><b style={{color:'var(--acc)'}}>{durSplit.active} min</b> working</span>
+                    <span><b style={{color:'#4a9eff'}}>{durSplit.rest} min</b> resting</span>
+                  </div>
+                  <div className="av-note" style={{marginTop:7,marginBottom:0}}>This is wall-clock time minus logged rest — so it still includes setup, transitions and any unlogged breaks, not just working sets. Read it as session length, not pure effort time. Sessions logged before this was tracked are not included.</div>
+                </div>
+              )}
+              {durations.outliers > 0 && <div className="av-note" style={{marginTop:9,marginBottom:0}}>{durations.outliers} session{durations.outliers===1?'':'s'} over 150 min excluded from averages &#8212; almost certainly paused and resumed rather than genuinely that long.</div>}
+            </div>
+          )}
+
+          {trainLoad && trainLoad.weeksOfData >= 2 && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Training load</span><span className="hm-wk">weekly tonnage</span></div>
+              <SVGChart data={trainLoad.series.map(b=>({x:b.weeksAgo===0?'now':b.weeksAgo+'w',y:Math.round(b.tonnage/1000)}))} height={110} color="#a479e2"/>
+              <div className="st-row"><span className="st-name">This week</span><span className="st-e1">{Math.round(trainLoad.acute/1000)}k kg</span><span className="st-pct" style={{color:'var(--t2)'}}>{trainLoad.series[trainLoad.series.length-1].sessions} sess</span></div>
+              {trainLoad.chronic!=null && <div className="st-row"><span className="st-name">4-week average</span><span className="st-e1">{Math.round(trainLoad.chronic/1000)}k kg</span><span className="st-pct" style={{color: trainLoad.verdict==='spike'?'var(--warn)':trainLoad.verdict==='drop'?'var(--inf)':'var(--ok)'}}>{trainLoad.ratio}&#215;</span></div>}
+              <div className="av-note" style={{marginTop:9,marginBottom:0}}>
+                {trainLoad.verdict==='spike' && <>This week is <b>{trainLoad.ratio}&#215;</b> your recent norm &#8212; a sharp jump. Not inherently bad, but pair it with a genuinely easier week rather than stacking another.</>}
+                {trainLoad.verdict==='drop' && <>This week is <b>{trainLoad.ratio}&#215;</b> your recent norm. Fine if deliberate (deload, illness, travel); worth a look if not.</>}
+                {trainLoad.verdict==='steady' && <>Load is steady at <b>{trainLoad.ratio}&#215;</b> your 4-week norm &#8212; consistent progression rather than lurching.</>}
+                {!trainLoad.verdict && 'Need a few more weeks before the ratio means anything.'}
+                <br/><span style={{color:'var(--t3)'}}>Descriptive only. Acute:chronic ratios were popularised for injury prediction and that claim has not held up well &#8212; read this as &quot;load vs my norm&quot;, not a risk score.</span>
+              </div>
+            </div>
+          )}
+
+          {rirDrift && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">RIR drift</span><span className="hm-wk">logged vs prescribed</span></div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:Math.abs(rirDrift.avg)<=0.5?'var(--ok)':rirDrift.avg>0.5?'var(--warn)':'var(--inf)',marginBottom:6}}>
+                {rirDrift.avg>0?'+':''}{rirDrift.avg}
+              </div>
+              <div style={{fontSize:12,lineHeight:1.5,color:'var(--t2)',marginBottom:8}}>
+                {Math.abs(rirDrift.avg)<=0.5?'Logged effort matches the prescription. Your RIR targets are being hit honestly.'
+                 :rirDrift.avg>0.5?'You are logging further from failure than the effective target by about '+rirDrift.avg.toFixed(1)+' reps. That can be right (pain, technique, a protected lift) — but if not, push closer or check you are not carrying a wrong default RIR.'
+                 :'You are training HARDER than prescribed by about '+Math.abs(rirDrift.avg).toFixed(1)+' reps. Fine occasionally; sustained, it accumulates fatigue faster than the block plans for.'}
+              </div>
+              <div className="ar-list">
+                {rirDrift.rows.slice(-6).map((r,i)=>(
+                  <div key={i} className="ar-row">
+                    <span className="ar-mus" style={{textTransform:'none'}}>Week {r.week} <span style={{color:'var(--t3)'}}>(target {r.target}, {r.n} sets)</span></span>
+                    <span className={`ar-chip ${Math.abs(r.drift)<=0.5?'hold':r.drift>0.5?'back':'load'}`}>{r.drift>0?'+':''}{r.drift}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="ar-note">Positive = logging more reps in reserve than programmed. Negative = training closer to failure than programmed. Deload weeks are compared against their own target, and trained-through weeks against 1-2 RIR.</div>
+            </div>
+          )}
+
+          {deloadRebound && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Deload rebound</span><span className="hm-wk">week after vs week before</span></div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:deloadRebound.avg>=1?'var(--ok)':deloadRebound.avg<=-1?'var(--err)':'var(--t2)',marginBottom:6}}>
+                {deloadRebound.avg>0?'+':''}{deloadRebound.avg}%
+              </div>
+              <div style={{fontSize:12,lineHeight:1.5,color:'var(--t2)',marginBottom:8}}>
+                {deloadRebound.avg>=1?'Your deloads are paying off — strength comes back higher than it went in. Keep taking them.'
+                 :deloadRebound.avg<=-1?'Strength is coming back LOWER after deloads. Either the deload is too deep, or you were not fatigued enough to need it. Consider training through the next one.'
+                 :'Flat. Deloads are neither helping nor hurting measurably yet — more events needed before this is decisive.'}
+              </div>
+              <div className="ar-list">
+                {deloadRebound.events.map((e,i)=>(
+                  <div key={i} className="ar-row">
+                    <span className="ar-mus" style={{textTransform:'none'}}>Block {e.block} · wk {e.week}</span>
+                    <span className={`ar-chip ${e.pct>=1?'add':e.pct<=-1?'back':'hold'}`}>{e.pct>0?'+':''}{e.pct}% · {e.lifts} lift{e.lifts===1?'':'s'}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="ar-note">Compares best e1RM on tracked compounds the week after each deload against the week before it. Needs logged sessions either side, so it fills in as blocks complete. Deload weeks themselves are excluded.</div>
+            </div>
+          )}
+
+          </>}
+
+          <div className="grp-head" onClick={()=>toggleGrp('recovery')}><span className="grp-ttl">Recovery & lifestyle</span><span className={'sec-chev'+(grpOpen('recovery')?' op':'')}>▾</span></div>
+          {grpOpen('recovery') && <>
+
           <div className="rec-trend-sec">
             <div className="mv-head">
               <span className="mv-ttl">Recovery & Fatigue</span>
@@ -564,6 +511,138 @@ export default function ProgressView() {
               </>
             )}
           </div>
+
+          {!recPerf && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Recovery vs performance</span><span className="hm-wk">not yet</span></div>
+              <div className="av-note" style={{marginBottom:0}}>Needs logged sessions on days with a WHOOP recovery score, across at least two recovery bands. Keep training and syncing &#8212; this fills in on its own.</div>
+            </div>
+          )}
+
+          {recPerf && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Recovery vs performance</span><span className="hm-wk">{recPerf.totalSessions} lift-sessions</span></div>
+              <div className="av-note">One point per session: WHOOP recovery that morning against mean e1RM relative to each lift's own average. Deloads excluded. Bands mark red / yellow / green.</div>
+              {recPerf.points && recPerf.points.length>=3 && (
+                <SVGScatter points={recPerf.points} color="#00e87a" height={155}
+                  xLabel="recovery %" yLabel="e1RM vs own avg" xMin={0} xMax={100}
+                  bands={[{from:0,to:34,color:'#ff4444'},{from:34,to:67,color:'#ffd24a'},{from:67,to:100,color:'#00e87a'}]}/>
+              )}
+              {([['high','Green (67%+)',recPerf.high,recPerf.highN],['mid','Yellow (34-66%)',recPerf.mid,recPerf.midN],['low','Red (under 34%)',recPerf.low,recPerf.lowN]] as [string, string, any, any][]).map(([k,lbl,v,n])=>(
+                <div key={k} className="st-row">
+                  <span className="st-name">{lbl}</span>
+                  <span className="st-e1">{n} session{n===1?'':'s'}</span>
+                  <span className="st-pct" style={{color: v==null?'var(--t3)': v>0.5?'var(--ok)': v<-0.5?'var(--warn)':'var(--t2)', opacity: recPerf.provisional?0.6:1}}>{v==null?'—':(v>0?'+':'')+v+'%'}</span>
+                </div>
+              ))}
+              <div className="av-note" style={{marginTop:9,marginBottom:0}}>
+                {recPerf.provisional && <><b>Early signal, not a verdict.</b> Gap is {recPerf.gap>0?'+':''}{recPerf.gap}% so far, but at least {recPerf.minVerdict} sessions in each band are needed before that means anything. Keep logging.</>}
+                {recPerf.verdict==='costly' && <>Green days out-perform low days by <b>{recPerf.gap}%</b>. Your recovery score is earning its place &#8212; respecting it is justified.</>}
+                {recPerf.verdict==='negligible' && <>Difference is only <b>{recPerf.gap}%</b> &#8212; within noise. On your data, recovery score is <b>not</b> predicting lift performance, which argues for trusting bar speed and RIR over the number.</>}
+                {recPerf.verdict==='inverse' && <>Low-recovery days score <b>higher</b> ({recPerf.gap}%). Almost certainly confounding &#8212; likely tren suppressing HRV on days you're actually fresh. Treat the recovery number with caution.</>}
+                {!recPerf.verdict && 'Not enough sessions in two recovery bands yet.'}
+              </div>
+            </div>
+          )}
+
+          {!timeOfDay && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Time of day</span><span className="hm-wk">not yet</span></div>
+              <div className="av-note" style={{marginBottom:0}}>Needs sessions logged across at least two time bands before start time can be compared.</div>
+            </div>
+          )}
+
+          {timeOfDay && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Time of day</span><span className="hm-wk">{timeOfDay.total} sessions</span></div>
+              <div className="av-note">Mean e1RM by when you actually started, relative to each lift&rsquo;s own average. Bands with fewer than 3 sessions show a count but no score.</div>
+              {timeOfDay.bands.map(b=>(
+                <div key={b.k} className="st-row">
+                  <span className="st-name">{b.label}<span className="dur-plan" style={{display:'block',textAlign:'left',minWidth:0,marginTop:1}}>{b.typical?'typically '+b.typical:b.sub}</span></span>
+                  <span className="st-e1">{b.sessions} sess</span>
+                  <span className="st-pct" style={{color: b.mean==null?'var(--t3)': b.mean>0.5?'var(--ok)': b.mean<-0.5?'var(--warn)':'var(--t2)'}}>{b.mean==null?'\u2014':(b.mean>0?'+':'')+b.mean+'%'}</span>
+                </div>
+              ))}
+              <div className="av-note" style={{marginTop:9,marginBottom:0}}>
+                {timeOfDay.provisional && <><b>Early signal, not a verdict.</b> {timeOfDay.better.label} is ahead by {timeOfDay.gap}% so far, but moving your training slot is a real change &#8212; it needs {timeOfDay.minVerdict}+ sessions in each band first ({timeOfDay.better.label} has {timeOfDay.better.sessions}, {timeOfDay.worse.label} has {timeOfDay.worse.sessions}).</>}
+                {timeOfDay.verdict==='clear' && <><b>{timeOfDay.better.label}</b> out-performs <b>{timeOfDay.worse.label}</b> by <b>{timeOfDay.gap}%</b> across your two most-used slots. Put your hardest sessions there where life allows.</>}
+                {timeOfDay.verdict==='nodiff' && <>Only <b>{timeOfDay.gap}%</b> between your two most-used slots &#8212; within noise. Train whenever adherence is easiest; consistency beats the clock.</>}
+                {!timeOfDay.verdict && 'Need 3+ sessions in at least two bands before comparing.'}
+              </div>
+            </div>
+          )}
+
+          {!alcoholImpact && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Alcohol vs lifting</span><span className="hm-wk">not yet</span></div>
+              <div className="av-note" style={{marginBottom:0}}>Needs alcohol units logged in Body &#8594; Context Flags, plus sessions on both drinking and clear days.</div>
+            </div>
+          )}
+
+          {alcoholImpact && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Alcohol vs lifting</span><span className="hm-wk">{alcoholImpact.drinkDays} day{alcoholImpact.drinkDays===1?'':'s'} logged</span></div>
+              <div className="av-note">Sessions on a drinking day or the day after, vs clear days. Deloads excluded.</div>
+              {[['clear','Clear days'],['after','Within 24h of alcohol']].map(([k,lbl])=>{
+                const b = alcoholImpact[k];
+                if (!b) return null;
+                return (
+                  <div key={k} className="st-row">
+                    <span className="st-name">{lbl}</span>
+                    <span className="st-e1">{b.sessions} session{b.sessions===1?'':'s'}</span>
+                    <span className="st-pct" style={{color: b.mean==null?'var(--t3)': b.mean>0.5?'var(--ok)': b.mean<-0.5?'var(--warn)':'var(--t2)'}}>{b.mean==null?'\u2014':(b.mean>0?'+':'')+b.mean+'%'}</span>
+                  </div>
+                );
+              })}
+              <div className="av-note" style={{marginTop:9,marginBottom:0}}>
+                {alcoholImpact.provisional && <><b>Early signal, not a verdict.</b> Difference is {alcoholImpact.gap>0?'+':''}{alcoholImpact.gap}% so far ({alcoholImpact.after.sessions} sessions after drinking vs {alcoholImpact.clear.sessions} clear). Needs {alcoholImpact.minVerdict}+ in each before drawing a conclusion.</>}
+                {alcoholImpact.verdict==='costly' && <>Lifting is <b>{Math.abs(alcoholImpact.gap)}%</b> down within 24h of drinking. That is your own data, not a general claim &#8212; worth weighing against training days.</>}
+                {alcoholImpact.verdict==='negligible' && <>Difference is <b>{Math.abs(alcoholImpact.gap)}%</b> &#8212; within noise at this sample size. Note that alcohol affects sleep, recovery and protein synthesis whether or not the bar notices.</>}
+                {alcoholImpact.verdict==='inverse' && <>Sessions after drinking score <b>higher</b>, which is almost certainly confounding (weekend sessions, more rest beforehand) rather than a real effect.</>}
+                {!alcoholImpact.verdict && 'Need at least 3 sessions in each group to compare.'}
+              </div>
+            </div>
+          )}
+
+          {painTrend && painTrend.flagged.length > 0 && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Joint pain by lift</span><span className="hm-wk">{painTrend.overallRate}% of exercise-sessions</span></div>
+              <div className="av-note">Which lifts repeatedly produce pain. One niggle is noise; a lift flagging most sessions is telling you to change the movement, not push through it.</div>
+              {painTrend.flagged.slice(0,8).map(p=>(
+                <div key={p.id} className="st-row">
+                  <span className="st-name">{p.name}{p.severity==='sharp'&&<span className="h-pain sharp" style={{marginLeft:6}}>sharp</span>}</span>
+                  <span className="st-e1">{p.painCount}/{p.sessions}</span>
+                  <span className="st-pct" style={{color: p.rate>=60?'var(--err)':p.rate>=30?'var(--warn)':'var(--t2)'}}>{p.rate}%</span>
+                  <span className="dur-plan" style={{color: p.dir==='worsening'?'var(--err)':p.dir==='improving'?'var(--ok)':'var(--t3)'}}>{p.dir==='worsening'?'▲ worse':p.dir==='improving'?'▼ better':'→ flat'}</span>
+                </div>
+              ))}
+              <div className="av-note" style={{marginTop:9,marginBottom:0}}>Anything sharp, or over 60% and worsening, should be swapped for a variation rather than loaded through. Persistent joint pain is worth raising with a physio.</div>
+            </div>
+          )}
+
+          {burnCheck && (
+            <div className="ar-card">
+              <div className="hm-head"><span className="hm-ttl">Burn cross-check</span><span className="hm-wk">WHOOP vs empirical</span></div>
+              <div style={{display:'flex',alignItems:'baseline',gap:10,marginBottom:6,fontFamily:"'JetBrains Mono',monospace"}}>
+                <span style={{fontSize:22,fontWeight:700,color:'var(--t)'}}>{burnCheck.avg}</span>
+                <span style={{fontSize:12,color:'var(--t3)'}}>WHOOP</span>
+                <span style={{fontSize:22,fontWeight:700,color:'var(--acc)'}}>{burnCheck.tdee}</span>
+                <span style={{fontSize:12,color:'var(--t3)'}}>empirical</span>
+              </div>
+              <div style={{fontSize:12,lineHeight:1.5,color:burnCheck.agree?'var(--ok)':'var(--warn)'}}>
+                {burnCheck.agree
+                  ? `Within ${Math.abs(burnCheck.gap)} kcal across ${burnCheck.days} completed days — the two independent methods agree, so treat the maintenance figure as solid.`
+                  : `${burnCheck.gap>0?'WHOOP reads '+burnCheck.gap+' kcal HIGHER':'WHOOP reads '+Math.abs(burnCheck.gap)+' kcal LOWER'} than your intake-vs-weight maintenance across ${burnCheck.days} days. Trust the empirical figure — it is derived from what actually happened to your weight. Wearable burn estimates are commonly out by 10-20%.`}
+              </div>
+              <div className="ar-note">Uses only completed WHOOP cycles (true full-day burns), never the in-progress cycle. Needs 5+ complete days, so it fills in over the next week.</div>
+            </div>
+          )}
+
+          </>}
+
+          <div className="grp-head" onClick={()=>toggleGrp('coach')}><span className="grp-ttl">Coach review</span><span className={'sec-chev'+(grpOpen('coach')?' op':'')}>▾</span></div>
+          {grpOpen('coach') && <>
+
           {logs.length >= 1 && (
             <div className="period-sec">
               <div className="mv-head"><span className="mv-ttl">Coach Review</span></div>
@@ -575,58 +654,7 @@ export default function ProgressView() {
               {periodReview && <div className="period-out">{periodReview}</div>}
             </div>
           )}
-          <div className="ex-sel-wrap">
-            <div className="ex-sel-lbl">Select Exercise</div>
-            <select className="ex-sel" value={progEx||''} onChange={e=>setProgEx(e.target.value)}>
-              <option value="">Choose an exercise</option>
-              {ALL_EX.map(e => <option key={e.id} value={e.id}>{e.name} ({e.session})</option>)}
-            </select>
-          </div>
-          {progEx && progChartData.length > 1 && (
-            <>
-              <div className="metric-tog">
-                {[['e1rm','Est. 1RM'],['weight','Top set'],['volume','Volume']].map(([m,lbl])=>(
-                  <button key={m} className={`mtog-btn${progMetric===m?' on':''}`} onClick={()=>setProgMetric(m)}>{lbl}</button>
-                ))}
-              </div>
-              <div className="chart-area">
-                <div className="chart-lbl">{_metricLbl}</div>
-                <SVGChart data={progChartData} height={130}/>
-              </div>
-              <div className="pstats">
-                <div className="pst"><div className="pst-v">{prWeight}{_unit}</div><div className="pst-l">{_prLbl}</div></div>
-                <div className="pst"><div className="pst-v">{lastWeight}{_unit}</div><div className="pst-l">Last Session</div></div>
-                <div className="pst"><div className="pst-v">{progChartData.length}</div><div className="pst-l">Sessions</div></div>
-              </div>
-            </>
-          )}
-          {progEx && (
-            <div className="prog-hist">
-              {progHist.length===0
-                ? <div className="no-data">No data yet.<br/>Log a session to see progress.</div>
-                : progHist.map((h,i) => (
-                    <div key={i} className="ph-row">
-                      <span className="ph-dt">{fmtShort(h.date)}</span>
-                      <div className="ph-sets">{h.sets.map((s,j) => <span key={j} className="ph-s">{s.weight}&#215;{s.reps}</span>)}</div>
-                    </div>
-                  ))
-              }
-            </div>
-          )}
-          {!progEx && <div className="empty-msg">Select an exercise above to see your progression chart and history.</div>}
-          {movementPRs.length > 0 && (
-            <div style={{marginTop:16,background:'var(--crd)',border:'1px solid var(--bdr)',borderRadius:12,padding:14}}>
-              <div style={{fontSize:14,fontWeight:800,color:'var(--t)',marginBottom:2}}>Lifetime movement PRs</div>
-              <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.5,marginBottom:10}}>Best estimated 1RM for each movement, pooled across every programme slot it appears in. Read-only &#183; this does not change any session prescription.</div>
-              {movementPRs.map((m,i)=>(
-                <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'6px 0',borderTop:i?'1px solid var(--bdr)':'none'}}>
-                  <span style={{flex:1,fontSize:13,color:'var(--t)',fontWeight:600}}>{m.name}</span>
-                  <span style={{fontSize:13,color:'var(--acc)',fontWeight:800,fontFamily:"'JetBrains Mono',monospace"}}>{m.bestE1RM}kg</span>
-                  <span style={{fontSize:10,color:'var(--t3)',minWidth:118,textAlign:'right',fontFamily:"'JetBrains Mono',monospace"}}>{m.sessions} sess &#183; {fmtShort(m.lastDate)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+
           </>}
         </div>
       );

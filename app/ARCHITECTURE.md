@@ -82,3 +82,12 @@ New records get a random id (`newId`). Records saved before ids existed get one 
 devices), with identical records on the same day numbered so they stay separate. `ensureIds` (load and
 sync) and `tombstoneWhere` (deletes) both use it, so a record has the same id everywhere and a delete
 on one device carries across.
+
+## Progress screen layout (Phase 5)
+Always shown: Needs attention, On track, Week in review.
+**Strength** (open by default): lift progress chart, Progressing, Stalled lifts, Strength retention,
+Lifetime movement PRs, Autoregulation.
+**Explore** (closed by default): Training & volume (heat map, volume, session length, load, RIR drift,
+deload rebound) | Recovery & lifestyle (WHOOP recovery and sleep trends, recovery vs performance,
+time of day, alcohol, joint pain, burn cross-check) | Coach review.
+Open/closed state is remembered in `prog_grp_closed_v2`.
