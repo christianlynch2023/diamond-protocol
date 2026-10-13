@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ALT_BY_MUSCLE, EX_MUSCLE, SESSIONS } from './data/programme';
 import { fmt } from './lib/format';
 import { RootBoundary } from './components/RootBoundary';
@@ -24,6 +25,20 @@ function App() {
     setSkipConfirm, setStorageFail, setView, showSwap, skipConfirm, skipTimer, startNewBlock, storageFail, subMap,
     timerMsg, timerOn, timerSecs, view
   } = __app;
+
+  // Bottom tabs: shrink a label only if it doesn't fit its tab (PROGRESS on narrow phones), rather than
+  // cutting it to "PROGRE...". Measured in the browser, so it works for any font and screen width.
+  useEffect(() => {
+    const fit = () => document.querySelectorAll<HTMLElement>('.bn-lb').forEach(el => {
+      el.style.fontSize = '';
+      if (el.scrollWidth > el.clientWidth + 0.5) el.style.fontSize = Math.max(6.5, 8 * el.clientWidth / el.scrollWidth - 0.1).toFixed(2) + 'px';
+    });
+    fit();
+    (document as any).fonts?.ready?.then(fit);
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [view]);
+
   return (
     <AppCtx.Provider value={__app}>
 <div className="app">

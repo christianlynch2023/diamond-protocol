@@ -217,7 +217,7 @@ export default function ProgressView() {
                 );
               })}
             </div>
-            <div className="ar-note">Add freely on isolation work while a muscle is progressing and recovery holds - no ceiling. Push compounds with load, not sets. Stop adding when a muscle stalls 2 sessions. Health markers override: red recovery or rising BP means hold regardless.</div>
+            <div className="ar-note">A muscle that's progressing holds its volume: it doesn't need more. Only a stalled muscle gets more, and only when recovery is green and its weekly sets sit low in its target range: one extra set for isolation work, or a little more load for compounds, one step at a time. At target it holds; if performance is falling, back off. Red recovery or high BP means hold, whatever the trend.</div>
           </div>
 
           </>}
