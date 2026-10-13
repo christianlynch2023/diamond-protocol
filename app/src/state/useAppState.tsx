@@ -1,8 +1,9 @@
 // All of App's state, effects and handlers, as one hook (Phase 3d).
 // App calls it once per render, exactly where this code used to run, so hook order is unchanged.
 // Its return type is the type of everything the screens read through useApp().
+import { MEAL_PLAN } from '../data/mealPlan';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DLW, EX_MUSCLE, MUSCLES, SESSIONS, buildIntensifier, effWR, getEffSets, getPhase, rirDefaultFor, setDeloadNow } from '../data/programme';
+import { DLW, EX_MUSCLE, MUSCLES, ORM_IDS, SESSIONS, buildIntensifier, effWR, getEffSets, getPhase, rirDefaultFor, setDeloadNow } from '../data/programme';
 import { usePersistentState } from '../hooks';
 import { computeAlcoholImpact, computeRecoveryPerformance, computeTimeOfDay, recentCtx } from '../lib/associations';
 import { playChime, primeAudio } from '../lib/audio';
@@ -208,6 +209,14 @@ export function useAppState() {
   const [wipData, setWipData]   = useState(() => LS.getJSON('dp_wip', null));
   const [expandLog, setExpandLog] = useState(null);
   const [progEx, setProgEx]     = useState(null);
+  // Round 1: open the Strength chart on the most recently trained main lift (one with at least two
+  // sessions, so there's a line to draw) instead of an empty picker. Your own choice then sticks.
+  useEffect(() => {
+    if (progEx) return;
+    const seen: Record<string, number> = {};
+    for (const l of logs) for (const ex of (l.exercises || [])) if (ORM_IDS.has(ex.id) && (ex.sets || []).some(s => (s.reps || 0) > 0)) seen[ex.id] = (seen[ex.id] || 0) + 1;
+    for (const l of logs) for (const ex of (l.exercises || [])) if ((seen[ex.id] || 0) >= 2) { setProgEx(ex.id); return; }
+  }, [logs]);
   const [progMetric, setProgMetric] = useState('e1rm');
   const [volMuscle, setVolMuscle] = useState('all');
   const [activeInts, setActiveInts] = useState(new Set());
@@ -812,7 +821,11 @@ export function useAppState() {
     if (nutriCoach.ok) {
       p('Est. maintenance: ~' + nutriCoach.tdee + ' kcal/day (' + nutriCoach.conf + ' confidence, from intake vs weight over ' + nutriCoach.spanDays + 'd)');
       p('Logging: ~' + nutriCoach.avgIntake + ' kcal/day · trend ' + (nutriCoach.ratePerWk > 0 ? '+' : '') + nutriCoach.ratePerWk.toFixed(2) + ' kg/wk');
-      p('Target (' + goalPhase + '): ' + ((activeTarget&&Number.isFinite(activeTarget.cals))?activeTarget.cals+' kcal (locked)':nutriCoach.targetCals+' kcal') + ' · P' + nutriCoach.proteinG + ' C' + nutriCoach.carbG + ' F' + nutriCoach.fatG);
+      // Round 1: tell the coach the same target the app uses: a lock, then the Meals plan, then the engine.
+      const planT = effTargets && effTargets.source === 'plan' ? effTargets : null;
+      if (activeTarget && Number.isFinite(activeTarget.cals)) p('Target (' + goalPhase + '): ' + activeTarget.cals + ' kcal (locked) · P' + nutriCoach.proteinG + ' C' + nutriCoach.carbG + ' F' + nutriCoach.fatG);
+      else if (planT) p('Target (Meals plan): training days ' + planT.dayTargets.train.cals + ' kcal (P' + planT.dayTargets.train.protein + ' C' + planT.dayTargets.train.carb + ' F' + planT.dayTargets.train.fat + '), rest days ' + planT.dayTargets.rest.cals + ' kcal (P' + planT.dayTargets.rest.protein + ' C' + planT.dayTargets.rest.carb + ' F' + planT.dayTargets.rest.fat + '); weekly avg ' + planT.weekly + ' kcal');
+      else p('Target (' + goalPhase + '): ' + nutriCoach.targetCals + ' kcal · P' + nutriCoach.proteinG + ' C' + nutriCoach.carbG + ' F' + nutriCoach.fatG);
     } else p('Smart targets: not ready (' + (nutriCoach.reason || 'insufficient data') + ')');
     if (burnCheck) p('WHOOP burn cross-check: ' + burnCheck.avg + ' vs empirical ' + burnCheck.tdee + ' (' + (burnCheck.agree ? 'agree' : 'gap ' + burnCheck.gap) + ', ' + burnCheck.days + 'd)');
     p('');
@@ -2164,8 +2177,21 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   // same rule as the engine: protein and fat fixed daily, carbs carrying the difference,
   // rest days at 60% of the average carb figure.
   const effTargets = useMemo(() => {
-    if (!nutriCoach) return null;
     const locked = activeTarget && Number.isFinite(activeTarget.cals) ? activeTarget : null;
+    // Round 1: the Meals plan is the target the whole app uses (Today, Week in review, meal timing),
+    // so the numbers never disagree. A target you've deliberately locked still wins; the live engine
+    // is only used when there is no plan.
+    if (!locked && MEAL_PLAN && MEAL_PLAN.targets) {
+      const tr = MEAL_PLAN.targets.train, rs = MEAL_PLAN.targets.rest;
+      const trainDays = Object.keys(SESSIONS).length || 4, restDays = 7 - trainDays;
+      const avg = (a: number, b: number) => Math.round((a * trainDays + b * restDays) / 7);
+      return {
+        source: 'plan', weekly: avg(tr.kcal, rs.kcal), protein: avg(tr.p, rs.p), fat: avg(tr.f, rs.f), carb: avg(tr.c, rs.c),
+        cycle: { trainDays, restDays, lowCarb: rs.c, highCarb: tr.c },
+        dayTargets: { train: { cals: tr.kcal, carb: tr.c, protein: tr.p, fat: tr.f }, rest: { cals: rs.kcal, carb: rs.c, protein: rs.p, fat: rs.f } },
+      };
+    }
+    if (!nutriCoach) return null;
     // Without a committed lock, only a confident live estimate can drive the card.
     if (!locked) {
       if (!nutriCoach.ok) return null;
@@ -2465,13 +2491,17 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // reads ~250 under even when eating exactly to plan. Fall back to 1990 if Smart isn't ready.
     // Single source of truth: a committed lock is what the athlete is eating to, so the delta is
     // measured against it. Only fall back to the live engine / suggestion when nothing is locked.
+    // Round 1: same rule as everywhere else: a lock, then your Meals plan (weekly blend), then the engine.
+    const planT = effTargets && effTargets.source === 'plan' ? effTargets : null;
     const calTgt = (activeTarget && Number.isFinite(activeTarget.cals)) ? activeTarget.cals
+                 : planT ? planT.weekly
                  : (nutriCoach && nutriCoach.ok && nutriCoach.targetCals) ? nutriCoach.targetCals
                  : (nutriCoach && nutriCoach.suggested) ? nutriCoach.suggested
                  : 1990;
-    const pTgt = (nutriCoach && nutriCoach.proteinG) ? nutriCoach.proteinG : 210;
+    const lockedT = activeTarget && Number.isFinite(activeTarget.cals) ? activeTarget : null;
+    const pTgt = lockedT && lockedT.protein != null ? lockedT.protein : planT ? planT.protein : (nutriCoach && nutriCoach.proteinG) ? nutriCoach.proteinG : 210;
     return { avgCal, avgP, calTgt, pTgt, calDelta: avgCal-calTgt, pDelta: avgP-pTgt, n:l7.length };
-  }, [nutrition, nutriCoach, activeTarget]);
+  }, [nutrition, nutriCoach, activeTarget, effTargets]);
 
   // Week in review: assembles the analytics that already exist into one decision-shaped summary.
   // Deliberately no composite score — each line carries its own verdict so the inputs stay visible.

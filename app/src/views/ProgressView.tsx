@@ -40,24 +40,7 @@ export default function ProgressView() {
               );
             } catch(e) { return null; }
           })()}
-          {(() => {
-            // Reorg: compress everything that's FINE into one glanceable strip, so healthy
-            // measures don't each take a full card. Reads existing verdicts only; fully fail-safe.
-            try {
-              const chips = [];
-              try { (weekReview && weekReview.items || []).filter(i=>i.verdict==='good').forEach(i=>chips.push(`${i.k} ${i.v}`)); } catch(_){}
-              try { const b = bpLog && bpLog[0]; if (b) { const c = bpCategory(b.sys,b.dia); if (c.cls==='green') chips.push('BP normal'); } } catch(_){}
-              if (!chips.length) return null;
-              return (
-                <div className="ar-card">
-                  <div className="hm-head"><span className="hm-ttl">On track</span><span className="hm-wk">{chips.length} &#10003;</span></div>
-                  <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6}}>
-                    {chips.slice(0,8).map((c,i)=><span key={i} style={{fontSize:11,color:'#00e87a',background:'rgba(0,232,122,.1)',border:'1px solid rgba(0,232,122,.3)',borderRadius:6,padding:'3px 8px'}}>{c}</span>)}
-                  </div>
-                </div>
-              );
-            } catch(e) { return null; }
-          })()}
+          {/* Round 1: the On track strip was removed; it only repeated Week in review's green rows. */}
           {weekReview && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Week in review</span><span className="hm-wk">last 7 days</span></div>

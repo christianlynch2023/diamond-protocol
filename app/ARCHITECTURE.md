@@ -84,7 +84,7 @@ sync) and `tombstoneWhere` (deletes) both use it, so a record has the same id ev
 on one device carries across.
 
 ## Progress screen layout (Phase 5)
-Always shown: Needs attention, On track, Week in review.
+Always shown: Needs attention, Week in review. (On track was removed in round 1: it only repeated Week in review's green rows.) The Strength chart opens on your most recently trained main lift.
 **Strength** (open by default): lift progress chart, Progressing, Stalled lifts, Strength retention,
 Lifetime movement PRs, Autoregulation.
 **Explore** (closed by default): Training & volume (heat map, volume, session length, load, RIR drift,
@@ -108,3 +108,12 @@ Each function file only wires real `fetch`, `process.env` and Blobs into a facto
 tests pass fakes instead, so they never touch WHOOP, Anthropic or your cloud data. `netlify/` is CommonJS
 (how Netlify deploys it), so tests import it via the default import. The TypeScript versions were checked
 against the previous JavaScript in 48 scenarios: identical responses, requests, logs and stored data.
+
+## Nutrition targets: one rule everywhere (round 1)
+Every target in the app (Today's fuel card, Week in review, meal timing, the AI coach summary, Body ->
+Nutrition) comes from `effTargets` in `state/useAppState.tsx`, in this order:
+1. a target you've deliberately **locked**,
+2. otherwise your **Meals plan** (`data/mealPlan.ts`): today's figure on Today (training day = a scheduled
+   session day or a day you've trained), the 4-train/3-rest weekly blend for weekly comparisons,
+3. otherwise the live **engine** estimate.
+The engine's maintenance (TDEE) estimate is still shown as information.

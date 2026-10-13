@@ -13,9 +13,16 @@ export default function TodayView() {
     isDeload, latestBP, latestGl, logs, nutriCoach, readiness, resumeWorkout, sel, setView, setWood,
     skinTempStat, startWorkout, tempStat, todayVitals, week, whoopData, wipData, wr
   } = useApp();
+  // Fuel target follows the Meals plan for today's day type (a scheduled session day, or a day
+  // you've already trained), so Today and Meals always show the same number.
+  const todayName = new Date().toLocaleDateString('en-GB', { weekday: 'long' });
+  const trainingToday = Object.values(SESSIONS).some(s => s.day === todayName)
+    || (logs || []).some(l => new Date(l.date).toDateString() === new Date().toDateString());
+  const planDay = effTargets && effTargets.source === 'plan' ? effTargets.dayTargets[trainingToday ? 'train' : 'rest'] : null;
   return (
         <div className="screen">
           <div className="topbar"><span className="logo">Today</span><span className="top-badge">B{block} · W{week}/12</span></div>
+          <div className="today-body">   {/* Round 1: the 15px side margins the other screens have */}
           <div className="today-date">{new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div>
 
           {/* ACTION FIRST. Today used to open on a recovery dashboard, so the thing you actually
@@ -94,17 +101,17 @@ export default function TodayView() {
           </div>
 
           <div className="td-card">
-            <div className="td-row"><span className="td-lbl">Fuel target <span className="td-prov">estimated</span></span>
-              <span className="td-val">{effTargets ? effTargets.weekly : (nutriCoach && nutriCoach.suggested) ? nutriCoach.suggested : '—'}{(effTargets || (nutriCoach && nutriCoach.suggested)) ? <span className="td-muted" style={{fontSize:13}}> kcal{effTargets && effTargets.source==='locked' ? ' \u00b7 locked' : ''}</span> : null}</span></div>
+                        <div className="td-row"><span className="td-lbl">Fuel target <span className="td-prov">{planDay ? 'plan · ' + (trainingToday ? 'training day' : 'rest day') : effTargets && effTargets.source === 'locked' ? 'locked' : 'estimated'}</span></span>
+              <span className="td-val">{planDay ? planDay.cals : effTargets ? effTargets.weekly : (nutriCoach && nutriCoach.suggested) ? nutriCoach.suggested : '—'}{(effTargets || (nutriCoach && nutriCoach.suggested)) ? <span className="td-muted" style={{fontSize:13}}> kcal</span> : null}</span></div>
             {(() => {
               // Macros come from the SAME source as the calorie number above (effTargets), so a
               // locked calorie target and its macros always reconcile. Reading protein/carb/fat
               // off the live engine while calories came from the lock let them silently disagree
               // (locked cals, but carbs derived from a different live estimate). Falls back to the
               // live engine only when there is no effTargets at all.
-              const P = effTargets ? effTargets.protein : (nutriCoach && nutriCoach.proteinG);
-              const C = effTargets ? effTargets.carb    : (nutriCoach && nutriCoach.carbG);
-              const F = effTargets ? effTargets.fat     : (nutriCoach && nutriCoach.fatG);
+              const P = planDay ? planDay.protein : effTargets ? effTargets.protein : (nutriCoach && nutriCoach.proteinG);
+              const C = planDay ? planDay.carb    : effTargets ? effTargets.carb    : (nutriCoach && nutriCoach.carbG);
+              const F = planDay ? planDay.fat     : effTargets ? effTargets.fat     : (nutriCoach && nutriCoach.fatG);
               return (P != null && Number.isFinite(P))
                 ? <div className="td-sub">P {P}g{C!=null?' · C '+C+'g':''}{F!=null?' · F '+F+'g':''}</div>
                 : null;
@@ -149,6 +156,7 @@ export default function TodayView() {
           {ctxReasons && ctxReasons.length>0 && <div className="td-card">
             <div className="td-row"><span className="td-lbl">Flags today</span><span className="td-val" style={{fontSize:13}}>{ctxReasons.join(' · ')}</span></div>
           </div>}
+          </div>
         </div>
       );
 }

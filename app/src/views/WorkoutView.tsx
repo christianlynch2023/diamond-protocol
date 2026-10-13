@@ -17,7 +17,7 @@ export default function WorkoutView() {
           <div className="fullscreen">
             <div className="wk-prog"><div className="wk-prog-fill" style={{width:`${(exIdx/sess.exercises.length)*100}%`}}/></div>
             <div className="wk-top"><span className="wk-sn">{sess.name} Wk{week}</span><span className="wk-cnt">{exIdx+1}/{sess.exercises.length}</span></div>
-            {progRec && (
+            {progRec && !(curTarget && !curTarget.first) && (   /* Round 1: the target card below already says this */
               <div className={`prog-rec ${progRec.type}`}>
                 {progRec.type==='inc'&&'▲'}{progRec.type==='beat'&&'→'}{progRec.type==='keep'&&'→'}{progRec.type==='first'&&'●'} {progRec.msg}
               </div>

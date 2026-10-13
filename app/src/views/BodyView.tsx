@@ -42,13 +42,31 @@ export default function BodyView() {
             <div className="sec-head" onClick={()=>toggleSec('weight')}><div className="body-ttl">Body Weight</div><span className={'sec-chev'+(secOpen('weight')?' op':'')}>▾</span></div>
             {secOpen('weight') && <>
             <div className="body-sub">Weekly weigh-in — track alongside your training block</div>
+            <button className="add-toggle add-primary" onClick={()=>setShowAddBody(v=>!v)}>
+              <span>Log weight</span><span className="plus">{showAddBody?'−':'+'}</span>
+            </button>
+            {showAddBody&&(
+              <div className="body-form">
+                <div className="bf-row">
+                  <div className="bf-grp">
+                    <div className="bf-lbl">Weight (kg)</div>
+                    <input className="bf-in" type="number" inputMode="decimal" placeholder="89.5" value={newWt} onChange={e=>setNewWt(e.target.value)}/>
+                  </div>
+                  <div className="bf-grp">
+                    <div className="bf-lbl">Notes</div>
+                    <input className="bf-in" type="text" placeholder="e.g. fasted" value={newWtNote} onChange={e=>setNewWtNote(e.target.value)}/>
+                  </div>
+                </div>
+                <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={wtDate} onChange={e=>setWtDate(e.target.value)}/></div>
+                <button className="bf-save" onClick={addBodyMetric}>Save</button>
+              </div>
+            )}
             {(bodyDash.curW!=null) && (
               <div className="dash-cards">
                 <div className="dash-card">
                   <div className="dc-lbl">Weight</div>
                   <div className="dc-val">{bodyDash.curW}<span className="dc-u">kg</span></div>
                   <div className="dc-sub">{bodyDash.avg7!=null?`7-day avg ${bodyDash.avg7.toFixed(1)}kg`:''}</div>
-                  {bodyDash.wtSpark.length>1 && <div style={{marginTop:4}}><Sparkline vals={bodyDash.wtSpark} color="#c4ff00" w={90}/><div style={{fontSize:8,color:'var(--t3)',fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{bodyDash.wtSparkFrom&&fmtShort(bodyDash.wtSparkFrom)} &ndash; {bodyDash.wtSparkTo&&fmtShort(bodyDash.wtSparkTo)} &#183; {bodyDash.wtSpark.length} weigh-ins</div></div>}
                 </div>
               </div>
             )}
@@ -71,25 +89,6 @@ export default function BodyView() {
             {bodyMetrics.length>1&&(
               <div style={{marginBottom:10}}>
                 <SVGChart data={bodyMetrics.slice(0,20).reverse().map(m=>({x:fmtShort(m.date),y:m.weight,t:new Date(m.date).getTime()}))} height={120} trend={true} anchor={6} events={chartEvents}/>
-              </div>
-            )}
-            <button className="add-toggle" onClick={()=>setShowAddBody(v=>!v)}>
-              <span>Log weight</span><span className="plus">{showAddBody?'−':'+'}</span>
-            </button>
-            {showAddBody&&(
-              <div className="body-form">
-                <div className="bf-row">
-                  <div className="bf-grp">
-                    <div className="bf-lbl">Weight (kg)</div>
-                    <input className="bf-in" type="number" inputMode="decimal" placeholder="89.5" value={newWt} onChange={e=>setNewWt(e.target.value)}/>
-                  </div>
-                  <div className="bf-grp">
-                    <div className="bf-lbl">Notes</div>
-                    <input className="bf-in" type="text" placeholder="e.g. fasted" value={newWtNote} onChange={e=>setNewWtNote(e.target.value)}/>
-                  </div>
-                </div>
-                <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={wtDate} onChange={e=>setWtDate(e.target.value)}/></div>
-                <button className="bf-save" onClick={addBodyMetric}>Save</button>
               </div>
             )}
             <button className="add-toggle" onClick={()=>setShowWtLog(v=>!v)} style={{marginTop:8}}>
@@ -298,7 +297,7 @@ export default function BodyView() {
               {!nutriCoach.ok && nutriCoach.reason && nutriCoach.reason!=='stale' && nutriCoach.reason!=='stale_weight' && nutriCoach.reason!=='implausible' && <div className="nc-note">{nutriCoach.reason}</div>}
               {!nutriCoach.ok && nutriCoach.partial && <div className="nc-note">Need ~1-2 weeks of consistent logging to estimate your maintenance. So far: {nutriCoach.foodDays} food day{nutriCoach.foodDays===1?'':'s'} and {nutriCoach.weighIns} weigh-in{nutriCoach.weighIns===1?'':'s'} in the last 14 days.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='noisy' && <div className="nc-note">Your weight trend is too noisy right now to set a reliable target (reading {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk} kg/wk, which is water not tissue). You are logging ~{nutriCoach.avgIntake} kcal/day &#8212; hold there and keep weighing in daily; the trend will settle within a few days.</div>}
-              {(nutriCoach.ok || (effTargets && effTargets.source==='locked')) && (
+              {(nutriCoach.ok || (effTargets && (effTargets.source==='locked' || effTargets.source==='plan'))) && (
                 <div className="nc-body">
                   <div className="nc-tgt nc-hero">
                     {effTargets && effTargets.dayTargets ? (() => {
@@ -391,8 +390,8 @@ export default function BodyView() {
                       </div>
                     </div>
                   )}
-                  <div className="nc-tgt-avg">Weekly avg {effTargets.weekly} kcal{effTargets.source==='locked'?' (locked)':''} &#183; C {effTargets.carb}g/day ({effTargets.cycle.trainDays} train / {effTargets.cycle.restDays} rest) &#183; {nutriCoach.ok?(nutriCoach.phase==="cut"?(nutriCoach.floorLimited?("floor-limited \u2212"+nutriCoach.impliedRatePct+"%/wk"):("cut \u2212"+nutriCoach.targetRatePct+"%/wk")):nutriCoach.phase==="bulk"?("lean gain +"+nutriCoach.targetRatePct+"%/wk"):"maintenance"):(goalPhase==='cut'?"cut \u2014 held":goalPhase==='bulk'?"lean gain \u2014 held":"maintenance \u2014 held")}</div>
-                          {nutriCoach.floorLimited && effTargets.source!=='locked' && <div className="nc-tgt-avg" style={{color:"var(--warn)"}}>Held at the {nutriCoach.kcalFloor} kcal minimum ({Math.round(nutriCoach.trendW)}kg &#215; 22), so this prescribes about &#8722;{nutriCoach.impliedRatePct}%/wk rather than the &#8722;{nutriCoach.targetRatePct}%/wk selected. Losing faster would mean going below the floor.</div>}
+                  <div className="nc-tgt-avg">Weekly avg {effTargets.weekly} kcal{effTargets.source==='locked'?' (locked)':effTargets.source==='plan'?' (your Meals plan)':''} &#183; C {effTargets.carb}g/day ({effTargets.cycle.trainDays} train / {effTargets.cycle.restDays} rest) &#183; {nutriCoach.ok?(nutriCoach.phase==="cut"?(nutriCoach.floorLimited?("floor-limited \u2212"+nutriCoach.impliedRatePct+"%/wk"):("cut \u2212"+nutriCoach.targetRatePct+"%/wk")):nutriCoach.phase==="bulk"?("lean gain +"+nutriCoach.targetRatePct+"%/wk"):"maintenance"):(goalPhase==='cut'?"cut \u2014 held":goalPhase==='bulk'?"lean gain \u2014 held":"maintenance \u2014 held")}</div>
+                          {nutriCoach.floorLimited && effTargets.source==='engine' && <div className="nc-tgt-avg" style={{color:"var(--warn)"}}>Held at the {nutriCoach.kcalFloor} kcal minimum ({Math.round(nutriCoach.trendW)}kg &#215; 22), so this prescribes about &#8722;{nutriCoach.impliedRatePct}%/wk rather than the &#8722;{nutriCoach.targetRatePct}%/wk selected. Losing faster would mean going below the floor.</div>}
                         </>
                       );
                     })() : (
