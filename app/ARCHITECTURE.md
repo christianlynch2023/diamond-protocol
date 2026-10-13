@@ -66,7 +66,7 @@ method has no single before/after weight; they now read "+x% · N lifts".
 ## Tests (Phase 4)
 `tests/` holds the automated tests (Node's built-in test runner, run with `tsx`). `npm test` runs them;
 `npm run build` runs them after the type checks and before `vite build`, so a failing test stops the
-deploy. 42 tests cover sync merges and deletes, ids for records saved before ids existed, blood flags and ranges, WHOOP parsing (naps, local dates,
+deploy. 61 tests cover the server functions (WHOOP login, refresh and back-fill, cloud sync, AI proxy), sync merges and deletes, ids for records saved before ids existed, blood flags and ranges, WHOOP parsing (naps, local dates,
 merging feeds), the progression engine (per-slot caps, deload sessions ignored), bodyweight helpers,
 the per-lift detrend, the recovery scatter, alcohol split and deload rebound.
 
@@ -91,3 +91,20 @@ Lifetime movement PRs, Autoregulation.
 deload rebound) | Recovery & lifestyle (WHOOP recovery and sleep trends, recovery vs performance,
 time of day, alcohol, joint pain, burn cross-check) | Coach review.
 Open/closed state is remembered in `prog_grp_closed_v2`.
+
+## Server functions (netlify/)
+Six Netlify functions, all TypeScript under strict checking (`netlify/tsconfig.json`):
+
+| Function | Does | Logic |
+|---|---|---|
+| `ai-proxy` | Adds the Anthropic key server-side and forwards allow-listed Messages API fields | `lib/ai.ts` |
+| `sync-data` | Cloud copy in Netlify Blobs: GET reads, POST writes, DELETE erases (key = hash of the sync code) | `lib/sync.ts` |
+| `whoop-auth` | Starts WHOOP login with a random state + httpOnly cookie | `lib/whoop.ts` |
+| `whoop-callback` | Checks the state (CSRF), swaps the code for tokens, hands them to the app in the URL fragment; never logs tokens | `lib/whoop.ts` |
+| `whoop-refresh` | Swaps a refresh token for new tokens | `lib/whoop.ts` |
+| `whoop-data` | Cycles, sleep, recovery, workouts; `?since=` back-fill with paging (max 4 pages, 60 days); 401 on any feed = refresh | `lib/whoop.ts` |
+
+Each function file only wires real `fetch`, `process.env` and Blobs into a factory in `netlify/lib/`;
+tests pass fakes instead, so they never touch WHOOP, Anthropic or your cloud data. `netlify/` is CommonJS
+(how Netlify deploys it), so tests import it via the default import. The TypeScript versions were checked
+against the previous JavaScript in 48 scenarios: identical responses, requests, logs and stored data.

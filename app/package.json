@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.app.json && npm test && vite build",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.app.json && tsc -p ../netlify/tsconfig.json && npm test && vite build",
     "preview": "vite preview --host",
-    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.app.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.app.json && tsc -p ../netlify/tsconfig.json",
     "test": "tsx --test tests/all.test.ts"
   },
   "dependencies": {

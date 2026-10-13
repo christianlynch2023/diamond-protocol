@@ -1,0 +1,15 @@
+{
+  // Strict check for the Netlify functions (netlify/functions) and their logic (netlify/lib).
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "strict": true,
+    "types": []
+  },
+  "include": ["functions", "lib", "types"]
+}
