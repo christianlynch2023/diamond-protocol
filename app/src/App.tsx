@@ -27,16 +27,33 @@ function App() {
   } = __app;
 
   // Bottom tabs: shrink a label only if it doesn't fit its tab (PROGRESS on narrow phones), rather than
-  // cutting it to "PROGRE...". Measured in the browser, so it works for any font and screen width.
+  // cutting it to "PROGRE...". Measures the text's exact width (fractions of a pixel, in capitals as shown)
+  // against the tab's inner width, keeps 1px of room, and re-measures whenever a web font finishes loading.
   useEffect(() => {
+    const ctx = document.createElement('canvas').getContext('2d');
     const fit = () => document.querySelectorAll<HTMLElement>('.bn-lb').forEach(el => {
       el.style.fontSize = '';
-      if (el.scrollWidth > el.clientWidth + 0.5) el.style.fontSize = Math.max(6.5, 8 * el.clientWidth / el.scrollWidth - 0.1).toFixed(2) + 'px';
+      const tab = el.parentElement;
+      if (!ctx || !tab) return;
+      const cs = getComputedStyle(el), ts = getComputedStyle(tab);
+      const avail = tab.clientWidth - parseFloat(ts.paddingLeft) - parseFloat(ts.paddingRight) - 1;
+      const text = (el.textContent || '').toUpperCase();
+      const width = (px: number) => { ctx.font = `${cs.fontWeight} ${px}px ${cs.fontFamily}`; return ctx.measureText(text).width; };
+      const base = parseFloat(cs.fontSize);
+      const need = width(base);
+      if (need <= avail) return;
+      // Small text doesn't shrink in exact proportion (letters snap to the pixel grid), so check the
+      // result and step down until it really fits, never below 6.5px.
+      let px = base * avail / need;
+      while (px > 6.5 && width(px) > avail) px -= 0.1;
+      el.style.fontSize = Math.max(6.5, px).toFixed(2) + 'px';
     });
     fit();
-    (document as any).fonts?.ready?.then(fit);
+    const fonts = (document as any).fonts;
+    fonts?.ready?.then(fit);
+    fonts?.addEventListener?.('loadingdone', fit);
     window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    return () => { window.removeEventListener('resize', fit); fonts?.removeEventListener?.('loadingdone', fit); };
   }, [view]);
 
   return (
