@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ALT_BY_MUSCLE, EX_MUSCLE, SESSIONS } from './data/programme';
 import { fmt } from './lib/format';
 import { RootBoundary } from './components/RootBoundary';
 import { Icon } from './components/Icon';
-import type { IconName } from './components/Icon';
+import { Segmented } from './components/ui';
+import { TABS, isSettings, showsNav, showsSettingsButton, tabFor } from './lib/nav';
 import { AppCtx } from './appContext';
 import BodyView from './views/BodyView';
 import HistoryView from './views/HistoryView';
@@ -18,12 +19,6 @@ import SessionView from './views/SessionView';
 import WorkoutView from './views/WorkoutView';
 import { useAppState } from './state/useAppState';
 
-// Bottom tabs: view id, line icon, label. Phase 2 of round 2 reduces this to five tabs.
-const TABS: ReadonlyArray<[string, IconName, string]> = [
-  ['today', 'today', 'Today'], ['meals', 'meals', 'Meals'], ['home', 'program', 'Program'], ['progress', 'progress', 'Progress'],
-  ['history', 'history', 'History'], ['body', 'body', 'Body'], ['privacy', 'privacy', 'Privacy'], ['tools', 'tools', 'Tools'],
-];
-
 function App() {
   const __app = useAppState();
   const {
@@ -31,39 +26,15 @@ function App() {
     editBodyDraft, finishModal, goToExercise, newBlockConfirm, restFlash, saveAndFinish, saveBodyEdit, sel, sess,
     setClearConfirm, setData, setEditBody, setEditBodyDraft, setFinishModal, setNewBlockConfirm, setShowSwap,
     setSkipConfirm, setStorageFail, setView, showSwap, skipConfirm, skipTimer, startNewBlock, storageFail, subMap,
-    timerMsg, timerOn, timerSecs, view
+    timerMsg, timerOn, timerSecs, view, logs, week
   } = __app;
 
-  // Bottom tabs: shrink a label only if it doesn't fit its tab, rather than cutting it to "Progre...".
-  // Measures the text's exact width as displayed (respecting any capitals transform) against the tab's
-  // inner width, keeps 1px of room, and re-measures whenever a web font finishes loading.
-  // Phase 2 (five tabs) removes this: five labels at 11px fit on any phone.
+  // Train remembers whether you were on Plan or History; Settings remembers which tab opened it.
+  const trainSub = useRef<string>('home');
+  const settingsFrom = useRef<string>('today');
   useEffect(() => {
-    const ctx = document.createElement('canvas').getContext('2d');
-    const fit = () => document.querySelectorAll<HTMLElement>('.bn-lb').forEach(el => {
-      el.style.fontSize = '';
-      const tab = el.parentElement;
-      if (!ctx || !tab) return;
-      const cs = getComputedStyle(el), ts = getComputedStyle(tab);
-      const avail = tab.clientWidth - parseFloat(ts.paddingLeft) - parseFloat(ts.paddingRight) - 1;
-      const raw = el.textContent || '';
-      const text = cs.textTransform === 'uppercase' ? raw.toUpperCase() : raw;
-      const width = (px: number) => { ctx.font = `${cs.fontWeight} ${px}px ${cs.fontFamily}`; return ctx.measureText(text).width; };
-      const base = parseFloat(cs.fontSize);
-      const need = width(base);
-      if (need <= avail) return;
-      // Small text doesn't shrink in exact proportion (letters snap to the pixel grid), so check the
-      // result and step down until it really fits, never below 9px.
-      let px = base * avail / need;
-      while (px > 9 && width(px) > avail) px -= 0.1;
-      el.style.fontSize = Math.max(9, px).toFixed(2) + 'px';
-    });
-    fit();
-    const fonts = (document as any).fonts;
-    fonts?.ready?.then(fit);
-    fonts?.addEventListener?.('loadingdone', fit);
-    window.addEventListener('resize', fit);
-    return () => { window.removeEventListener('resize', fit); fonts?.removeEventListener?.('loadingdone', fit); };
+    if (view === 'home' || view === 'history') trainSub.current = view;
+    if (tabFor(view)) settingsFrom.current = view;
   }, [view]);
 
   return (
@@ -193,7 +164,21 @@ function App() {
 
       {view === 'today' && <TodayView />}
 
-      {view === 'home' && <ProgramView />}
+      {(view === 'home' || view === 'history') && (
+        <div className="tabwrap">
+          <div className="tabhead">
+            <div className="tabhead-row">
+              <div>
+                <h1 className="tabhead-title">Train</h1>
+                <div className="tabhead-sub">{view === 'history' ? `${logs.length} sessions logged` : `Block ${block} · Week ${week} of 12`}</div>
+              </div>
+            </div>
+            <Segmented label="Train" value={view === 'history' ? 'history' : 'home'} onChange={v => setView(v)}
+              options={[{ value: 'home', label: 'Plan' }, { value: 'history', label: 'History' }]} />
+          </div>
+          {view === 'home' ? <ProgramView /> : <HistoryView />}
+        </div>
+      )}
 
       {view === 'session' && sess && <SessionView />}
 
@@ -202,24 +187,43 @@ function App() {
       {view === 'complete' && <CompleteView />}
 
       {view === 'progress' && <ProgressView />}
-      {view === 'history' && <HistoryView />}
 
       {view === 'meals' && <MealsView />}
-      {view === 'privacy' && <PrivacyView />}
-      {view === 'tools' && <ToolsView />}
+      {isSettings(view) && (
+        <div className="tabwrap">
+          <div className="tabhead">
+            <div className="tabhead-row no-set">
+              <h1 className="tabhead-title">Settings</h1>
+              <button type="button" className="done-btn" onClick={() => setView(settingsFrom.current)}>Done</button>
+            </div>
+            <Segmented label="Settings" value={view === 'privacy' ? 'privacy' : 'tools'} onChange={v => setView(v)}
+              options={[{ value: 'tools', label: 'Tools and data' }, { value: 'privacy', label: 'Privacy' }]} />
+          </div>
+          {view === 'privacy' ? <PrivacyView /> : <ToolsView />}
+        </div>
+      )}
 
 
       {view==='body'&&<BodyView />}
 
       {restFlash && <div className="rest-flash"><div className="rest-flash-txt">REST OVER</div></div>}
-      {view !== 'workout' && view !== 'complete' && (
+      {showsSettingsButton(view) && (
+        <button type="button" className="set-btn" aria-label="Settings" onClick={() => setView('tools')}>
+          <Icon name="settings" size={20} />
+        </button>
+      )}
+      {showsNav(view) && (
         <nav className="bnav" aria-label="Main">
-          {TABS.map(([v,icon,label]) => (
-            <button key={v} type="button" className={`bn${view===v?' on':''}`} aria-current={view===v?'page':undefined} onClick={() => setView(v)}>
-              <span className="bn-ic"><Icon name={icon} size={22} /></span>
-              <span className="bn-lb">{label}</span>
-            </button>
-          ))}
+          {TABS.map(t => {
+            const on = tabFor(view) === t.id;
+            return (
+              <button key={t.id} type="button" className={`bn${on ? ' on' : ''}`} aria-current={on ? 'page' : undefined}
+                onClick={() => setView(t.id === 'train' ? trainSub.current : t.home)}>
+                <span className="bn-ic"><Icon name={t.icon} size={22} /></span>
+                <span className="bn-lb">{t.label}</span>
+              </button>
+            );
+          })}
         </nav>
       )}
     </div>

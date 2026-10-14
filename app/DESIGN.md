@@ -26,6 +26,11 @@ Every number is tabular and carries a unit, a date or a comparison.
 `Card`, `Eyebrow`, `Figure`, `Button`, `Segmented`, `Stepper`, `Sparkline`, `RangeBar`, `Icon`.
 Touch targets are at least 44px. Chart maths (`lib/chartMath.ts`) is pure and tested.
 
+## Navigation (phase 2)
+Five tabs: Today, Train (Plan and History), Progress, Body, Fuel. Tools and Privacy live in Settings,
+opened from the button at the top right of every tab. Internal view names are unchanged; `lib/nav.ts`
+maps them to tabs and is tested.
+
 ## Round 2 phases
 1. Visual foundation (this layer) · 2. Navigation, five tabs · 3. Today · 4. Fuel ·
 5. Session flow · 6. Body and Progress · 7. Hardening and audit.

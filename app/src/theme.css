@@ -82,3 +82,20 @@ button, input, select, textarea { font-variant-numeric: tabular-nums; }
 .ui-range-band { position: absolute; top: 2px; height: 6px; border-radius: 3px; background: #2e3946; }
 .ui-range-dot { position: absolute; top: 0; width: 10px; height: 10px; margin-left: -5px; border-radius: 5px; }
 .ui-spark { display: block; }
+
+/* ---- Phase 2: five tabs, Train and Settings headers, settings button ---- */
+/* Train (Plan + History) and Settings (Tools + Privacy) wrap the existing screens in one shared header,
+   so the screens' own top bars are hidden inside them. */
+.tabwrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tabwrap > .screen { flex: 1; min-height: 0; }
+.tabwrap .topbar { display: none; }
+.tabhead { flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px; background: var(--bg); border-bottom: 1px solid var(--bdr); }
+.tabhead-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding-right: 56px; }
+.tabhead-row.no-set { padding-right: 0; }
+.tabhead-title { margin: 0; font-family: var(--font-fig); font-size: 28px; line-height: 32px; font-weight: 700; color: var(--t); }
+.tabhead-sub { margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--t2); }
+.done-btn { min-height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid var(--bdr); background: var(--crd); color: var(--t); font-family: var(--font-text); font-size: 15px; font-weight: 600; cursor: pointer; }
+
+/* Settings button: top right of every tab screen. Top bars keep room for it on the right. */
+.set-btn { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 8px); right: 12px; z-index: 30; width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--bdr); background: var(--crd); color: var(--t); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.topbar { padding-right: 68px; }

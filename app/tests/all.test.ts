@@ -7,3 +7,4 @@ import './analytics.test';
 import './ids.test';
 import './functions.test';
 import './ui.test';
+import './nav.test';
