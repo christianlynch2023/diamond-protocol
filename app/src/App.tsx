@@ -46,7 +46,8 @@ function App() {
           <button onClick={()=>setStorageFail(null)} style={{background:'none',border:'1px solid rgba(255,90,79,0.5)',color:'#ff9a9a',borderRadius:8,padding:'0 10px',minHeight:36,cursor:'pointer',flexShrink:0}}>Dismiss</button>
         </div>
       )}
-      {timerOn && (
+      {/* During a workout the rest timer runs inline on the workout screen (phase 5), with logging locked. */}
+      {timerOn && view !== 'workout' && (
         <div className="timer-ov">
           <div className="t-lbl">Rest Period</div>
           <div className="t-ring">

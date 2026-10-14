@@ -10,3 +10,4 @@ import './ui.test';
 import './nav.test';
 import './today.test';
 import './fuel.test';
+import './workout.test';
