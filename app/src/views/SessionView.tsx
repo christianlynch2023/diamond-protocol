@@ -76,10 +76,10 @@ export default function SessionView() {
                           })}
                         </div>
                       );
-                    })() : ex.struct ? <div style={{fontSize:10,color:'var(--mut)',marginTop:3}}>{ex.struct}</div> : null}
+                    })() : ex.struct ? <div style={{fontSize:11,color:'var(--mut)',marginTop:3}}>{ex.struct}</div> : null}
                     {ex.avoidFail && <div><span className="chip avd">{ex.avoidReason}</span></div>}
-                    {rec.type==='inc' && <div style={{fontSize:10,color:'var(--ok)',marginTop:4}}>&#9650; Increase weight — all sets hit top range</div>}
-                    {rec.type==='beat' && <div style={{fontSize:10,color:'var(--acc)',marginTop:4}}>&#8594; Beat reps on weaker sets</div>}
+                    {rec.type==='inc' && <div style={{fontSize:11,color:'var(--ok)',marginTop:4}}>&#9650; Increase weight — all sets hit top range</div>}
+                    {rec.type==='beat' && <div style={{fontSize:11,color:'var(--acc)',marginTop:4}}>&#8594; Beat reps on weaker sets</div>}
                     {showInt && ex.int && (
                       <div className="int-tog-row">
                         <span className="int-tog-desc">{ex.int.label}: {ex.int.desc}</span>

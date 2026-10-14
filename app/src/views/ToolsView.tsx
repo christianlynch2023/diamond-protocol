@@ -31,7 +31,7 @@ export default function ToolsView() {
                 ? plateRes.plates.length===0
                   ? <div style={{fontFamily:'JetBrains Mono,monospace',fontSize:12,color:'var(--t2)'}}>Bar only — 20kg</div>
                   : <>
-                      <div style={{fontSize:9,letterSpacing:'.15em',color:'var(--t3)',marginBottom:6,textTransform:'uppercase'}}>Each side:</div>
+                      <div style={{fontSize:11,letterSpacing:'.1em',color:'var(--t3)',marginBottom:6,textTransform:'uppercase'}}>Each side:</div>
                       {plateRes.plates.map((p,i) => (
                         <div key={i} className="plate-row">
                           <span className="plate-kg">{p.kg}kg &#215; {p.count}</span>
@@ -137,7 +137,7 @@ export default function ToolsView() {
           <div className="tool-sec">
             <div className="tool-ttl">AI Coaching</div>
             <div className="tool-sub">AI runs through a server-side proxy — no API key is stored on this device</div>
-            <div style={{fontSize:9,color:'var(--t3)',fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>build {BUILD_ID}</div>
+            <div style={{fontSize:11,color:'var(--t3)',fontFamily:"'Barlow Semi Condensed',monospace",marginTop:6}}>build {BUILD_ID}</div>
             <div className="api-note">The key lives in the Netlify ANTHROPIC_API_KEY env var, never in the browser. Nothing to enter here.</div>
           </div>
           <div className="tool-sec">

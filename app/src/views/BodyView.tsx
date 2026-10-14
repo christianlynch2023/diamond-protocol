@@ -123,7 +123,7 @@ export default function BodyView() {
                     <div key={s} className={`site-row${key?' site-key':''}`}>
                       <div className="site-main" onClick={()=>{setExpandedSite(expanded?null:s); setMViewSite(s);}}>
                         <span className="site-nm">{s}</span>
-                        <span className="site-spark">{d.spark && d.spark.length>1 && <Sparkline vals={d.spark} color={key?'#4a9eff':'#5a6b7a'}/>}</span>
+                        <span className="site-spark">{d.spark && d.spark.length>1 && <Sparkline vals={d.spark} color={key?'#b8c2cf':'#5a6b7a'}/>}</span>
                         <span className="site-latest">{d.latest!=null?d.latest:'—'}<span className="site-u">cm</span></span>
                         <span className="site-chg" style={{color: d.change>0?'var(--inf)':d.change<0?'var(--ok)':'var(--t3)'}}>
                           {d.change!=null?`${d.change>0?'▲':d.change<0?'▼':''}${Math.abs(d.change)}`:''}
@@ -149,7 +149,7 @@ export default function BodyView() {
             {measSeries.length > 1 && expandedSite && (
               <div style={{marginTop:8,marginBottom:10}}>
                 <div className="chart-lbl">{mViewSite} — trend (cm)</div>
-                <SVGChart data={measSeries} height={120} color="#4a9eff"/>
+                <SVGChart data={measSeries} height={120} color="#b8c2cf"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddMeas(v => !v)}>
@@ -187,9 +187,9 @@ export default function BodyView() {
               ))}
             </div>
             <div style={{display:'flex',gap:6,marginBottom:8,alignItems:'center'}}>
-              <span style={{fontSize:10.5,color:'var(--t2)',letterSpacing:'.1em',textTransform:'uppercase'}}>Add as</span>
+              <span style={{fontSize:11,color:'var(--t2)',letterSpacing:'.1em',textTransform:'uppercase'}}>Add as</span>
               {['front','side','back'].map(p=>(
-                <button key={p} onClick={()=>setCiAddPose(p)} style={{padding:'5px 11px',fontSize:10.5,borderRadius:6,border:'1px solid var(--bdr)',background:ciAddPose===p?'var(--acc)':'var(--sur)',color:ciAddPose===p?'#000':'var(--t2)',fontWeight:ciAddPose===p?700:500,textTransform:'capitalize'}}>{p}</button>
+                <button key={p} onClick={()=>setCiAddPose(p)} style={{padding:'5px 11px',fontSize:11,borderRadius:6,border:'1px solid var(--bdr)',background:ciAddPose===p?'var(--acc)':'var(--sur)',color:ciAddPose===p?'#000':'var(--t2)',fontWeight:ciAddPose===p?700:500,textTransform:'capitalize'}}>{p}</button>
               ))}
             </div>
             <label className="add-toggle" style={{cursor:'pointer',display:'flex'}}>
@@ -245,7 +245,7 @@ export default function BodyView() {
                                     else if(!ciCompareB){setCiCompareB(c.id);}
                                     else {setCiCompareA(c.id);setCiCompareB(null);}
                                   }}/>
-                                <div style={{position:'absolute',top:0,left:0,right:0,padding:'3px 5px',background:'rgba(0,0,0,.65)',fontSize:8,color:'#fff',display:'flex',justifyContent:'space-between'}}>
+                                <div style={{position:'absolute',top:0,left:0,right:0,padding:'3px 5px',background:'rgba(0,0,0,.65)',fontSize:11,color:'#fff',display:'flex',justifyContent:'space-between'}}>
                                   <span style={{fontWeight:700,letterSpacing:'.06em'}}>{POSE_TAG[c.pose]||'?'}</span>
                                   <span>{selA&&<span style={{color:'var(--acc)',fontWeight:700}}>A</span>}{selB&&<span style={{color:'var(--inf)',fontWeight:700}}>B</span>}</span>
                                 </div>
@@ -508,8 +508,8 @@ export default function BodyView() {
               {nutrition.slice(0, 21).map((n, i) => (
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(n.date)}</span>
-                  <span style={{flex:1,margin:'0 8px',fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'var(--t2)'}}>P{n.protein} C{n.carbs} F{n.fat}</span>
-                  <span className="bl-val">{n.calories}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>kcal</span></span>
+                  <span style={{flex:1,margin:'0 8px',fontFamily:"'Barlow Semi Condensed',monospace",fontSize:11,color:'var(--t2)'}}>P{n.protein} C{n.carbs} F{n.fat}</span>
+                  <span className="bl-val">{n.calories}<span style={{fontSize:11,color:'var(--t3)',marginLeft:2}}>kcal</span></span>
                   <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('nutrition',i,n)}>&#9998;</button>
                   <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setNutrition,'nu')(x=>x===n)}>&#215;</button>
                 </div>
@@ -543,22 +543,22 @@ export default function BodyView() {
                       </div>
                       <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',display:'block'}}>
                         <line x1={PX} y1={yf(cardioTrend.target)} x2={W-PX} y2={yf(cardioTrend.target)} stroke="var(--ok)" strokeWidth="1" strokeDasharray="4 3" opacity="0.55"/>
-                        <text x={W-PX} y={yf(cardioTrend.target)-3} textAnchor="end" fontSize="8" fill="#00e87a" opacity="0.8" fontFamily="JetBrains Mono">150 min guide</text>
+                        <text x={W-PX} y={yf(cardioTrend.target)-3} textAnchor="end" fontSize="8" fill="#3fe0c5" opacity="0.8" fontFamily="Barlow Semi Condensed">150 min guide</text>
                         {rows.map((r,i)=>{
                           const x=PX+i*bw+bw*0.18, w=bw*0.64;
-                          const segs=[['manual','#4a9eff',r.manual],['z2','#c4ff00',r.z2],['z3','#ff8c00',r.z3]];
+                          const segs=[['manual','#b8c2cf',r.manual],['z2','#c4ff00',r.z2],['z3','#ffb020',r.z3]];
                           let acc=0;
                           return (<g key={i}>
                             {segs.map(([k,c,v],si)=>{ if(!v) return null; const y0=yf(acc), y1=yf(acc+v); acc+=v;
                               return <rect key={si} x={x} y={y1} width={w} height={Math.max(0,y0-y1)} fill={c} opacity={i===rows.length-1?1:0.75}/>; })}
-                            <text x={x+w/2} y={H-2} textAnchor="middle" fontSize="7.5" fill="#728aa2" fontFamily="JetBrains Mono">{i===rows.length-1?'now':fmtShort(new Date(r.t).toISOString()).split(' ')[0]}</text>
+                            <text x={x+w/2} y={H-2} textAnchor="middle" fontSize="7.5" fill="#728aa2" fontFamily="Barlow Semi Condensed">{i===rows.length-1?'now':fmtShort(new Date(r.t).toISOString()).split(' ')[0]}</text>
                           </g>);
                         })}
-                        <text x={PX-4} y={yf(maxV)+4} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="JetBrains Mono">{Math.round(maxV)}</text>
+                        <text x={PX-4} y={yf(maxV)+4} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="Barlow Semi Condensed">{Math.round(maxV)}</text>
                       </svg>
                       <div style={{display:'flex',gap:12,marginTop:6,flexWrap:'wrap'}}>
-                        {[['Logged','#4a9eff'],['Zone 2','#c4ff00'],['Zone 3','#ff8c00']].map(([l,c],i)=>(
-                          <span key={i} style={{display:'flex',alignItems:'center',gap:4,fontSize:10,color:'var(--t2)'}}>
+                        {[['Logged','#b8c2cf'],['Zone 2','#c4ff00'],['Zone 3','#ffb020']].map(([l,c],i)=>(
+                          <span key={i} style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'var(--t2)'}}>
                             <span style={{width:8,height:8,borderRadius:2,background:c}}/>{l}
                           </span>))}
                       </div>
@@ -588,8 +588,8 @@ export default function BodyView() {
               {cardioLog.slice(0, 21).map((c, i) => (
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(c.date)}</span>
-                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{c.modality}{c.note ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {c.note}</span> : null}</span>
-                  <span className="bl-val">{c.minutes}<span style={{fontSize:9,color:'var(--t3)',marginLeft:2}}>min</span></span>
+                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{c.modality}{c.note ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:11}}> &#183; {c.note}</span> : null}</span>
+                  <span className="bl-val">{c.minutes}<span style={{fontSize:11,color:'var(--t3)',marginLeft:2}}>min</span></span>
                   <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('cardio',i,c)}>&#9998;</button>
                   <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setCardioLog,'cd')(x=>x===c)}>&#215;</button>
                 </div>
@@ -613,7 +613,7 @@ export default function BodyView() {
             {bpSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Systolic &#8212; last {Math.min(bpLog.length,21)} readings</div>
-                <SVGChart data={bpSeries} height={110} color="#ff6b6b" trend={true} anchor={40} events={chartEvents} band={{lo:90,hi:120}} bandColor="#00e87a" bandLabel="normal systolic"/>
+                <SVGChart data={bpSeries} height={110} color="#ff6b6b" trend={true} anchor={40} events={chartEvents} band={{lo:90,hi:120}} bandColor="#3fe0c5" bandLabel="normal systolic"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddBP(v => !v)}>
@@ -637,7 +637,7 @@ export default function BodyView() {
               {bpLog.slice(0, 21).map((b, i) => { const c = bpCategory(b.sys, b.dia); return (
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(b.date)}</span>
-                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{b.sys}/{b.dia}{b.pulse ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &#183; {b.pulse}bpm</span> : null}</span>
+                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{b.sys}/{b.dia}{b.pulse ? <span style={{color:'var(--t3)',fontWeight:400,fontSize:11}}> &#183; {b.pulse}bpm</span> : null}</span>
                   <span className={`bp-dot ${c.cls}`} title={c.label||""} style={{width:"auto",height:"auto",background:"none",fontSize:11,fontWeight:800,lineHeight:1,color:c.cls==="green"?"var(--ok)":c.cls==="amber"?"var(--warn)":"var(--err)"}}>{c.cls==="green"?"✓":c.cls==="amber"?"△":"▲"}</span>
                   <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('bp',i,b)}>&#9998;</button>
                   <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setBpLog,'bp')(x=>x===b)}>&#215;</button>
@@ -685,7 +685,7 @@ export default function BodyView() {
                   <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>
                     {c.units>0?`${c.units}u`:''}{c.units>0&&(c.tags||[]).length?' · ':''}
                     {(c.tags||[]).map(t=>(CTX_TAGS.find(x=>x.id===t)||{}).label).filter(Boolean).join(', ')}
-                    {c.note?<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> · {c.note}</span>:null}
+                    {c.note?<span style={{color:'var(--t3)',fontWeight:400,fontSize:11}}> · {c.note}</span>:null}
                   </span>
                   <button className="bl-del" aria-label="Delete this entry" onClick={()=>tombstone(setContextLog,'cx')(x=>x===c)}>&#215;</button>
                 </div>
@@ -709,7 +709,7 @@ export default function BodyView() {
             {glSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Fasting glucose &#8212; last {Math.min(glucoseLog.length,21)} readings (mmol/L)</div>
-                <SVGChart data={glSeries} height={110} color="#f0a020" trend={true} anchor={3} band={{lo:4.0,hi:5.5}} bandColor="#00e87a" bandLabel="fasting in-range"/>
+                <SVGChart data={glSeries} height={110} color="#ffb020" trend={true} anchor={3} band={{lo:4.0,hi:5.5}} bandColor="#3fe0c5" bandLabel="fasting in-range"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddGl(v => !v)}>
@@ -731,7 +731,7 @@ export default function BodyView() {
               {glucoseLog.slice(0, 21).map((g, i) => { const c = glucoseCategory(g.value); return (
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(g.date)}</span>
-                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{g.value}<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> mmol/L</span></span>
+                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{g.value}<span style={{color:'var(--t3)',fontWeight:400,fontSize:11}}> mmol/L</span></span>
                   <span className={`bp-dot ${c.cls}`} title={c.label||""} style={{width:"auto",height:"auto",background:"none",fontSize:11,fontWeight:800,lineHeight:1,color:c.cls==="green"?"var(--ok)":c.cls==="amber"?"var(--warn)":"var(--err)"}}>{c.cls==="green"?"✓":c.cls==="amber"?"△":"▲"}</span>
                   <button className="bl-edit" aria-label="Edit this entry" onClick={()=>openBodyEdit('glucose',i,g)}>&#9998;</button>
                   <button className="bl-del" aria-label="Delete this entry" onClick={() => tombstone(setGlucoseLog,'gl')(x=>x===g)}>&#215;</button>
@@ -749,7 +749,7 @@ export default function BodyView() {
             {tempChartSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Waking temp &#8212; last {Math.min(tempLogList.length,21)} readings (&deg;)</div>
-                <SVGChart data={tempChartSeries} height={110} color="#ff9f43" trend={true} anchor={1.5} events={chartEvents} band={tempBand} bandColor="#00e87a" bandLabel="your baseline"/>
+                <SVGChart data={tempChartSeries} height={110} color="#ff9f43" trend={true} anchor={1.5} events={chartEvents} band={tempBand} bandColor="#3fe0c5" bandLabel="your baseline"/>
               </div>
             )}
             <button className="add-toggle" onClick={() => setShowAddTemp(v => !v)}>
@@ -771,7 +771,7 @@ export default function BodyView() {
               {tempLogList.slice(0, 21).map((v, i) => (
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(v.date)}</span>
-                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{v.temp}<span style={{color:'var(--t3)',fontWeight:400,fontSize:10}}> &deg;</span></span>
+                  <span style={{flex:1,margin:'0 8px',color:'var(--t)',fontWeight:600,fontSize:12}}>{v.temp}<span style={{color:'var(--t3)',fontWeight:400,fontSize:11}}> &deg;</span></span>
                   <button className="bl-del" aria-label="Delete this entry" onClick={() => clearVitalField(v.date,'temp')}>&#215;</button>
                 </div>
               ))}
@@ -924,7 +924,7 @@ export default function BodyView() {
                     <thead>
                       <tr>
                         <th style={{textAlign:'left',padding:'4px 8px 6px 0',color:'var(--t3)',fontWeight:700,position:'sticky',left:0,background:'var(--crd)'}}>Marker</th>
-                        {bloodCompare.dates.map(d=><th key={d} style={{padding:'4px 8px 6px',color:'var(--t2)',fontFamily:"'JetBrains Mono',monospace",fontWeight:700,whiteSpace:'nowrap',textAlign:'center'}}>{fmtShort(d)}</th>)}
+                        {bloodCompare.dates.map(d=><th key={d} style={{padding:'4px 8px 6px',color:'var(--t2)',fontFamily:"'Barlow Semi Condensed',monospace",fontWeight:700,whiteSpace:'nowrap',textAlign:'center'}}>{fmtShort(d)}</th>)}
                       </tr>
                     </thead>
                     <tbody>
@@ -934,7 +934,7 @@ export default function BodyView() {
                           {bloodCompare.dates.map(d=>{
                             const c = r.cells[d];
                             const col = !c ? 'var(--t3)' : (c.flag==='high'||c.flag==='low') ? '#ff6b6b' : c.flag==='watch' ? '#e0b020' : 'var(--t)';
-                            return <td key={d} style={{padding:'6px 8px',textAlign:'center',fontFamily:"'JetBrains Mono',monospace",color:col,whiteSpace:'nowrap'}}>{c ? `${c.flag==='high'?'\u25b2 ':c.flag==='low'?'\u25bc ':''}${c.disp}` : '\u2014'}</td>;
+                            return <td key={d} style={{padding:'6px 8px',textAlign:'center',fontFamily:"'Barlow Semi Condensed',monospace",color:col,whiteSpace:'nowrap'}}>{c ? `${c.flag==='high'?'\u25b2 ':c.flag==='low'?'\u25bc ':''}${c.disp}` : '\u2014'}</td>;
                           })}
                         </tr>
                       ))}
@@ -1033,7 +1033,7 @@ export default function BodyView() {
                     <span className="mp-cals">{dm.days} d</span>
                   </div>
                   <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',display:'block'}}>
-                    {[0,0.5,1].map((f,i)=>{const y=(H-PY)-f*(H-2*PY);return(<g key={i}><line x1={PX} y1={y} x2={W-PX} y2={y} stroke="#1d2733" strokeWidth="1" strokeDasharray="3 3"/><text x={PX-4} y={y+3} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="JetBrains Mono">{Math.round(f*dm.maxAmt)}</text></g>);})}
+                    {[0,0.5,1].map((f,i)=>{const y=(H-PY)-f*(H-2*PY);return(<g key={i}><line x1={PX} y1={y} x2={W-PX} y2={y} stroke="#1d2733" strokeWidth="1" strokeDasharray="3 3"/><text x={PX-4} y={y+3} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="Barlow Semi Condensed">{Math.round(f*dm.maxAmt)}</text></g>);})}
                     {dm.series.map((s,si)=>{const line=s.pts.map((p,i)=>`${i===0?'M':'L'}${xf(p.d).toFixed(1)} ${yf(p.amt).toFixed(1)}`).join(' ');return <path key={si} d={line} fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>;})}
                     {dm.series.flatMap((s,si)=> s.evs.map((e,ei)=>{const d=(e.t-dm.t0)/86400000;return <circle key={si+'-'+ei} cx={xf(d)} cy={H-PY} r="1.6" fill={s.color} fillOpacity="0.6"/>;}))}
                     {/* Blood draws on the same axis: puts marker drift in protocol context. */}
@@ -1044,19 +1044,19 @@ export default function BodyView() {
                       const d=(t-dm.t0)/86400000;
                       return (<g key={'bd'+pi}>
                         <line x1={xf(d)} y1={PY} x2={xf(d)} y2={H-PY} stroke="#a479e2" strokeWidth="1" strokeDasharray="3 3" opacity="0.55"/>
-                        <text x={xf(d)} y={PY-4} textAnchor="middle" fontSize="7" fill="#a479e2" opacity="0.9" fontFamily="JetBrains Mono">bloods</text>
+                        <text x={xf(d)} y={PY-4} textAnchor="middle" fontSize="7" fill="#a479e2" opacity="0.9" fontFamily="Barlow Semi Condensed">bloods</text>
                       </g>);
                     })}
-                    <text x={PX} y={H-2} textAnchor="start" fontSize="8" fill="#728aa2" fontFamily="JetBrains Mono">{fmtShort(new Date(dm.t0).toISOString())}</text>
-                    <text x={W-PX} y={H-2} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="JetBrains Mono">today</text>
-                    <text x={PX-4} y={PY-5} fontSize="7.5" fill="#728aa2" fontFamily="JetBrains Mono">mg-eq</text>
+                    <text x={PX} y={H-2} textAnchor="start" fontSize="8" fill="#728aa2" fontFamily="Barlow Semi Condensed">{fmtShort(new Date(dm.t0).toISOString())}</text>
+                    <text x={W-PX} y={H-2} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="Barlow Semi Condensed">today</text>
+                    <text x={PX-4} y={PY-5} fontSize="7.5" fill="#728aa2" fontFamily="Barlow Semi Condensed">mg-eq</text>
                   </svg>
                   <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:5}}>
                     {dm.series.map((s,si)=>(
                       <div key={si} style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
                         <span style={{width:8,height:8,borderRadius:2,background:s.color,flexShrink:0}}/>
                         <span style={{fontSize:11,color:'var(--t)',fontWeight:600}}>{s.name}</span>
-                        <span style={{fontSize:10,color:'var(--t2)',fontFamily:"'JetBrains Mono',monospace"}}>t&#189; ~{s.hl}d ({s.conf}) &#183; {s.n} logged &#183; now ~{Math.round(s.cur)} (peak ~{Math.round(s.peak)}) mg-eq</span>
+                        <span style={{fontSize:11,color:'var(--t2)',fontFamily:"'Barlow Semi Condensed',monospace"}}>t&#189; ~{s.hl}d ({s.conf}) &#183; {s.n} logged &#183; now ~{Math.round(s.cur)} (peak ~{Math.round(s.peak)}) mg-eq</span>
                       </div>
                     ))}
                   </div>

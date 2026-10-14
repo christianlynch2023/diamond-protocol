@@ -49,7 +49,7 @@ export default function WorkoutView() {
               <div className="set-trk">
                 <div className="stl">
                   <span>{editIdx!==null?`Editing Set ${editIdx+1}`:`Set ${loggedSetsArr.length+1} of ${effSets}`}</span>
-                  <span style={{color:'var(--t3)',fontFamily:'JetBrains Mono,monospace',fontSize:9}}>{loggedSetsArr.length}/{effSets} done</span>
+                  <span style={{color:'var(--t3)',fontFamily:'JetBrains Mono,monospace',fontSize:11}}>{loggedSetsArr.length}/{effSets} done</span>
                 </div>
                 <div className="dots">
                   {Array.from({length:effSets}).map((_,i) => (

@@ -30,10 +30,10 @@ export default function MealsView() {
           else { vTxt = 'Under 0.3 kg a week. If this holds for 2 weeks, cut 150 kcal of rest-day carbs or add 2,000 steps a day.'; vCol = 'var(--warn)'; }
           const wksTarget = toGo != null && toGo > 0 ? Math.ceil(toGo / P.targetRate) : null;
           const wksNow = toGo != null && toGo > 0 && loss != null && loss > 0.05 ? Math.ceil(toGo / loss) : null;
-          const mono = {fontFamily:"'JetBrains Mono',monospace"};
+          const mono = {fontFamily:"'Barlow Semi Condensed',monospace"};
           const stat = (label, val) => (
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:10,color:'var(--t3)',marginBottom:2}}>{label}</div>
+              <div style={{fontSize:11,color:'var(--t3)',marginBottom:2}}>{label}</div>
               <div style={{...mono,fontSize:15,fontWeight:700,color:'var(--t)'}}>{val}</div>
             </div>
           );
@@ -68,7 +68,7 @@ export default function MealsView() {
                   {[['kcal',tgt.kcal],['protein',tgt.p+'g'],['carbs',tgt.c+'g'],['fat',tgt.f+'g']].map(([l,v])=>(
                     <div key={l} style={{flex:1,textAlign:'center',padding:'8px 2px',background:'var(--sur)',border:'1px solid var(--bdr)',borderRadius:8}}>
                       <div style={{...mono,fontSize:14,fontWeight:700,color:'var(--acc)'}}>{v}</div>
-                      <div style={{fontSize:10,color:'var(--t3)'}}>{l}</div>
+                      <div style={{fontSize:11,color:'var(--t3)'}}>{l}</div>
                     </div>
                   ))}
                 </div>
@@ -78,7 +78,7 @@ export default function MealsView() {
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:13,fontWeight:700,color:'var(--t)'}}>{m.n}</div>
                       <div style={{fontSize:12,color:'var(--t2)',lineHeight:1.45}}>{m.food}</div>
-                      <div style={{...mono,fontSize:10,color:'var(--t3)',marginTop:2}}>P {m.p} &#183; C {m.c} &#183; F {m.f}</div>
+                      <div style={{...mono,fontSize:11,color:'var(--t3)',marginTop:2}}>P {m.p} &#183; C {m.c} &#183; F {m.f}</div>
                     </div>
                   </div>
                 ))}

@@ -24,7 +24,7 @@ export default function PrivacyView() {
               {storageBreakdown.rows.map((r,i)=>(
                 <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderTop:i?'1px solid var(--bdr)':'none',fontSize:12}}>
                   <span style={{color:'var(--t)'}}>{r.name}</span>
-                  <span style={{color:'var(--t3)',fontFamily:"'JetBrains Mono',monospace"}}>{fmtB(r.bytes)}</span>
+                  <span style={{color:'var(--t3)',fontFamily:"'Barlow Semi Condensed',monospace"}}>{fmtB(r.bytes)}</span>
                 </div>
               ))}
             </div>

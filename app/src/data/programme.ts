@@ -195,7 +195,7 @@ export const EX_MUSCLE: Record<string, MuscleMap> = {
         const paint = () => {
           const b = document.createElement('div');
           b.textContent = msg;
-          b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#ff4444;color:#000;font:700 12px/1.4 monospace;padding:8px 12px;text-align:center';
+          b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#ff5a4f;color:#000;font:700 12px/1.4 monospace;padding:8px 12px;text-align:center';
           document.body && document.body.appendChild(b);
         };
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paint);

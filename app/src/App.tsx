@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { ALT_BY_MUSCLE, EX_MUSCLE, SESSIONS } from './data/programme';
 import { fmt } from './lib/format';
 import { RootBoundary } from './components/RootBoundary';
+import { Icon } from './components/Icon';
+import type { IconName } from './components/Icon';
 import { AppCtx } from './appContext';
 import BodyView from './views/BodyView';
 import HistoryView from './views/HistoryView';
@@ -16,6 +18,12 @@ import SessionView from './views/SessionView';
 import WorkoutView from './views/WorkoutView';
 import { useAppState } from './state/useAppState';
 
+// Bottom tabs: view id, line icon, label. Phase 2 of round 2 reduces this to five tabs.
+const TABS: ReadonlyArray<[string, IconName, string]> = [
+  ['today', 'today', 'Today'], ['meals', 'meals', 'Meals'], ['home', 'program', 'Program'], ['progress', 'progress', 'Progress'],
+  ['history', 'history', 'History'], ['body', 'body', 'Body'], ['privacy', 'privacy', 'Privacy'], ['tools', 'tools', 'Tools'],
+];
+
 function App() {
   const __app = useAppState();
   const {
@@ -26,9 +34,10 @@ function App() {
     timerMsg, timerOn, timerSecs, view
   } = __app;
 
-  // Bottom tabs: shrink a label only if it doesn't fit its tab (PROGRESS on narrow phones), rather than
-  // cutting it to "PROGRE...". Measures the text's exact width (fractions of a pixel, in capitals as shown)
-  // against the tab's inner width, keeps 1px of room, and re-measures whenever a web font finishes loading.
+  // Bottom tabs: shrink a label only if it doesn't fit its tab, rather than cutting it to "Progre...".
+  // Measures the text's exact width as displayed (respecting any capitals transform) against the tab's
+  // inner width, keeps 1px of room, and re-measures whenever a web font finishes loading.
+  // Phase 2 (five tabs) removes this: five labels at 11px fit on any phone.
   useEffect(() => {
     const ctx = document.createElement('canvas').getContext('2d');
     const fit = () => document.querySelectorAll<HTMLElement>('.bn-lb').forEach(el => {
@@ -37,16 +46,17 @@ function App() {
       if (!ctx || !tab) return;
       const cs = getComputedStyle(el), ts = getComputedStyle(tab);
       const avail = tab.clientWidth - parseFloat(ts.paddingLeft) - parseFloat(ts.paddingRight) - 1;
-      const text = (el.textContent || '').toUpperCase();
+      const raw = el.textContent || '';
+      const text = cs.textTransform === 'uppercase' ? raw.toUpperCase() : raw;
       const width = (px: number) => { ctx.font = `${cs.fontWeight} ${px}px ${cs.fontFamily}`; return ctx.measureText(text).width; };
       const base = parseFloat(cs.fontSize);
       const need = width(base);
       if (need <= avail) return;
       // Small text doesn't shrink in exact proportion (letters snap to the pixel grid), so check the
-      // result and step down until it really fits, never below 6.5px.
+      // result and step down until it really fits, never below 9px.
       let px = base * avail / need;
-      while (px > 6.5 && width(px) > avail) px -= 0.1;
-      el.style.fontSize = Math.max(6.5, px).toFixed(2) + 'px';
+      while (px > 9 && width(px) > avail) px -= 0.1;
+      el.style.fontSize = Math.max(9, px).toFixed(2) + 'px';
     });
     fit();
     const fonts = (document as any).fonts;
@@ -60,9 +70,9 @@ function App() {
     <AppCtx.Provider value={__app}>
 <div className="app">
       {storageFail && (
-        <div style={{position:'sticky',top:0,zIndex:9999,background:'rgba(255,68,68,0.14)',borderBottom:'1px solid rgba(255,68,68,0.5)',color:'#ff9a9a',fontFamily:"'JetBrains Mono',monospace",fontSize:11,padding:'8px 12px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
+        <div style={{position:'sticky',top:0,zIndex:9999,background:'rgba(255,90,79,0.14)',borderBottom:'1px solid rgba(255,90,79,0.5)',color:'#ff9a9a',fontFamily:'var(--font-text)',fontSize:13,padding:'8px 12px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
           <span>Storage write failed ({storageFail}). Your device storage may be full or blocked — recent changes might not survive a reload. Export a backup, then free space.</span>
-          <button onClick={()=>setStorageFail(null)} style={{background:'none',border:'1px solid rgba(255,68,68,0.5)',color:'#ff9a9a',borderRadius:6,padding:'3px 8px',cursor:'pointer',flexShrink:0}}>Dismiss</button>
+          <button onClick={()=>setStorageFail(null)} style={{background:'none',border:'1px solid rgba(255,90,79,0.5)',color:'#ff9a9a',borderRadius:8,padding:'0 10px',minHeight:36,cursor:'pointer',flexShrink:0}}>Dismiss</button>
         </div>
       )}
       {timerOn && (
@@ -203,14 +213,14 @@ function App() {
 
       {restFlash && <div className="rest-flash"><div className="rest-flash-txt">REST OVER</div></div>}
       {view !== 'workout' && view !== 'complete' && (
-        <div className="bnav">
-          {[['today','&#128197;','Today'],['meals','&#127869;','Meals'],['home','&#127947;','Program'],['progress','&#128200;','Progress'],['history','&#128203;','History'],['body','&#9878;','Body'],['privacy','&#128274;','Privacy'],['tools','&#128295;','Tools']].map(([v,icon,label]) => (
-            <div key={v} className={`bn${view===v?' on':''}`} onClick={() => setView(v)}>
-              <span className="bn-ic" dangerouslySetInnerHTML={{__html:icon}}/>
+        <nav className="bnav" aria-label="Main">
+          {TABS.map(([v,icon,label]) => (
+            <button key={v} type="button" className={`bn${view===v?' on':''}`} aria-current={view===v?'page':undefined} onClick={() => setView(v)}>
+              <span className="bn-ic"><Icon name={icon} size={22} /></span>
               <span className="bn-lb">{label}</span>
-            </div>
+            </button>
           ))}
-        </div>
+        </nav>
       )}
     </div>
     </AppCtx.Provider>

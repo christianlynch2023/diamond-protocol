@@ -12,13 +12,13 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
 }
 const ic=document.createElement('canvas'); ic.width=ic.height=512;
 const cx=ic.getContext('2d');
-cx.fillStyle='#07090c'; cx.roundRect(0,0,512,512,80); cx.fill();
+cx.fillStyle='#0a0c10'; cx.roundRect(0,0,512,512,80); cx.fill();
 cx.fillStyle='#c4ff00'; cx.roundRect(0,0,512,10,[80,80,0,0]); cx.fill();
 cx.fillStyle='#c4ff00'; cx.font='bold 300px system-ui,sans-serif';
 cx.textAlign='center'; cx.textBaseline='middle'; cx.fillText('\u26a1',256,265);
 const iurl=ic.toDataURL('image/png');
 document.getElementById('apple-icon').href=iurl;
-const mf={name:"Diamond Protocol",short_name:"Diamond",description:"12-Week Hypertrophy Tracker",start_url:".",display:"standalone",background_color:"#07090c",theme_color:"#07090c",orientation:"portrait-primary",icons:[{src:iurl,sizes:"512x512",type:"image/png"},{src:iurl,sizes:"192x192",type:"image/png"}]};
+const mf={name:"Diamond Protocol",short_name:"Diamond",description:"12-Week Hypertrophy Tracker",start_url:".",display:"standalone",background_color:"#0a0c10",theme_color:"#0a0c10",orientation:"portrait-primary",icons:[{src:iurl,sizes:"512x512",type:"image/png"},{src:iurl,sizes:"192x192",type:"image/png"}]};
 const mb=new Blob([JSON.stringify(mf)],{type:'application/json'});
 const ml=document.createElement('link'); ml.rel='manifest'; ml.href=URL.createObjectURL(mb); document.head.appendChild(ml);
 // HARD CACHE-BUST: if the stored build id differs from this bundle's, delete every cache and

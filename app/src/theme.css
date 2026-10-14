@@ -1,0 +1,84 @@
+/* Round 2 theme layer (Phase 1). Loaded straight after styles.css, so it wins on equal selectors.
+   Rollback for the whole look: remove the theme.css import in main.tsx.
+   Colour roles: lime = action and "you are here"; mint = good; amber = watch; red = problem;
+   everything else neutral. See app/DESIGN.md. */
+
+:root {
+  /* existing variable names, new values: every rule in styles.css picks these up */
+  --bg: #0a0c10;
+  --sur: #171c24;          /* raised tiles, inputs, chips */
+  --crd: #12161c;          /* cards */
+  --bdr: #222a35;
+  --acc: #c4ff00;
+  --ag: rgba(196, 255, 0, .12);
+  --ag2: rgba(196, 255, 0, .05);
+  --ok: #3fe0c5;
+  --warn: #ffb020;
+  --err: #ff5a4f;
+  --inf: #b8c2cf;          /* information is neutral now; blue is retired */
+  --t: #eef2f6;
+  --t2: #8a96a6;           /* 6:1 on cards */
+  --t3: #808c9c;           /* 4.8:1 on raised tiles, the faintest text allowed */
+
+  /* new tokens for phases 2 to 6 */
+  --line2: #1a212b;
+  --font-text: 'Barlow', system-ui, -apple-system, sans-serif;
+  --font-fig: 'Barlow Semi Condensed', 'Barlow', system-ui, sans-serif;
+  --fs-cap: 12px; --fs-label: 13px; --fs-body: 15px; --fs-title: 20px; --fs-screen: 30px; --fs-fig: 44px;
+  --r-card: 18px; --r-tile: 14px; --r-ctl: 12px;
+  --tap: 44px;
+}
+
+body { font-family: var(--font-text); font-variant-numeric: tabular-nums; background: var(--bg); color: var(--t); }
+button, input, select, textarea { font-variant-numeric: tabular-nums; }
+
+/* ---- bottom navigation: line icons, sentence-case labels, lime pill on the active tab ---- */
+.bnav { background: rgba(10, 12, 16, .96); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.bn { background: none; border: 0; font: inherit; color: var(--t2); gap: 3px; padding: 6px 0 4px; justify-content: center; min-height: 56px; }
+.bn.on { color: var(--acc); }
+.bn-ic { display: flex; align-items: center; justify-content: center; width: 44px; height: 28px; border-radius: 14px; font-size: 0; transition: background .15s; }
+.bn.on .bn-ic { background: rgba(196, 255, 0, .12); }
+.bn-lb { font-family: var(--font-text); font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; color: inherit; }
+.bn.on .bn-lb { color: var(--acc); font-weight: 600; }
+
+/* ---- calmer primary buttons: sentence case, no tracking, comfortable height ---- */
+.start-btn, .log-btn, .done-home { text-transform: none; letter-spacing: 0; font-size: 16px; font-weight: 600; border-radius: 14px; min-height: 52px; }
+
+/* ---- softer cards ---- */
+.sc, .ex-card, .whoop-panel, .h-item, .modal, .done-stat, .pst, .dash-card { border-radius: 16px; }
+
+/* ---- round 2 building blocks (components/ui.tsx) ---- */
+.ui-card { background: var(--crd); border: 1px solid var(--bdr); border-radius: var(--r-card); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.ui-card-watch { border-color: rgba(255, 176, 32, .45); }
+.ui-card-accent { border-color: rgba(196, 255, 0, .45); }
+.ui-eyebrow { font-family: var(--font-text); font-size: 11px; line-height: 14px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--t2); }
+.ui-fig { font-family: var(--font-fig); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--t); }
+.ui-fig-s { font-size: 17px; line-height: 20px; font-weight: 600; }
+.ui-fig-m { font-size: 22px; line-height: 24px; font-weight: 600; }
+.ui-fig-l { font-size: 36px; line-height: 40px; }
+.ui-fig-xl { font-size: 44px; line-height: 46px; }
+.ui-unit { margin-left: 4px; font-size: .45em; font-weight: 500; color: var(--t2); }
+.ui-t-ok { color: var(--ok); } .ui-t-watch { color: var(--warn); } .ui-t-problem { color: var(--err); } .ui-t-accent { color: var(--acc); }
+.ui-bg-ok { background: var(--ok); } .ui-bg-watch { background: var(--warn); } .ui-bg-problem { background: var(--err); } .ui-bg-accent { background: var(--acc); }
+
+.ui-btn { min-height: var(--tap); padding: 0 16px; border-radius: var(--r-ctl); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: var(--font-text); font-size: 15px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+.ui-btn:disabled { opacity: .4; cursor: not-allowed; }
+.ui-btn-primary { background: var(--acc); color: #0a0c10; border-color: var(--acc); }
+.ui-btn-ghost { background: var(--sur); color: var(--t); border-color: #2a3442; }
+.ui-btn-danger { background: rgba(255, 90, 79, .08); color: var(--err); border-color: rgba(255, 90, 79, .5); }
+.ui-full { width: 100%; min-height: 52px; font-size: 17px; border-radius: var(--r-tile); }
+
+.ui-seg { display: grid; gap: 4px; padding: 4px; background: var(--crd); border: 1px solid var(--bdr); border-radius: var(--r-tile); }
+.ui-seg-b { min-height: 36px; border: 0; border-radius: 10px; background: none; color: var(--t2); font-family: var(--font-text); font-size: 14px; font-weight: 500; cursor: pointer; }
+.ui-seg-b.on { background: var(--acc); color: #0a0c10; font-weight: 600; }
+
+.ui-step { background: var(--sur); border-radius: var(--r-tile); padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ui-step-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.ui-step-b { width: var(--tap); height: var(--tap); border-radius: var(--r-ctl); border: 1px solid #2a3442; background: var(--crd); color: var(--t); font-size: 22px; cursor: pointer; }
+.ui-step-sub { font-size: 12px; color: var(--t2); }
+
+.ui-range { position: relative; height: 10px; }
+.ui-range-track { position: absolute; left: 0; right: 0; top: 4px; height: 2px; border-radius: 1px; background: var(--bdr); }
+.ui-range-band { position: absolute; top: 2px; height: 6px; border-radius: 3px; background: #2e3946; }
+.ui-range-dot { position: absolute; top: 0; width: 10px; height: 10px; margin-left: -5px; border-radius: 5px; }
+.ui-spark { display: block; }

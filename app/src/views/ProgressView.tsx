@@ -156,8 +156,8 @@ export default function ProgressView() {
               <div className="ar-card">
                 <div className="hm-head"><span className="hm-ttl">Strength retention</span><span className="hm-wk">21d vs prior 21d · e1RM</span></div>
                 <div style={{display:'flex',alignItems:'baseline',gap:10,marginBottom:6}}>
-                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:strengthRet.avgPct>=-1.5?'var(--ok)':'var(--err)'}}>{strengthRet.avgPct>0?'+':''}{strengthRet.avgPct}%</span>
-                  {wrate!=null && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'var(--t2)'}}>weight {wrate>0?'+':''}{wrate.toFixed(2)} kg/wk</span>}
+                  <span style={{fontFamily:"'Barlow Semi Condensed',monospace",fontSize:30,fontWeight:700,color:strengthRet.avgPct>=-1.5?'var(--ok)':'var(--err)'}}>{strengthRet.avgPct>0?'+':''}{strengthRet.avgPct}%</span>
+                  {wrate!=null && <span style={{fontFamily:"'Barlow Semi Condensed',monospace",fontSize:12,color:'var(--t2)'}}>weight {wrate>0?'+':''}{wrate.toFixed(2)} kg/wk</span>}
                 </div>
                 <div style={{fontSize:12,lineHeight:1.5,color:vCls,marginBottom:8}}>{verdict}</div>
                 <div className="ar-list">
@@ -180,8 +180,8 @@ export default function ProgressView() {
               {movementPRs.map((m,i)=>(
                 <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'6px 0',borderTop:i?'1px solid var(--bdr)':'none'}}>
                   <span style={{flex:1,fontSize:13,color:'var(--t)',fontWeight:600}}>{m.name}</span>
-                  <span style={{fontSize:13,color:'var(--acc)',fontWeight:800,fontFamily:"'JetBrains Mono',monospace"}}>{m.bestE1RM}kg</span>
-                  <span style={{fontSize:10,color:'var(--t3)',minWidth:118,textAlign:'right',fontFamily:"'JetBrains Mono',monospace"}}>{m.sessions} sess &#183; {fmtShort(m.lastDate)}</span>
+                  <span style={{fontSize:13,color:'var(--acc)',fontWeight:800,fontFamily:"'Barlow Semi Condensed',monospace"}}>{m.bestE1RM}kg</span>
+                  <span style={{fontSize:11,color:'var(--t3)',minWidth:118,textAlign:'right',fontFamily:"'Barlow Semi Condensed',monospace"}}>{m.sessions} sess &#183; {fmtShort(m.lastDate)}</span>
                 </div>
               ))}
             </div>
@@ -206,7 +206,7 @@ export default function ProgressView() {
           </>}
 
           {/* Phase 5: everything below is deeper analysis, collapsed by default so Progress leads with what matters today. */}
-          <div className="explore-lbl" style={{fontSize:10,fontWeight:800,letterSpacing:'.14em',textTransform:'uppercase',color:'var(--t3)',margin:'20px 2px 2px'}}>Explore</div>
+          <div className="explore-lbl" style={{fontSize:11,fontWeight:800,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--t3)',margin:'20px 2px 2px'}}>Explore</div>
           <div style={{fontSize:11,color:'var(--t3)',margin:'0 2px 8px',lineHeight:1.5}}>Deeper analysis. Tap a section to open it.</div>
 
           <div className="grp-head" onClick={()=>toggleGrp('training')}><span className="grp-ttl">Training & volume</span><span className={'sec-chev'+(grpOpen('training')?' op':'')}>▾</span></div>
@@ -224,7 +224,7 @@ export default function ProgressView() {
                 const sets=Math.round((plannedVol[key]||0)*10)/10;   // fractional — drives status
                 const dsets=Math.round((volParts.dir[key]||0)*10)/10; // direct isolation — detail
                 if(sets===0 && mus.optional) return null;
-                const c = sets<mus.min?{bg:'rgba(74,158,255,.12)',bd:'rgba(74,158,255,.38)',fg:'#5aa9ff'}:sets>mus.max?{bg:'rgba(212,160,23,.14)',bd:'rgba(212,160,23,.5)',fg:'#e0b020'}:{bg:'rgba(0,232,122,.12)',bd:'rgba(0,232,122,.38)',fg:'#00e87a'};
+                const c = sets<mus.min?{bg:'rgba(184,194,207,.12)',bd:'rgba(184,194,207,.38)',fg:'#5aa9ff'}:sets>mus.max?{bg:'rgba(212,160,23,.14)',bd:'rgba(212,160,23,.5)',fg:'#e0b020'}:{bg:'rgba(63,224,197,.12)',bd:'rgba(63,224,197,.38)',fg:'#3fe0c5'};
                 return (
                   <div key={key} className="hm-cell" style={{background:c.bg,borderColor:c.bd}}>
                     <div className="hm-mus">{mus.name}</div>
@@ -235,7 +235,7 @@ export default function ProgressView() {
                 );
               })}
             </div>
-            <div className="hm-legend"><span><i style={{background:'#5aa9ff'}}/>below floor</span><span><i style={{background:'#00e87a'}}/>in range</span><span><i style={{background:'#e0b020'}}/>overreach</span></div>
+            <div className="hm-legend"><span><i style={{background:'#5aa9ff'}}/>below floor</span><span><i style={{background:'#3fe0c5'}}/>in range</span><span><i style={{background:'#e0b020'}}/>overreach</span></div>
           </div>
 
           {actualVol && actualVol.completedWeeks > 0 && (
@@ -246,7 +246,7 @@ export default function ProgressView() {
                 const act=actualVol.avg[key]||0, plan=Math.round((plannedVol[key]||0)*10)/10;
                 if(act===0 && mus.optional) return null;
                 const pctOfPlan = plan>0 ? (act/plan)*100 : 0;
-                const col = act<mus.min ? '#5aa9ff' : act>mus.max ? '#e0b020' : '#00e87a';
+                const col = act<mus.min ? '#5aa9ff' : act>mus.max ? '#e0b020' : '#3fe0c5';
                 return (
                   <div key={key} className="av-row">
                     <span className="av-mus">{mus.name}</span>
@@ -307,7 +307,7 @@ export default function ProgressView() {
           {durations && durations.series.length > 1 && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Session length</span><span className="hm-wk">last {durations.series.length} · avg {durations.overall} min</span></div>
-              <SVGBars items={durations.types.map(t=>({label:t.name.replace('Upper','Up').replace('Lower','Low'),value:t.avg,lo:t.min,hi:t.max,sub:t.n+' sess'}))} color="#4a9eff" height={132} unit="min avg"/>
+              <SVGBars items={durations.types.map(t=>({label:t.name.replace('Upper','Up').replace('Lower','Low'),value:t.avg,lo:t.min,hi:t.max,sub:t.n+' sess'}))} color="#b8c2cf" height={132} unit="min avg"/>
               {durations.types.map(t=>{
                 return (
                   <div key={t.key} className="dur-row">
@@ -326,11 +326,11 @@ export default function ProgressView() {
                   </div>
                   <div style={{display:'flex',height:10,borderRadius:5,overflow:'hidden',background:'var(--sur)'}}>
                     <div style={{width:(durSplit.wall?durSplit.active/durSplit.wall*100:0)+'%',background:'var(--acc)'}}/>
-                    <div style={{width:(durSplit.wall?durSplit.rest/durSplit.wall*100:0)+'%',background:'#4a9eff',opacity:0.6}}/>
+                    <div style={{width:(durSplit.wall?durSplit.rest/durSplit.wall*100:0)+'%',background:'#b8c2cf',opacity:0.6}}/>
                   </div>
-                  <div style={{display:'flex',gap:14,marginTop:6,fontSize:10.5,color:'var(--t2)'}}>
+                  <div style={{display:'flex',gap:14,marginTop:6,fontSize:11,color:'var(--t2)'}}>
                     <span><b style={{color:'var(--acc)'}}>{durSplit.active} min</b> working</span>
-                    <span><b style={{color:'#4a9eff'}}>{durSplit.rest} min</b> resting</span>
+                    <span><b style={{color:'#b8c2cf'}}>{durSplit.rest} min</b> resting</span>
                   </div>
                   <div className="av-note" style={{marginTop:7,marginBottom:0}}>This is wall-clock time minus logged rest — so it still includes setup, transitions and any unlogged breaks, not just working sets. Read it as session length, not pure effort time. Sessions logged before this was tracked are not included.</div>
                 </div>
@@ -358,7 +358,7 @@ export default function ProgressView() {
           {rirDrift && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">RIR drift</span><span className="hm-wk">logged vs prescribed</span></div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:Math.abs(rirDrift.avg)<=0.5?'var(--ok)':rirDrift.avg>0.5?'var(--warn)':'var(--inf)',marginBottom:6}}>
+              <div style={{fontFamily:"'Barlow Semi Condensed',monospace",fontSize:30,fontWeight:700,color:Math.abs(rirDrift.avg)<=0.5?'var(--ok)':rirDrift.avg>0.5?'var(--warn)':'var(--inf)',marginBottom:6}}>
                 {rirDrift.avg>0?'+':''}{rirDrift.avg}
               </div>
               <div style={{fontSize:12,lineHeight:1.5,color:'var(--t2)',marginBottom:8}}>
@@ -381,7 +381,7 @@ export default function ProgressView() {
           {deloadRebound && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Deload rebound</span><span className="hm-wk">week after vs week before</span></div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:deloadRebound.avg>=1?'var(--ok)':deloadRebound.avg<=-1?'var(--err)':'var(--t2)',marginBottom:6}}>
+              <div style={{fontFamily:"'Barlow Semi Condensed',monospace",fontSize:30,fontWeight:700,color:deloadRebound.avg>=1?'var(--ok)':deloadRebound.avg<=-1?'var(--err)':'var(--t2)',marginBottom:6}}>
                 {deloadRebound.avg>0?'+':''}{deloadRebound.avg}%
               </div>
               <div style={{fontSize:12,lineHeight:1.5,color:'var(--t2)',marginBottom:8}}>
@@ -423,11 +423,11 @@ export default function ProgressView() {
                   )}
                 </div>
                 <div className="chart-lbl" style={{marginTop:14}}>Recovery — last {Math.min(whoopHistory.length,30)} readings</div>
-                <SVGChart data={whoopHistory.slice(-30).map(h=>({x:h.date.slice(5),y:h.recovery,t:new Date(h.date).getTime()}))} height={120} color="#00e87a" trend={true} events={chartEvents}/>
+                <SVGChart data={whoopHistory.slice(-30).map(h=>({x:h.date.slice(5),y:h.recovery,t:new Date(h.date).getTime()}))} height={120} color="#3fe0c5" trend={true} events={chartEvents}/>
                 {whoopHistory.filter(h=>h.hrv!=null).length>1 && (
                   <>
                     <div className="chart-lbl" style={{marginTop:12}}>HRV trend (ms)</div>
-                    <SVGChart data={whoopHistory.slice(-30).filter(h=>h.hrv!=null).map(h=>({x:h.date.slice(5),y:h.hrv,t:new Date(h.date).getTime()}))} height={110} color="#4a9eff"/>
+                    <SVGChart data={whoopHistory.slice(-30).filter(h=>h.hrv!=null).map(h=>({x:h.date.slice(5),y:h.hrv,t:new Date(h.date).getTime()}))} height={110} color="#b8c2cf"/>
                   </>
                 )}
                 {(() => {
@@ -447,8 +447,8 @@ export default function ProgressView() {
                       ['sleepHrs', 'Sleep', 'h', 1, '#a479e2'],
                       ['rhr', 'Resting HR', ' bpm', 0, '#ff6b6b'],
                       ['skinTemp', 'Skin temp', '\u00b0C', 1, '#e0b020'],
-                      ['spo2', 'SpO\u2082', '%', 1, '#4a9eff'],
-                      ['respRate', 'Resp. rate', ' rpm', 1, '#00e87a'],
+                      ['spo2', 'SpO\u2082', '%', 1, '#b8c2cf'],
+                      ['respRate', 'Resp. rate', ' rpm', 1, '#3fe0c5'],
                     ] as [string, string, string, number, string][]).map(([k, label, unit, dp, color]) => ({ k, label, unit, dp, color, data: series(k), c: cmp(k) }))
                      .filter(m => m.data.length >= 3);
                     if (!metrics.length) return null;
@@ -466,9 +466,9 @@ export default function ProgressView() {
                             const delta = m.c && m.c.base != null ? m.c.now - m.c.base : null;
                             return (
                               <div key={m.k} style={{ background: 'var(--sur)', border: '1px solid var(--bdr)', borderRadius: 8, padding: '7px 8px' }}>
-                                <div style={{ fontSize: 10, color: 'var(--t3)' }}>{m.label} &#183; 7-day</div>
-                                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, fontWeight: 700, color: m.color }}>{m.c ? m.c.now.toFixed(m.dp) + m.unit : '-'}</div>
-                                <div style={{ fontSize: 10, color: 'var(--t3)' }}>{delta != null ? (delta >= 0 ? '+' : '') + delta.toFixed(m.dp) + ' vs before' : 'building baseline'}</div>
+                                <div style={{ fontSize:11, color: 'var(--t3)' }}>{m.label} &#183; 7-day</div>
+                                <div style={{ fontFamily: "'Barlow Semi Condensed',monospace", fontSize: 14, fontWeight: 700, color: m.color }}>{m.c ? m.c.now.toFixed(m.dp) + m.unit : '-'}</div>
+                                <div style={{ fontSize:11, color: 'var(--t3)' }}>{delta != null ? (delta >= 0 ? '+' : '') + delta.toFixed(m.dp) + ' vs before' : 'building baseline'}</div>
                               </div>
                             );
                           })}
@@ -487,7 +487,7 @@ export default function ProgressView() {
                 {recFuelReady && (
                   <>
                     <div className="chart-lbl" style={{marginTop:14}}>Recovery vs fuel &#8212; last {recFuelRows.filter(r=>r.recovery!=null).length} days</div>
-                    <div style={{fontSize:10,color:'var(--t3)',marginBottom:4}}>Green/amber/red dots = recovery. Blue bars = calories in. Read it yourself: do low-recovery days follow low-fuel or low-sleep days?</div>
+                    <div style={{fontSize:11,color:'var(--t3)',marginBottom:4}}>Green/amber/red dots = recovery. Blue bars = calories in. Read it yourself: do low-recovery days follow low-fuel or low-sleep days?</div>
                     <RecoveryFuelStrip rows={recFuelRows} height={150}/>
                   </>
                 )}
@@ -507,9 +507,9 @@ export default function ProgressView() {
               <div className="hm-head"><span className="hm-ttl">Recovery vs performance</span><span className="hm-wk">{recPerf.totalSessions} lift-sessions</span></div>
               <div className="av-note">One point per session: WHOOP recovery that morning against mean e1RM relative to each lift's own average. Deloads excluded. Bands mark red / yellow / green.</div>
               {recPerf.points && recPerf.points.length>=3 && (
-                <SVGScatter points={recPerf.points} color="#00e87a" height={155}
+                <SVGScatter points={recPerf.points} color="#3fe0c5" height={155}
                   xLabel="recovery %" yLabel="e1RM vs own avg" xMin={0} xMax={100}
-                  bands={[{from:0,to:34,color:'#ff4444'},{from:34,to:67,color:'#ffd24a'},{from:67,to:100,color:'#00e87a'}]}/>
+                  bands={[{from:0,to:34,color:'#ff5a4f'},{from:34,to:67,color:'#ffd24a'},{from:67,to:100,color:'#3fe0c5'}]}/>
               )}
               {([['high','Green (67%+)',recPerf.high,recPerf.highN],['mid','Yellow (34-66%)',recPerf.mid,recPerf.midN],['low','Red (under 34%)',recPerf.low,recPerf.lowN]] as [string, string, any, any][]).map(([k,lbl,v,n])=>(
                 <div key={k} className="st-row">
@@ -606,7 +606,7 @@ export default function ProgressView() {
           {burnCheck && (
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Burn cross-check</span><span className="hm-wk">WHOOP vs empirical</span></div>
-              <div style={{display:'flex',alignItems:'baseline',gap:10,marginBottom:6,fontFamily:"'JetBrains Mono',monospace"}}>
+              <div style={{display:'flex',alignItems:'baseline',gap:10,marginBottom:6,fontFamily:"'Barlow Semi Condensed',monospace"}}>
                 <span style={{fontSize:22,fontWeight:700,color:'var(--t)'}}>{burnCheck.avg}</span>
                 <span style={{fontSize:12,color:'var(--t3)'}}>WHOOP</span>
                 <span style={{fontSize:22,fontWeight:700,color:'var(--acc)'}}>{burnCheck.tdee}</span>

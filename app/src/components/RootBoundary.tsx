@@ -12,8 +12,8 @@ export class RootBoundary extends React.Component<{ children?: any }, { err: any
     if(!this.state.err) return this.props.children;
     const e=this.state.err;
     let hasWip=false; try{ hasWip=!!localStorage.getItem('dp_wip'); }catch(_){}
-    const box={maxWidth:520,margin:'40px auto',padding:'20px',fontFamily:"'JetBrains Mono',monospace",color:'#e8e8e8',background:'#141414',border:'1px solid #333',borderRadius:12};
-    const btn={display:'inline-block',marginTop:14,marginRight:10,padding:'10px 16px',borderRadius:8,border:'1px solid #444',background:'#1e1e1e',color:'#c4ff00',fontFamily:"'JetBrains Mono',monospace",fontSize:13,cursor:'pointer'};
+    const box={maxWidth:520,margin:'40px auto',padding:'20px',fontFamily:"'Barlow Semi Condensed',monospace",color:'#e8e8e8',background:'#141414',border:'1px solid #333',borderRadius:12};
+    const btn={display:'inline-block',marginTop:14,marginRight:10,padding:'10px 16px',borderRadius:8,border:'1px solid #444',background:'#1e1e1e',color:'#c4ff00',fontFamily:"'Barlow Semi Condensed',monospace",fontSize:13,cursor:'pointer'};
     return React.createElement('div',{style:box},
       React.createElement('div',{style:{color:'#ff5555',fontWeight:700,letterSpacing:'.06em',marginBottom:10}},'SOMETHING THREW — the app caught it'),
       hasWip

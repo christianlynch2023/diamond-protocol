@@ -2084,8 +2084,8 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
       if (c.units > 0) evs.push({ t, label:'\u{1F377}', color:'#a479e2' });
       const tags = Array.isArray(c.tags) ? c.tags : [];
       if (tags.includes('illness'))   evs.push({ t, label:'ill',   color:'#ff6b6b' });
-      if (tags.includes('travel'))    evs.push({ t, label:'trip',  color:'#4a9eff' });
-      if (tags.includes('poorsleep')) evs.push({ t, label:'sleep', color:'#f0a020' });
+      if (tags.includes('travel'))    evs.push({ t, label:'trip',  color:'#b8c2cf' });
+      if (tags.includes('poorsleep')) evs.push({ t, label:'sleep', color:'#ffb020' });
     }
     // Deload weeks, taken from logged sessions so a trained-through week is not shaded.
     const dl = (logs||[]).filter(l => l && l.deload === true).map(l => new Date(l.date).getTime())
@@ -2095,7 +2095,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     while (i < dl.length) {
       let j = i;
       while (j+1 < dl.length && dl[j+1] - dl[j] <= 4*dayMs) j++;
-      evs.push({ t: dl[i] - dayMs, tEnd: dl[j] + dayMs, color:'#ff8c00' });
+      evs.push({ t: dl[i] - dayMs, tEnd: dl[j] + dayMs, color:'#ffb020' });
       i = j + 1;
     }
     return evs.slice(0, 40);

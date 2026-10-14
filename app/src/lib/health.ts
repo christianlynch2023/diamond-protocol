@@ -56,4 +56,4 @@ export const PK_ESTERS = [
 
 export function pkFor(compound: unknown){ const c=String(compound||'').toLowerCase(); return PK_ESTERS.find(p=>p.match.some(m=>c.includes(m)))||null; }
 
-export const DECAY_COLORS = ['#c4ff00','#4a9eff','#ff8c00','#00e87a','#ff4444','#a479e2','#f691b2','#43d692'];
+export const DECAY_COLORS = ['#c4ff00','#b8c2cf','#ffb020','#3fe0c5','#ff5a4f','#a479e2','#f691b2','#43d692'];

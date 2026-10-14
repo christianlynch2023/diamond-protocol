@@ -1,9 +1,9 @@
-// v3: Vite build. React is bundled into hashed files under /assets, so the CDN entries are gone.
-const CACHE = 'diamond-v3';
+// v4: round 2. Fonts are now bundled under /assets with the rest of the app, so nothing is
+// fetched from Google any more. The new cache name clears the old v3 cache on activate.
+const CACHE = 'diamond-v4';
 const CORE = [
   './',
   './index.html',
-  'https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap',
 ];
 
 self.addEventListener('install', e => {
@@ -50,8 +50,8 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Everything else: cache-first, then network. Safe for Vite assets because their file names
-  // change whenever their content changes, so a cached copy is never out of date.
+  // Everything else (scripts, styles, fonts): cache-first, then network. Safe for Vite assets because
+  // their file names change whenever their content changes, so a cached copy is never out of date.
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const hit = await cache.match(req);

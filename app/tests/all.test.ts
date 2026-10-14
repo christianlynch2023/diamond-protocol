@@ -6,3 +6,4 @@ import './training.test';
 import './analytics.test';
 import './ids.test';
 import './functions.test';
+import './ui.test';
