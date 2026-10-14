@@ -97,7 +97,7 @@ export default function ProgramView() {
           {whoopConnected ? (
             <div className={`whoop-panel${whoopData?.recovery!=null?' '+getWhoopCls(whoopData.recovery):''}`}>
               <div className="whoop-hdr">
-                <span className="whoop-nm">&#9889; WHOOP{whoopData?.recovery!=null&&<span className={`whoop-auto-badge ${getWhoopCls(whoopData.recovery)}`} style={{marginLeft:8}}>{whoopData.recovery>=67?'Green':whoopData.recovery>=34?'Yellow':'Red'}</span>}</span>
+                <span className="whoop-nm">WHOOP{whoopData?.recovery!=null&&<span className={`whoop-auto-badge ${getWhoopCls(whoopData.recovery)}`} style={{marginLeft:8}}>{whoopData.recovery>=67?'Green':whoopData.recovery>=34?'Yellow':'Red'}</span>}</span>
                 <span className="whoop-sync">{whoopLoading?'Syncing...':fmtAgo(whoopData?.cachedAt)}</span>
               </div>
               {whoopLoading&&!whoopData?<div className="whoop-loading">Loading recovery data...</div>

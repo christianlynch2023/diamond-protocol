@@ -262,3 +262,7 @@ button, input, select, textarea { font-variant-numeric: tabular-nums; }
 .ar-card { border-radius: var(--r-card); }
 .hm-ttl { font-family: var(--font-fig); font-size: 18px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .hm-wk { font-size: 12px; color: var(--t2); }
+
+/* ---- Phase 7: per-screen error message ---- */
+.vb-msg { padding: 24px 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.vb-ttl { font-family: var(--font-fig); font-size: 22px; font-weight: 600; color: var(--t); }

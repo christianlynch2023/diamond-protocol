@@ -31,7 +31,7 @@ export default function HistoryView() {
                       const cls = pct === null ? '' : pct >= 3 ? 'vl-up' : pct <= -8 ? 'vl-dn' : '';
                       return <div className={`h-vol ${cls}`}>Volume: {vl.toLocaleString()}kg{pct!==null?` (${pct>=0?'+':''}${pct}% vs last ${log.sessionName})`:''}</div>;
                     })()}
-                    {(() => { const w = matchWorkout(log, whoopWorkouts); return w ? <div className="h-whoop">&#9889; {w.strain} strain{w.avgHr?` \u00b7 ${w.avgHr} avg HR`:''}{w.maxHr?` \u00b7 ${w.maxHr} max`:''}{w.kcal?` \u00b7 ${w.kcal} cal`:''}</div> : null; })()}
+                    {(() => { const w = matchWorkout(log, whoopWorkouts); return w ? <div className="h-whoop">{w.strain} strain{w.avgHr?` \u00b7 ${w.avgHr} avg HR`:''}{w.maxHr?` \u00b7 ${w.maxHr} max`:''}{w.kcal?` \u00b7 ${w.kcal} cal`:''}</div> : null; })()}
                     {expandLog===i && editingLog!==i && (
                       <div className="h-exp">
                         {log.exercises.map((ex,j) => (

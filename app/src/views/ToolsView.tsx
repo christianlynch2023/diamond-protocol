@@ -145,9 +145,9 @@ export default function ToolsView() {
             <div className="tool-sub">Export a backup before any app update. Import restores full history.</div>
             <div className="data-btns">
               <button className="data-btn" onClick={exportData}>&#8595; Export Backup</button>
-              <button className="data-btn" onClick={exportSummary}>&#128203; Summary (coach/AI)</button>
+              <button className="data-btn" onClick={exportSummary}>Summary (coach/AI)</button>
               <button className="data-btn" onClick={importData}>&#8593; Import Backup</button>
-              <button className="data-btn danger" onClick={() => setClearConfirm(true)}>&#128465; Clear All Data</button>
+              <button className="data-btn danger" onClick={() => setClearConfirm(true)}>Clear All Data</button>
             </div>
             <div className="ver">Diamond Protocol v2.0 — data stored in localStorage</div>
           </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { Suspense, lazy, useEffect, useRef } from 'react';
 import { ALT_BY_MUSCLE, EX_MUSCLE, SESSIONS } from './data/programme';
 import { fmt } from './lib/format';
 import { RootBoundary } from './components/RootBoundary';
@@ -6,18 +6,38 @@ import { Icon } from './components/Icon';
 import { Segmented } from './components/ui';
 import { TABS, isSettings, showsNav, showsSettingsButton, tabFor } from './lib/nav';
 import { AppCtx } from './appContext';
-import BodyView from './views/BodyView';
 import HistoryView from './views/HistoryView';
 import MealsView from './views/MealsView';
-import PrivacyView from './views/PrivacyView';
 import ProgramView from './views/ProgramView';
-import ProgressView from './views/ProgressView';
 import TodayView from './views/TodayView';
-import ToolsView from './views/ToolsView';
 import CompleteView from './views/CompleteView';
 import SessionView from './views/SessionView';
 import WorkoutView from './views/WorkoutView';
 import { useAppState } from './state/useAppState';
+import { ViewBoundary } from './components/ViewBoundary';
+
+// Round 2 phase 7: the two heaviest screens (Progress, Body) and the two rarely used ones (Tools, Privacy)
+// load as separate files, so the app opens faster. Two safeguards:
+//  - a few seconds after start-up they are fetched in the background, so the service worker caches them
+//    and they still open offline;
+//  - if a file has gone (a new deploy replaced it while the app sat open), the app reloads once to pick
+//    up the new version instead of showing a broken screen.
+const RELOAD_KEY = 'dp_chunk_reload';
+function lazyView(load: () => Promise<{ default: any }>) {
+  return lazy(() => load().then(m => { try { sessionStorage.removeItem(RELOAD_KEY); } catch (_) { /* ignore */ } return m; }).catch(err => {
+    try { if (!sessionStorage.getItem(RELOAD_KEY)) { sessionStorage.setItem(RELOAD_KEY, '1'); window.location.reload(); } } catch (_) { /* ignore */ }
+    throw err;
+  }));
+}
+const loadProgress = () => import('./views/ProgressView');
+const loadBody = () => import('./views/BodyView');
+const loadTools = () => import('./views/ToolsView');
+const loadPrivacy = () => import('./views/PrivacyView');
+const ProgressView = lazyView(loadProgress);
+const BodyView = lazyView(loadBody);
+const ToolsView = lazyView(loadTools);
+const PrivacyView = lazyView(loadPrivacy);
+const Loading = () => <div className="screen"><div className="empty-msg">Loading…</div></div>;
 
 function App() {
   const __app = useAppState();
@@ -32,6 +52,11 @@ function App() {
   // Train remembers whether you were on Plan or History; Settings remembers which tab opened it.
   const trainSub = useRef<string>('home');
   const settingsFrom = useRef<string>('today');
+  // Warm the separately loaded screens once the first screen is up, so they are cached for offline use.
+  useEffect(() => {
+    const id = window.setTimeout(() => { [loadProgress, loadBody, loadTools, loadPrivacy].forEach(f => { f().catch(() => {}); }); }, 2500);
+    return () => window.clearTimeout(id);
+  }, []);
   useEffect(() => {
     if (view === 'home' || view === 'history') trainSub.current = view;
     if (tabFor(view)) settingsFrom.current = view;
@@ -163,7 +188,7 @@ function App() {
         </div>
       )}
 
-      {view === 'today' && <TodayView />}
+      {view === 'today' && <ViewBoundary name="Today"><TodayView /></ViewBoundary>}
 
       {(view === 'home' || view === 'history') && (
         <div className="tabwrap">
@@ -177,19 +202,19 @@ function App() {
             <Segmented label="Train" value={view === 'history' ? 'history' : 'home'} onChange={v => setView(v)}
               options={[{ value: 'home', label: 'Plan' }, { value: 'history', label: 'History' }]} />
           </div>
-          {view === 'home' ? <ProgramView /> : <HistoryView />}
+          <ViewBoundary name="Train">{view === 'home' ? <ProgramView /> : <HistoryView />}</ViewBoundary>
         </div>
       )}
 
-      {view === 'session' && sess && <SessionView />}
+      {view === 'session' && sess && <ViewBoundary name="Session"><SessionView /></ViewBoundary>}
 
-      {view === 'workout' && sess && curEx && <WorkoutView />}
+      {view === 'workout' && sess && curEx && <ViewBoundary name="Workout"><WorkoutView /></ViewBoundary>}
 
-      {view === 'complete' && <CompleteView />}
+      {view === 'complete' && <ViewBoundary name="Session summary"><CompleteView /></ViewBoundary>}
 
-      {view === 'progress' && <ProgressView />}
+      {view === 'progress' && <ViewBoundary name="Progress"><Suspense fallback={<Loading />}><ProgressView /></Suspense></ViewBoundary>}
 
-      {view === 'meals' && <MealsView />}
+      {view === 'meals' && <ViewBoundary name="Fuel"><MealsView /></ViewBoundary>}
       {isSettings(view) && (
         <div className="tabwrap">
           <div className="tabhead">
@@ -200,12 +225,12 @@ function App() {
             <Segmented label="Settings" value={view === 'privacy' ? 'privacy' : 'tools'} onChange={v => setView(v)}
               options={[{ value: 'tools', label: 'Tools and data' }, { value: 'privacy', label: 'Privacy' }]} />
           </div>
-          {view === 'privacy' ? <PrivacyView /> : <ToolsView />}
+          <ViewBoundary name="Settings"><Suspense fallback={<Loading />}>{view === 'privacy' ? <PrivacyView /> : <ToolsView />}</Suspense></ViewBoundary>
         </div>
       )}
 
 
-      {view==='body'&&<BodyView />}
+      {view==='body'&&<ViewBoundary name="Body"><Suspense fallback={<Loading />}><BodyView /></Suspense></ViewBoundary>}
 
       {restFlash && <div className="rest-flash"><div className="rest-flash-txt">REST OVER</div></div>}
       {showsSettingsButton(view) && (

@@ -34,3 +34,16 @@ maps them to tabs and is tested.
 ## Round 2 phases
 1. Visual foundation (this layer) · 2. Navigation, five tabs · 3. Today · 4. Fuel ·
 5. Session flow · 6. Body and Progress · 7. Hardening and audit.
+
+## Round 2 acceptance (phase 7)
+| Test | Pass mark | How it is held |
+|---|---|---|
+| Log a set that hits target | 1 tap | Steppers pre-fill the engine's target |
+| Open to Today | Under 1 second, works offline | Heavy screens load separately and are cached after start-up |
+| Every number on screen | Has a unit, a date or a comparison | Design rule; checked by eye on each phase |
+| Text contrast | 4.5:1 minimum | `tests/contrast.test.ts` reads theme.css on every build |
+| Rest timer | Alerts while open; catches up on return | Timer is end-time based; inline during workouts |
+| Real data | 12 weeks loaded, nothing breaks layout | Manual check on Test |
+| One screen failing | Doesn't take the app down | `components/ViewBoundary.tsx` around each screen |
+
+`scripts/r2-audit.mjs` reports emoji, text below 11px, faint text colours and bundle sizes.

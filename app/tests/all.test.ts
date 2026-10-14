@@ -12,3 +12,4 @@ import './today.test';
 import './fuel.test';
 import './workout.test';
 import './body.test';
+import './contrast.test';

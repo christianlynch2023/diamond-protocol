@@ -544,7 +544,7 @@ export default function BodyView() {
                       </div>
                       <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',display:'block'}}>
                         <line x1={PX} y1={yf(cardioTrend.target)} x2={W-PX} y2={yf(cardioTrend.target)} stroke="var(--ok)" strokeWidth="1" strokeDasharray="4 3" opacity="0.55"/>
-                        <text x={W-PX} y={yf(cardioTrend.target)-3} textAnchor="end" fontSize="8" fill="#3fe0c5" opacity="0.8" fontFamily="Barlow Semi Condensed">150 min guide</text>
+                        <text x={W-PX} y={yf(cardioTrend.target)-3} textAnchor="end" fontSize="11" fill="#3fe0c5" opacity="0.8" fontFamily="Barlow Semi Condensed">150 min guide</text>
                         {rows.map((r,i)=>{
                           const x=PX+i*bw+bw*0.18, w=bw*0.64;
                           const segs=[['manual','#b8c2cf',r.manual],['z2','#c4ff00',r.z2],['z3','#ffb020',r.z3]];
@@ -552,10 +552,10 @@ export default function BodyView() {
                           return (<g key={i}>
                             {segs.map(([k,c,v],si)=>{ if(!v) return null; const y0=yf(acc), y1=yf(acc+v); acc+=v;
                               return <rect key={si} x={x} y={y1} width={w} height={Math.max(0,y0-y1)} fill={c} opacity={i===rows.length-1?1:0.75}/>; })}
-                            <text x={x+w/2} y={H-2} textAnchor="middle" fontSize="7.5" fill="#728aa2" fontFamily="Barlow Semi Condensed">{i===rows.length-1?'now':fmtShort(new Date(r.t).toISOString()).split(' ')[0]}</text>
+                            <text x={x+w/2} y={H-2} textAnchor="middle" fontSize="11" fill="var(--t3)" fontFamily="Barlow Semi Condensed">{i===rows.length-1?'now':fmtShort(new Date(r.t).toISOString()).split(' ')[0]}</text>
                           </g>);
                         })}
-                        <text x={PX-4} y={yf(maxV)+4} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="Barlow Semi Condensed">{Math.round(maxV)}</text>
+                        <text x={PX-4} y={yf(maxV)+4} textAnchor="end" fontSize="11" fill="var(--t3)" fontFamily="Barlow Semi Condensed">{Math.round(maxV)}</text>
                       </svg>
                       <div style={{display:'flex',gap:12,marginTop:6,flexWrap:'wrap'}}>
                         {[['Logged','#b8c2cf'],['Zone 2','#c4ff00'],['Zone 3','#ffb020']].map(([l,c],i)=>(
@@ -931,7 +931,7 @@ export default function BodyView() {
                     <tbody>
                       {bloodCompare.rows.map((r,i)=>(
                         <tr key={i} style={{borderTop:'1px solid var(--bdr)'}}>
-                          <td style={{textAlign:'left',padding:'6px 8px 6px 0',color:'var(--t)',position:'sticky',left:0,background:'var(--crd)',whiteSpace:'nowrap'}}>{r.label}{r.unitMismatch && <span title="Units differ between panels" aria-label="Units differ between panels" style={{color:'#e0b020',marginLeft:4}}>&#9888;</span>}</td>
+                          <td style={{textAlign:'left',padding:'6px 8px 6px 0',color:'var(--t)',position:'sticky',left:0,background:'var(--crd)',whiteSpace:'nowrap'}}>{r.label}{r.unitMismatch && <span title="Units differ between panels" aria-label="Units differ between panels" style={{color:'#e0b020',marginLeft:4}}>!</span>}</td>
                           {bloodCompare.dates.map(d=>{
                             const c = r.cells[d];
                             const col = !c ? 'var(--t3)' : (c.flag==='high'||c.flag==='low') ? '#ff6b6b' : c.flag==='watch' ? '#e0b020' : 'var(--t)';
@@ -942,7 +942,7 @@ export default function BodyView() {
                     </tbody>
                   </table>
                 </div>
-                <div className="bm-note">Same marker across panels, newest date first. Blank (&#8212;) = not measured that draw. Units can differ between providers &#8212; check the per-panel detail below before comparing absolute values.{bloodCompare.anyMismatch && <span style={{color:'#e0b020'}}> &#9888; marks a marker reported in different units on different panels, so its numbers are not directly comparable.</span>}</div>
+                <div className="bm-note">Same marker across panels, newest date first. Blank (&#8212;) = not measured that draw. Units can differ between providers &#8212; check the per-panel detail below before comparing absolute values.{bloodCompare.anyMismatch && <span style={{color:'#e0b020'}}> ! marks a marker reported in different units on different panels, so its numbers are not directly comparable.</span>}</div>
               </div>
             )}
             {bloodsLog.length ? (
@@ -1034,7 +1034,7 @@ export default function BodyView() {
                     <span className="mp-cals">{dm.days} d</span>
                   </div>
                   <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',display:'block'}}>
-                    {[0,0.5,1].map((f,i)=>{const y=(H-PY)-f*(H-2*PY);return(<g key={i}><line x1={PX} y1={y} x2={W-PX} y2={y} stroke="#1d2733" strokeWidth="1" strokeDasharray="3 3"/><text x={PX-4} y={y+3} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="Barlow Semi Condensed">{Math.round(f*dm.maxAmt)}</text></g>);})}
+                    {[0,0.5,1].map((f,i)=>{const y=(H-PY)-f*(H-2*PY);return(<g key={i}><line x1={PX} y1={y} x2={W-PX} y2={y} stroke="#1d2733" strokeWidth="1" strokeDasharray="3 3"/><text x={PX-4} y={y+3} textAnchor="end" fontSize="11" fill="var(--t3)" fontFamily="Barlow Semi Condensed">{Math.round(f*dm.maxAmt)}</text></g>);})}
                     {dm.series.map((s,si)=>{const line=s.pts.map((p,i)=>`${i===0?'M':'L'}${xf(p.d).toFixed(1)} ${yf(p.amt).toFixed(1)}`).join(' ');return <path key={si} d={line} fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>;})}
                     {dm.series.flatMap((s,si)=> s.evs.map((e,ei)=>{const d=(e.t-dm.t0)/86400000;return <circle key={si+'-'+ei} cx={xf(d)} cy={H-PY} r="1.6" fill={s.color} fillOpacity="0.6"/>;}))}
                     {/* Blood draws on the same axis: puts marker drift in protocol context. */}
@@ -1045,12 +1045,12 @@ export default function BodyView() {
                       const d=(t-dm.t0)/86400000;
                       return (<g key={'bd'+pi}>
                         <line x1={xf(d)} y1={PY} x2={xf(d)} y2={H-PY} stroke="#a479e2" strokeWidth="1" strokeDasharray="3 3" opacity="0.55"/>
-                        <text x={xf(d)} y={PY-4} textAnchor="middle" fontSize="7" fill="#a479e2" opacity="0.9" fontFamily="Barlow Semi Condensed">bloods</text>
+                        <text x={xf(d)} y={PY-4} textAnchor="middle" fontSize="11" fill="#a479e2" opacity="0.9" fontFamily="Barlow Semi Condensed">bloods</text>
                       </g>);
                     })}
-                    <text x={PX} y={H-2} textAnchor="start" fontSize="8" fill="#728aa2" fontFamily="Barlow Semi Condensed">{fmtShort(new Date(dm.t0).toISOString())}</text>
-                    <text x={W-PX} y={H-2} textAnchor="end" fontSize="8" fill="#728aa2" fontFamily="Barlow Semi Condensed">today</text>
-                    <text x={PX-4} y={PY-5} fontSize="7.5" fill="#728aa2" fontFamily="Barlow Semi Condensed">mg-eq</text>
+                    <text x={PX} y={H-2} textAnchor="start" fontSize="11" fill="var(--t3)" fontFamily="Barlow Semi Condensed">{fmtShort(new Date(dm.t0).toISOString())}</text>
+                    <text x={W-PX} y={H-2} textAnchor="end" fontSize="11" fill="var(--t3)" fontFamily="Barlow Semi Condensed">today</text>
+                    <text x={PX-4} y={PY-5} fontSize="11" fill="var(--t3)" fontFamily="Barlow Semi Condensed">mg-eq</text>
                   </svg>
                   <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:5}}>
                     {dm.series.map((s,si)=>(
