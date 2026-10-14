@@ -9,3 +9,4 @@ import './functions.test';
 import './ui.test';
 import './nav.test';
 import './today.test';
+import './fuel.test';
