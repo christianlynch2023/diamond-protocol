@@ -1,10 +1,14 @@
-// Split out of App.jsx in Phase 2. Behaviour unchanged.
+// Split out of App.jsx in Phase 2. Round 2 phase 6: chart text at least 11px, finer axis labels,
+// round 2 palette, and low recovery shown in amber (never red). Scales and maths are unchanged.
 import React from 'react';
+import { tickLabel } from '../lib/chartMath';
 
-export function RecoveryFuelStrip({ rows, height=150 }) {
+const FIG = 'Barlow Semi Condensed';
+
+export function RecoveryFuelStrip({ rows, height=156 }) {
   // rows: [{date, recovery, kcal, carbs, sleepH}] oldest->newest
   if (!rows || rows.length < 3) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12,textAlign:'center'}}>Need 3+ days with both WHOOP and logged nutrition to show the overlay</div>;
-  const W=Math.max(rows.length*30, 300), barH=height-46, pad=4;
+  const W=Math.max(rows.length*34, 300), barH=height-52, pad=4;
   const kcals=rows.map(r=>r.kcal).filter(v=>v!=null);
   // §8.6: scale calorie bars from an absolute ZERO baseline (rounded ceiling), not min->max.
   // Min-max scaling stretched the lowest day to ~0px and the highest to full height, making a
@@ -19,7 +23,8 @@ export function RecoveryFuelStrip({ rows, height=150 }) {
     return {x,y,r};
   });
   const line=pts.filter(p=>p.y!=null).map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const recColor=r=>r>=67?'#3fe0c5':r>=34?'#f0c020':'#ff6b6b';
+  // Readiness is information, not alarm: low recovery is amber, never red.
+  const recColor=r=>r>=67?'#3fe0c5':r>=34?'#b8c2cf':'#ffb020';
   return (
     <div style={{overflowX:'auto'}}>
       <svg width={W} height={height} style={{display:'block'}}>
@@ -29,9 +34,9 @@ export function RecoveryFuelStrip({ rows, height=150 }) {
           return (
             <g key={i}>
               {r.kcal!=null && <rect x={x+colW*0.2} y={barH-kh} width={colW*0.6} height={kh} rx={2} fill="rgba(184,194,207,.32)"/>}
-              <text x={x+colW/2} y={height-26} fontSize="8" fill="var(--t3)" textAnchor="middle">{r.kcal!=null?Math.round(r.kcal/100)/10+'k':''}</text>
-              <text x={x+colW/2} y={height-14} fontSize="8" fill="var(--t3)" textAnchor="middle">{r.date.slice(5)}</text>
-              {r.sleepH!=null && <text x={x+colW/2} y={height-2} fontSize="7.5" fill="var(--t3)" textAnchor="middle">{r.sleepH}h</text>}
+              <text x={x+colW/2} y={height-30} fontSize="11" fill="var(--t3)" textAnchor="middle" fontFamily={FIG}>{r.kcal!=null?Math.round(r.kcal/100)/10+'k':''}</text>
+              <text x={x+colW/2} y={height-17} fontSize="11" fill="var(--t3)" textAnchor="middle" fontFamily={FIG}>{r.date.slice(5)}</text>
+              {r.sleepH!=null && <text x={x+colW/2} y={height-4} fontSize="11" fill="var(--t3)" textAnchor="middle" fontFamily={FIG}>{r.sleepH}h</text>}
             </g>
           );
         })}
@@ -58,7 +63,7 @@ export function Sparkline({ vals, color='#b8c2cf', w=54, h=18 }) {
 export function SVGScatter({ points, color='#c4ff00', height=150, xLabel='', yLabel='', xMin=null, xMax=null, bands=null }) {
   const pts = (points||[]).filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.y));
   if (pts.length < 3) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12}}>Need at least 3 sessions to plot</div>;
-  const W = 320, H = height, PX = 30, PY = 14;
+  const W = 320, H = height, PX = 34, PY = 16;
   const iW = W - PX*2, iH = H - PY*2;
   const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
   const x0 = Number.isFinite(xMin) ? xMin : Math.min(...xs);
@@ -89,15 +94,15 @@ export function SVGScatter({ points, color='#c4ff00', height=150, xLabel='', yLa
               height={iH} fill={b.color} opacity="0.08"/>
       ))}
       <line x1={PX} y1={ty(0)} x2={W-PX} y2={ty(0)} stroke="var(--bdr)" strokeWidth="1" strokeDasharray="3 3"/>
-      <text x={PX-4} y={ty(0)+3} textAnchor="end" fontSize="8" fill="var(--t3)" fontFamily="Barlow Semi Condensed">0%</text>
+      <text x={PX-4} y={ty(0)+4} textAnchor="end" fontSize="11" fill="var(--t3)" fontFamily={FIG}>0%</text>
       {fit && <line x1={fit.x1} y1={fit.y1} x2={fit.x2} y2={fit.y2} stroke={color} strokeWidth="1.5" strokeOpacity="0.55" strokeDasharray="5 4"/>}
       {pts.map((p,i) => (
         <circle key={i} cx={tx(p.x)} cy={ty(p.y)} r="3.5" fill={color} fillOpacity="0.75" stroke={color} strokeWidth="0.5"/>
       ))}
-      <text x={PX} y={H-2} fontSize="8" fill="var(--t3)" fontFamily="Barlow Semi Condensed">{Math.round(x0)}</text>
-      <text x={W-PX} y={H-2} textAnchor="end" fontSize="8" fill="var(--t3)" fontFamily="Barlow Semi Condensed">{Math.round(x1)}</text>
-      <text x={W/2} y={H-2} textAnchor="middle" fontSize="8" fill="var(--t3)" fontFamily="Barlow Semi Condensed">{xLabel}</text>
-      <text x={2} y={PY+6} fontSize="8" fill="var(--t3)" fontFamily="Barlow Semi Condensed">{yLabel}</text>
+      <text x={PX} y={H-2} fontSize="11" fill="var(--t3)" fontFamily={FIG}>{Math.round(x0)}</text>
+      <text x={W-PX} y={H-2} textAnchor="end" fontSize="11" fill="var(--t3)" fontFamily={FIG}>{Math.round(x1)}</text>
+      <text x={W/2} y={H-2} textAnchor="middle" fontSize="11" fill="var(--t3)" fontFamily={FIG}>{xLabel}</text>
+      <text x={2} y={PY-3} fontSize="11" fill="var(--t3)" fontFamily={FIG}>{yLabel}</text>
     </svg>
   );
 }
@@ -106,10 +111,10 @@ export function SVGScatter({ points, color='#c4ff00', height=150, xLabel='', yLa
 // Bars for CATEGORICAL comparison. Session types alternate rather than progress, so a line
 // joining them implies a continuity that does not exist: Upper 3 at 72 min followed by Lower
 // at 95 min is not a downward trend, it is two different sessions.
-export function SVGBars({ items, color='#b8c2cf', height=130, unit='' }) {
+export function SVGBars({ items, color='#b8c2cf', height=140, unit='' }) {
   const rows = (items||[]).filter(i => i && Number.isFinite(i.value));
   if (!rows.length) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--t3)',fontSize:12}}>No data yet</div>;
-  const W = 320, H = height, PX = 8, PT = 12, PB = 26;
+  const W = 320, H = height, PX = 8, PT = 18, PB = 32;
   const iW = W - PX*2, iH = H - PT - PB;
   const max = Math.max(...rows.map(r => Number.isFinite(r.hi) ? r.hi : r.value)) * 1.12 || 1;
   const bw = iW / rows.length;
@@ -127,14 +132,14 @@ export function SVGBars({ items, color='#b8c2cf', height=130, unit='' }) {
                     stroke="var(--t3)" strokeWidth="1" opacity="0.7"/>
             )}
             <rect x={x} y={y} width={w} height={h} rx="3" fill={color} fillOpacity="0.85"/>
-            <text x={x+w/2} y={y-3} textAnchor="middle" fontSize="9" fill={color} fontFamily="Barlow Semi Condensed" fontWeight="700">{r.value}</text>
-            <text x={x+w/2} y={H-14} textAnchor="middle" fontSize="8" fill="var(--t2)">{r.label}</text>
-            {r.sub && <text x={x+w/2} y={H-4} textAnchor="middle" fontSize="7.5" fill="var(--t3)" fontFamily="Barlow Semi Condensed">{r.sub}</text>}
+            <text x={x+w/2} y={y-4} textAnchor="middle" fontSize="12" fill={color} fontFamily={FIG} fontWeight="700">{r.value}</text>
+            <text x={x+w/2} y={H-17} textAnchor="middle" fontSize="11" fill="var(--t2)">{r.label}</text>
+            {r.sub && <text x={x+w/2} y={H-4} textAnchor="middle" fontSize="11" fill="var(--t3)" fontFamily={FIG}>{r.sub}</text>}
           </g>
         );
       })}
-      {hasRange && <text x={PX} y={PT-3} textAnchor="start" fontSize="8" fill="var(--t3)" fontFamily="Barlow Semi Condensed">bar = avg &#183; line = min&ndash;max range</text>}
-      {unit && <text x={W-2} y={PT-3} textAnchor="end" fontSize="8" fill="var(--t3)" fontFamily="Barlow Semi Condensed">{unit}</text>}
+      {hasRange && <text x={PX} y={PT-5} textAnchor="start" fontSize="11" fill="var(--t3)" fontFamily={FIG}>bar = avg &#183; line = min&ndash;max range</text>}
+      {unit && <text x={W-2} y={PT-5} textAnchor="end" fontSize="11" fill="var(--t3)" fontFamily={FIG}>{unit}</text>}
     </svg>
   );
 }
@@ -172,7 +177,7 @@ export function SVGChart({ data, color='#c4ff00', height=130, band=null, bandCol
     }
   }
   const range = maxV - minV || 1;
-  const W=320, H=height, PX=36, PY=14, iW=W-PX*2, iH=H-PY*2;
+  const W=320, H=height, PX=38, PY=16, iW=W-PX*2, iH=H-PY*2;
   // Points were previously spaced purely by index, so a three-day gap between weigh-ins
   // rendered identically to consecutive days and visually distorted the slope. When every
   // point carries a real timestamp (t), space by elapsed time instead. Falls back to even
@@ -202,10 +207,10 @@ export function SVGChart({ data, color='#c4ff00', height=130, band=null, bandCol
       if (Number.isFinite(ev.tEnd)) {
         const a = Math.max(tMin, ev.t), b = Math.min(tMax, ev.tEnd);
         if (b < tMin || a > tMax) continue;
-        annos.push({ span:true, x1:xAt(a), x2:xAt(b), color:ev.color||'#7b90a8' });
+        annos.push({ span:true, x1:xAt(a), x2:xAt(b), color:ev.color||'#8a96a6' });
       } else {
         if (ev.t < tMin || ev.t > tMax) continue;
-        annos.push({ span:false, x1:xAt(ev.t), color:ev.color||'#7b90a8', label:ev.label||'' });
+        annos.push({ span:false, x1:xAt(ev.t), color:ev.color||'#8a96a6', label:ev.label||'' });
       }
     }
   }
@@ -243,18 +248,18 @@ export function SVGChart({ data, color='#c4ff00', height=130, band=null, bandCol
             <rect x={PX} y={top} width={iW} height={h} fill={bandColor} opacity="0.10"/>
             <line x1={PX} y1={top} x2={W-PX} y2={top} stroke={bandColor} strokeWidth="1" strokeDasharray="4 3" opacity="0.45"/>
             <line x1={PX} y1={top+h} x2={W-PX} y2={top+h} stroke={bandColor} strokeWidth="1" strokeDasharray="4 3" opacity="0.45"/>
-            {bandLabel && <text x={W-PX-2} y={top-3} textAnchor="end" fontSize="8" fill={bandColor} opacity="0.75" fontFamily="Barlow Semi Condensed">{bandLabel}</text>}
+            {bandLabel && <text x={W-PX-2} y={top-3} textAnchor="end" fontSize="11" fill={bandColor} opacity="0.85" fontFamily={FIG}>{bandLabel}</text>}
           </g>
         );
       })()}
       {yTicks.map((t,i) => (
         <g key={i}>
-          <line x1={PX} y1={t.y} x2={W-PX} y2={t.y} stroke="#1d2733" strokeWidth="1" strokeDasharray="3 3"/>
-          <text x={PX-5} y={t.y+3} textAnchor="end" fontSize="9" fill="#728aa2" fontFamily="Barlow Semi Condensed">{Math.round(t.v)}</text>
+          <line x1={PX} y1={t.y} x2={W-PX} y2={t.y} stroke="var(--bdr)" strokeWidth="1" strokeDasharray="3 3"/>
+          <text x={PX-5} y={t.y+4} textAnchor="end" fontSize="11" fill="var(--t3)" fontFamily={FIG}>{tickLabel(t.v, range)}</text>
         </g>
       ))}
       {xIdx.map((idx,i) => (
-        <text key={i} x={tx(idx)} y={H-2} textAnchor="middle" fontSize="9" fill="#728aa2" fontFamily="Barlow Semi Condensed">{data[idx].x}</text>
+        <text key={i} x={tx(idx)} y={H-2} textAnchor="middle" fontSize="11" fill="var(--t3)" fontFamily={FIG}>{data[idx].x}</text>
       ))}
       {/* EVENT ANNOTATIONS. The app already records deloads, alcohol, illness, travel and
           protocol doses, but none of it reached the charts, so every wobble needed
@@ -267,8 +272,8 @@ export function SVGChart({ data, color='#c4ff00', height=130, band=null, bandCol
         <g key={'a'+i}>
           <line x1={a.x1} y1={PY} x2={a.x1} y2={H-PY} stroke={a.color} strokeWidth="1"
                 strokeDasharray="3 3" opacity="0.5"/>
-          <text x={a.x1} y={PY-1} textAnchor="middle" fontSize="7.5" fill={a.color}
-                opacity="0.85" fontFamily="Barlow Semi Condensed">{a.label}</text>
+          <text x={a.x1} y={PY-3} textAnchor="middle" fontSize="11" fill={a.color}
+                opacity="0.9" fontFamily={FIG}>{a.label}</text>
         </g>
       ))}
       <path d={area} fill={`url(#${gid})`}/>

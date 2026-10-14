@@ -47,3 +47,12 @@ export function normalRange(values: ReadonlyArray<number | null | undefined>, mi
   const lo = percentile(v, 0.25), hi = percentile(v, 0.75);
   return lo === null || hi === null ? null : { lo, hi };
 }
+
+/** Axis label precision that matches the span on screen: a 6 kg bodyweight axis reads 85.4 / 88.4 / 91.4
+ *  (rounding to 85 / 88 / 91 hid real tenths), while a 2,000 kcal axis stays in whole numbers. */
+export function tickLabel(v: number, span: number): string {
+  if (!isNum(v)) return '';
+  const a = Math.abs(span);
+  const dp = a >= 20 ? 0 : a >= 2 ? 1 : 2;
+  return (Math.round(v * 10 ** dp) / 10 ** dp).toFixed(dp);
+}

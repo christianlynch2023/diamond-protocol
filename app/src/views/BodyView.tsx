@@ -1,3 +1,4 @@
+import BodySummary from '../components/BodySummary';
 // BodyView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
 import { useApp } from '../appContext';
@@ -36,7 +37,7 @@ export default function BodyView() {
   } = useApp();
   return (
         <div className="screen">
-          <div className="topbar"><span className="logo">Body</span></div>
+          <div className="topbar"><span className="logo">Body</span></div><BodySummary />
 
           <div className="body-sec">
             <div className="sec-head" onClick={()=>toggleSec('weight')}><div className="body-ttl">Body Weight</div><span className={'sec-chev'+(secOpen('weight')?' op':'')}>▾</span></div>
@@ -277,7 +278,7 @@ export default function BodyView() {
           </div>
 
           <div className="body-sec">
-            <div className="sec-head" onClick={()=>toggleSec('nutrition')}><div className="body-ttl">Nutrition</div><span className={'sec-chev'+(secOpen('nutrition')?' op':'')}>▾</span></div>
+            <div className="sec-head" onClick={()=>toggleSec('nutrition')}><div className="body-ttl">Nutrition log and hydration</div><span className={'sec-chev'+(secOpen('nutrition')?' op':'')}>▾</span></div>
             {secOpen('nutrition') && <>
             <div className="body-sub">Daily macro totals — read them off your tracker and log them here to line fuel up with training</div>
             <div className="nc">
