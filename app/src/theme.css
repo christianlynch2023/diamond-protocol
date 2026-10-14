@@ -266,3 +266,7 @@ button, input, select, textarea { font-variant-numeric: tabular-nums; }
 /* ---- Phase 7: per-screen error message ---- */
 .vb-msg { padding: 24px 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .vb-ttl { font-family: var(--font-fig); font-size: 22px; font-weight: 600; color: var(--t); }
+
+/* ---- Body nutrition: pointer to Fuel ---- */
+.bn2-fuel { margin: 4px 0 12px; padding: 10px 12px; border-radius: var(--r-tile); background: var(--sur); border: 1px solid var(--bdr); font-size: 13px; line-height: 18px; color: var(--t2); }
+.bn2-fuel button { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--acc); text-decoration: underline; cursor: pointer; }

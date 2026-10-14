@@ -9,32 +9,7 @@ import { fmtShort, localToday } from '../lib/format';
 import { MEAS_SITES, PK_ESTERS, bpCategory, glucoseCategory } from '../lib/health';
 
 export default function BodyView() {
-  const {
-    KEY_SITES, acceptTarget, activeTarget, addBP, addBldRow, addBodyMetric, addCardio, addCheckin,
-    addContext, addGlucose, addMeasurement, addNutrition, addProtocol, analyseProgress, biomarkers,
-    bldForm, bloodCompare, bloodMarkerIndex, bloodsLog, bodyDash, bodyMetrics, bpDate, bpDia, bpLog,
-    bpPulse, bpSeries, bpStats, bpSys, bwRate, cDate, cMin, cNote, cType, calStats, cancelBloodPanel,
-    cardioLog, cardioMins, cardioSessions, cardioTrend, chartEvents, checkins, ciAddPose, ciAnalysing,
-    ciAnalysis, ciCompareA, ciCompareB, ciPose, clearVitalField, contextLog, ctxDate, ctxNote,
-    ctxReasons, ctxTags, ctxUnits, decayModel, delBldRow, delCheckin, deleteBloodPanel, editBloodPanel,
-    effTargets, expandedSite, glDate, glSeries, glStats, glVal, glucoseLog, goalPhase, hydration, imgOf,
-    latestBP, latestBySite, latestGl, lockCals, mDate, mSite, mVal, mViewSite, mealPlan, mealSlot,
-    measSeries, measurements, nC, nDate, nF, nP, newWt, newWtNote, nutriCoach, nutriDayType, nutrition,
-    openBodyEdit, pCmp, pDate, pDose, pNote, pUnit, protSeries, protocolLog, saveBloodPanel,
-    saveTempBody, secOpen, setBldForm, setBodyMetrics, setBpDate, setBpDia, setBpLog, setBpPulse,
-    setBpSys, setCDate, setCMin, setCNote, setCType, setCardioLog, setCiAddPose, setCiCompareA,
-    setCiCompareB, setCiPose, setContextLog, setCtxDate, setCtxNote, setCtxTags, setCtxUnits,
-    setExpandedSite, setGlDate, setGlVal, setGlucoseLog, setLockCals, setMDate, setMSite, setMVal,
-    setMViewSite, setMealSlot, setMeasurements, setNC, setNDate, setNF, setNP, setNewWt, setNewWtNote,
-    setNutriDayType, setNutrition, setPCmp, setPDate, setPDose, setPNote, setPUnit, setProtocolLog,
-    setShowAddBP, setShowAddBody, setShowAddCardio, setShowAddCtx, setShowAddGl, setShowAddMeas,
-    setShowAddNutri, setShowAddProt, setShowAddTemp, setShowBpLog, setShowCalLog, setShowCtxLog,
-    setShowGlLog, setShowTempLog, setShowWoodLog, setShowWtLog, setTDate, setTVal, setWDate, setWtDate,
-    showAddBP, showAddBody, showAddCardio, showAddCtx, showAddGl, showAddMeas, showAddNutri, showAddProt,
-    showAddTemp, showBpLog, showCalLog, showCtxLog, showGlLog, showTempLog, showWoodLog, showWtLog,
-    startBloodPanel, tDate, tVal, targetLock, tempBand, tempChartSeries, tempLogList, toggleSec,
-    tombstone, updBldRow, upsertVitalsDated, vitalsLog, wDate, whoopCardio, woodLogList, wtDate
-  } = useApp();
+  const { KEY_SITES, activeTarget, addBP, addBldRow, addBodyMetric, addCardio, addCheckin, addContext, addGlucose, addMeasurement, addNutrition, addProtocol, analyseProgress, biomarkers, bldForm, bloodCompare, bloodMarkerIndex, bloodsLog, bodyDash, bodyMetrics, bpDate, bpDia, bpLog, bpPulse, bpSeries, bpStats, bpSys, bwRate, cDate, cMin, cNote, cType, calStats, cancelBloodPanel, cardioLog, cardioMins, cardioSessions, cardioTrend, chartEvents, checkins, ciAddPose, ciAnalysing, ciAnalysis, ciCompareA, ciCompareB, ciPose, clearVitalField, contextLog, ctxDate, ctxNote, ctxReasons, ctxTags, ctxUnits, decayModel, delBldRow, delCheckin, deleteBloodPanel, editBloodPanel, effTargets, expandedSite, glDate, glSeries, glStats, glVal, glucoseLog, goalPhase, hydration, imgOf, latestBP, latestBySite, latestGl, mDate, mSite, mVal, mViewSite, mealPlan, mealSlot, measSeries, measurements, nC, nDate, nF, nP, newWt, newWtNote, nutriCoach, nutriDayType, nutrition, openBodyEdit, pCmp, pDate, pDose, pNote, pUnit, protSeries, protocolLog, saveBloodPanel, saveTempBody, secOpen, setBldForm, setBodyMetrics, setBpDate, setBpDia, setBpLog, setBpPulse, setBpSys, setCDate, setCMin, setCNote, setCType, setCardioLog, setCiAddPose, setCiCompareA, setCiCompareB, setCiPose, setContextLog, setCtxDate, setCtxNote, setCtxTags, setCtxUnits, setExpandedSite, setGlDate, setGlVal, setGlucoseLog, setMDate, setMSite, setMVal, setMViewSite, setMealSlot, setMeasurements, setNC, setNDate, setNF, setNP, setNewWt, setNewWtNote, setNutriDayType, setNutrition, setPCmp, setPDate, setPDose, setPNote, setPUnit, setProtocolLog, setShowAddBP, setShowAddBody, setShowAddCardio, setShowAddCtx, setShowAddGl, setShowAddMeas, setShowAddNutri, setShowAddProt, setShowAddTemp, setShowBpLog, setShowCalLog, setShowCtxLog, setShowGlLog, setShowTempLog, setShowWoodLog, setShowWtLog, setTDate, setTVal, setWDate, setWtDate, showAddBP, showAddBody, showAddCardio, showAddCtx, showAddGl, showAddMeas, showAddNutri, showAddProt, showAddTemp, showBpLog, showCalLog, showCtxLog, showGlLog, showTempLog, showWoodLog, showWtLog, startBloodPanel, tDate, tVal, tempBand, tempChartSeries, tempLogList, toggleSec, tombstone, updBldRow, upsertVitalsDated, vitalsLog, wDate, whoopCardio, woodLogList, wtDate, setView } = useApp();
   return (
         <div className="screen">
           <div className="topbar"><span className="logo">Body</span></div><BodySummary />
@@ -280,9 +255,10 @@ export default function BodyView() {
           <div className="body-sec">
             <div className="sec-head" onClick={()=>toggleSec('nutrition')}><div className="body-ttl">Nutrition log and hydration</div><span className={'sec-chev'+(secOpen('nutrition')?' op':'')}>▾</span></div>
             {secOpen('nutrition') && <>
+            <div className="bn2-fuel">Today's intake, the last 7 days, your maintenance estimate and target lock are on <button type="button" onClick={() => setView('meals')}>Fuel</button>. This section keeps your daily targets, hydration, the advice, energy balance and the full log.</div>
             <div className="body-sub">Daily macro totals — read them off your tracker and log them here to line fuel up with training</div>
             <div className="nc">
-              <div className="nc-hd"><span className="nc-ttl">Smart targets</span>{nutriCoach.ok && <span className={'nc-conf '+nutriCoach.conf}>{nutriCoach.conf} confidence</span>}</div>
+              <div className="nc-hd"><span className="nc-ttl">Daily targets and hydration</span>{nutriCoach.ok && <span className={'nc-conf '+nutriCoach.conf}>{nutriCoach.conf} confidence</span>}</div>
               {!nutriCoach.ok && nutriCoach.reason==='stale' && <div className="nc-note">Your most recent food/weight log is {nutriCoach.ageDays} days old, so these targets have expired. Log a few days of food and a weigh-in to recalculate.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='stale_weight' && <div className="nc-note">Your most recent weigh-in is {nutriCoach.ageDays!=null?nutriCoach.ageDays+' days old':'missing'}, so targets can't be calculated from it. Log a fresh weigh-in.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='implausible' && !(activeTarget && Number.isFinite(activeTarget.cals)) && <div className="nc-note">Your weight is holding roughly steady on ~{nutriCoach.avgIntake} kcal/day, so that's close to your maintenance. The short-term trend ({nutriCoach.ratePerWk!=null?(nutriCoach.ratePerWk>0?'+':'')+nutriCoach.ratePerWk+' kg/wk':'unclear'}) is too water-noisy to auto-lock a precise target &#8212; but to {goalPhase==='cut'?'lose':goalPhase==='bulk'?'gain':'hold'}, {goalPhase==='cut'?'drop to':goalPhase==='bulk'?'push to':'stay around'} <b>{nutriCoach.suggested} kcal/day</b> and keep weighing in daily. A precise target locks in once the trend clears.</div>}
@@ -403,54 +379,12 @@ export default function BodyView() {
                       </>
                     )}
                   </div>
-                  {targetLock && (
-                    <div className="tl-box">
-                      {targetLock.active ? (<>
-                        <div className="tl-row"><span className="tl-k">Active target</span><span className="tl-v">{targetLock.active.cals} kcal{targetLock.active.manual?<span className="tl-tag">manual</span>:null}</span></div>
-                        <div className="tl-sub">Locked {targetLock.ageDays===0?'today':targetLock.ageDays+'d ago'} &#183; {targetLock.due?'review due now':'review in '+(7-targetLock.ageDays)+'d'}</div>
-                      </>) : (
-                        <div className="tl-sub">No target locked yet &#8212; accept one to hold it for the week.</div>
-                      )}
-                      <div className="tl-row" style={{marginTop:7}}><span className="tl-k">Live maintenance</span><span className="tl-v" style={{color:'var(--t2)'}}>{nutriCoach.ok && nutriCoach.tdee!=null ? nutriCoach.tdee+' kcal' : 'unsettled'}</span></div>
-                      <div className="tl-sub">Updates daily as information. Does not change what you eat.</div>
-                      {targetLock.active && targetLock.candidate && targetLock.delta!=null && (<>
-                        <div className="tl-row" style={{marginTop:7}}><span className="tl-k">Next target</span>
-                          <span className="tl-v" style={{color: targetLock.delta===0?'var(--t2)':'var(--acc)'}}>
-                            {targetLock.delta===0 ? 'no change' : (targetLock.active.cals+targetLock.delta)+' kcal'}
-                          </span></div>
-                        <div className="tl-sub">{targetLock.delta===0
-                          ? 'Difference is inside the noise of the estimate \u2014 holding.'
-                          : (targetLock.delta>0?'+':'')+targetLock.delta+' kcal, capped at 100/week so one odd week cannot swing it.'}</div>
-                      </>)}
-                      {targetLock.active && !targetLock.candidate && (
-                        <div className="tl-sub" style={{marginTop:7,color:'var(--warn)'}}>Estimate is unsettled this week &#8212; no reliable adjustment to suggest, so your locked target holds. Keep weighing in; it resumes once the trend clears.</div>
-                      )}
-                      {(targetLock.due || !targetLock.active) && (<>
-                        <div className="tl-edit">
-                          <span className="tl-k" style={{whiteSpace:'nowrap'}}>Lock at</span>
-                          <input type="number" inputMode="numeric" step="10"
-                            placeholder={String(targetLock.active && targetLock.delta!=null ? targetLock.active.cals+targetLock.delta : (targetLock.candidate ? targetLock.candidate.cals : (targetLock.active ? targetLock.active.cals : '')))}
-                            value={lockCals} onChange={e=>setLockCals(e.target.value)}/>
-                          <span className="tl-sub" style={{margin:0}}>kcal</span>
-                        </div>
-                        <button className="tl-btn" onClick={()=>{
-                          const v=parseFloat(lockCals);
-                          acceptTarget(isFinite(v)&&v>0 ? v : undefined);
-                        }}>
-                          {lockCals.trim() ? 'Lock '+lockCals.trim()+' kcal for the week'
-                            : (targetLock.candidate ? (targetLock.active ? 'Accept the suggested target' : 'Lock the suggested target') : 'Hold '+targetLock.active.cals+' kcal for another week')}
-                        </button>
-                        <div className="tl-sub">{targetLock.candidate ? 'Leave blank to take the suggestion. Type a number to set your own \u2014 it will still hold for seven days.' : 'Type a number to change it, or hold to keep your current target for another week.'}</div>
-                      </>)}
-                    </div>
-                  )}
+                  
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='gap' && <div className="nc-adj down">You are averaging <b>{nutriCoach.adjust.over} kcal/day over target</b>. That gap explains the stall &#8212; the target itself is fine. Close it before changing anything.</div>}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='down' && <div className="nc-adj down">Intake is on target but loss has stalled. Drop ~{nutriCoach.adjust.kcal} kcal/day: -{nutriCoach.adjust.carb}g carb and -{nutriCoach.adjust.fat}g fat, protein held.</div>}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='up' && <div className="nc-adj up">Dropping faster than 1%/wk. Add ~{nutriCoach.adjust.kcal} kcal/day (+{nutriCoach.adjust.carb}g carb) to protect muscle.</div>}
                   {nutriCoach.adjust && nutriCoach.adjust.dir==='hold' && <div className="nc-adj hold">On track. Loss rate is in the target range, hold these numbers.</div>}
-                  {nutriCoach.ok
-                    ? <div className="nc-ctx">est. maintenance ~{nutriCoach.tdee} kcal ({nutriCoach.conf} confidence) &#183; logging ~{nutriCoach.avgIntake}/day &#183; {nutriCoach.ratePerWk>0?'+':''}{nutriCoach.ratePerWk.toFixed(2)} kg/wk over {nutriCoach.spanDays}d</div>
-                    : <div className="nc-ctx">engine can't verify maintenance this week &#8212; trend {nutriCoach.ratePerWk!=null?(nutriCoach.ratePerWk>0?'+':'')+nutriCoach.ratePerWk+' kg/wk':'unclear'} is too water-noisy{nutriCoach.avgIntake!=null?' at ~'+nutriCoach.avgIntake+' kcal/day logged':''}{nutriCoach.suggested!=null?'; it would otherwise suggest ~'+nutriCoach.suggested+' kcal':''}. Holding your locked target.</div>}
+                  
                 </div>
               )}
             </div>
