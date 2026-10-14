@@ -99,3 +99,35 @@ button, input, select, textarea { font-variant-numeric: tabular-nums; }
 /* Settings button: top right of every tab screen. Top bars keep room for it on the right. */
 .set-btn { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 8px); right: 12px; z-index: 30; width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--bdr); background: var(--crd); color: var(--t); display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .topbar { padding-right: 68px; }
+
+/* ---- Phase 3: Today ---- */
+.td2 { display: flex; flex-direction: column; gap: 12px; }
+.td2 .today-date { margin-bottom: 0; }
+.td2 .td-card { margin: 0; }
+.td2-cardhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.td2-meta { font-size: 12px; line-height: 16px; color: var(--t2); }
+.td2-sname { margin: 0; font-family: var(--font-fig); font-size: 34px; line-height: 36px; font-weight: 700; color: var(--t); }
+.td2-sess.compact .td2-sname { font-size: 24px; line-height: 28px; }
+.td2-sfocus { margin-top: 2px; font-size: 15px; line-height: 20px; color: var(--t2); }
+.td2-first { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: var(--r-tile); background: var(--sur); }
+.td2-first-ex { font-size: 15px; font-weight: 500; }
+.td2-note { font-size: 13px; line-height: 18px; color: var(--t2); }
+.td2-warn { font-size: 13px; line-height: 18px; color: var(--warn); }
+.td2-link { background: none; border: 0; min-height: 36px; color: var(--t2); font-family: var(--font-text); font-size: 14px; text-decoration: underline; cursor: pointer; }
+.td2-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.td2-m { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.td2-ml { font-size: 12px; line-height: 16px; color: var(--t2); }
+.td2-none { font-size: 14px; line-height: 20px; color: var(--t2); }
+.td2-bigrec { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.td2-rr { display: flex; flex-direction: column; gap: 6px; }
+.td2-rr-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.td2-low { font-size: 13px; line-height: 18px; color: var(--warn); }
+.td2-guide { font-size: 13px; line-height: 18px; color: var(--t2); padding-top: 10px; border-top: 1px solid var(--bdr); }
+.td2-guide b { color: var(--t); font-weight: 600; }
+.td2-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.td2-actions .ui-btn { width: 100%; }
+.td2-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: var(--r-tile); border: 1px solid rgba(255, 176, 32, .45); background: rgba(255, 176, 32, .06); font-size: 14px; line-height: 18px; }
+.td2-banner button { flex-shrink: 0; min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255, 176, 32, .6); background: none; color: var(--warn); font-family: var(--font-text); font-size: 14px; font-weight: 600; cursor: pointer; }
+.td2-step { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid var(--bdr); font-size: 14px; line-height: 18px; }
+.td2-pair { display: flex; gap: 8px; flex-shrink: 0; }
+.td2-advtxt { font-size: 14px; line-height: 20px; color: var(--t2); }
