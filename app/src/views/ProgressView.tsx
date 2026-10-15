@@ -124,7 +124,7 @@ export default function ProgressView() {
             <div className="ar-card">
               <div className="hm-head"><span className="hm-ttl">Stalled lifts</span><span className="hm-wk">{stalls.stalled.length} of {stalls.total}</span></div>
               {stalls.stalled.length > 0 ? (<>
-              <div className="av-note">Best e1RM in the last 2 sessions vs the sessions before. Deloads excluded. Under 1% improvement = stalled.</div>
+              <div className="av-note">Trend of effort-adjusted e1RM (reps in reserve counted) over each lift’s last 4 to 6 sessions, deloads excluded. Within ±2% is holding. On a cut only declining lifts are listed; holding strength while losing weight is the goal.</div>
               {stalls.stalled.slice(0,8).map(s=>(
                 <div key={s.id} className="st-row">
                   <span className="st-name">{s.name}<span className="dur-plan" style={{display:'block',textAlign:'left',minWidth:0,marginTop:1}}>{s.sessionsSincePeak>0?s.sessionsSincePeak+' since peak · now '+s.lastE1rm+'kg vs '+s.peakE1rm+'kg peak':'at peak'}</span></span>
@@ -134,7 +134,7 @@ export default function ProgressView() {
               ))}
               <div className="av-note" style={{marginTop:9,marginBottom:0}}>Fixes: drop to a back-off set and rebuild, change the rep range, swap to a fresh variation, or check recovery and sleep for that muscle. <b>On a cut a stall is often a win</b> — holding load while losing weight is retention. Act only if a lift stalls <b>and</b> bodyweight is stable.</div>
               </>) : (
-                <div className="av-note" style={{marginBottom:0}}>No stalled lifts — everything with enough history is still progressing.</div>
+                <div className="av-note" style={{marginBottom:0}}>No lifts need attention.</div>
               )}
             </div>
           )}

@@ -1,7 +1,8 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
 import { DLW, EX_DEF_BY_ID, EX_MUSCLE, MUSCLES, ORM_IDS, SESSIONS, effWR, rirDefaultFor } from '../data/programme';
 import { fmtShort } from './format';
-import { epley, totalLoad } from './training';
+import { totalLoad } from './training';
+import { TREND_MIN_SESSIONS, TREND_WINDOW, classifyTrend, e1rmEffort, needsAttention, rirNum, trendChange } from './strength';
 import type { BwResolver, SessionLog, WhoopDay } from '../types';
 
 // ---- Strength-retention index (the cut KPI) ----
@@ -117,7 +118,24 @@ export function computeDurations(logs: SessionLog[] | null | undefined, limit = 
 }
 
 
-export function computeStalls(logs: SessionLog[] | null | undefined, minSessions = 3, bwAt: BwResolver | null = null) {
+// Effort-adjusted e1RM for one logged set (analytics accuracy). Reps in reserve count as reps you could
+// have done; a set with no RIR logged uses the programmed target for that week and exercise.
+const setE1rm = (pid: string, s: { weight: number; reps?: number | null; rir?: unknown }, l: SessionLog, bwAt?: BwResolver | null): number => {
+  const planned = (): number | null => {
+    const n = effWR(l.week, false).rirN;
+    if (n == null) return null;
+    const v = rirDefaultFor(EX_DEF_BY_ID[pid], n);
+    return typeof v === 'number' && Number.isFinite(v) ? v : n;
+  };
+  return e1rmEffort(totalLoad(pid, s.weight, bwAt, l.date), s.reps || 0, s.rir, rirNum(s.rir) === null ? planned() : null);
+};
+
+// Per-lift trend (analytics accuracy). For each exercise, the best effort-adjusted e1RM per session
+// across recent non-deload sessions, then a robust trend over the latest six: gaining, holding or
+// declining, with a +/-2% noise band and at least four sessions before any verdict. A lift is
+// "stalled" (needs attention) when declining, or when holding outside a cut: on a cut, holding
+// strength while losing weight is the goal. Holding lifts on a cut are returned in `holding`.
+export function computeStalls(logs: SessionLog[] | null | undefined, minSessions = 3, bwAt: BwResolver | null = null, phase: string | null = null) {
   const byEx: Record<string, { name: string; pts: { t: number; e1rm: number }[] }> = {};
   for (const l of (logs||[])) {
     if (l.deload === true) continue;
@@ -127,40 +145,42 @@ export function computeStalls(logs: SessionLog[] | null | undefined, minSessions
     for (const ex of (l.exercises||[])) {
       if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) continue;
       const pid = ex.origId || ex.id;
-      const best = Math.max(...ex.sets.map(s => epley(totalLoad(pid, s.weight, bwAt, l.date), s.reps||0)));
+      const best = Math.max(...ex.sets.map(s => setE1rm(pid, s, l, bwAt)));
       if (!best || !isFinite(best)) continue;
       (byEx[pid] = byEx[pid] || { name: ex.name, pts: [] }).pts.push({ t, e1rm: best });
     }
   }
-  const stalled = [], progressing = [];
+  const stalled = [], progressing = [], holding = [];
   for (const pid in byEx) {
     const rec = byEx[pid];
-    // logs are newest-first; sort explicitly so order is not assumed
+    if (!rec) continue;
     rec.pts.sort((a,b) => b.t - a.t);
-    const pts = rec.pts.slice(0, 6);
-    if (pts.length < minSessions) continue;
-    const recent = pts.slice(0, 2).map(p => p.e1rm);       // last 2 sessions
-    const earlier = pts.slice(2).map(p => p.e1rm);          // the 3rd back and older
-    if (!earlier.length) continue;
-    const bestRecent = Math.max(...recent), bestEarlier = Math.max(...earlier);
-    const pct = bestEarlier > 0 ? ((bestRecent - bestEarlier) / bestEarlier) * 100 : 0;
-    // Sessions elapsed since the all-time peak e1RM for this lift (newest-first walk).
+    if (rec.pts.length < Math.max(minSessions, TREND_MIN_SESSIONS)) continue;
+    const tr = trendChange(rec.pts.map(p => ({ t: p.t, v: p.e1rm })));
+    if (!tr) continue;
+    const trend = classifyTrend(tr.changePct);
+    const pts = rec.pts.slice(0, TREND_WINDOW);
+    const recent = pts.slice(0, 2).map(p => p.e1rm);
+    const earlier = pts.slice(2).map(p => p.e1rm);
     const all = rec.pts.map(p => p.e1rm);
     const peak = Math.max(...all);
     let sincePeak = 0;
     for (const x of all) { if (x >= peak - 0.001) break; sincePeak++; }
-    const entry = { id: pid, name: rec.name, sessions: pts.length,
-                    bestRecent: Math.round(bestRecent), bestEarlier: Math.round(bestEarlier),
-                    pct: +pct.toFixed(1),
-                    sessionsSincePeak: sincePeak, peakE1rm: Math.round(peak), lastE1rm: Math.round(all[0]),
+    const bestRecent = Math.max(...recent);
+    const entry = { id: pid, name: rec.name, sessions: tr.n, spanDays: tr.spanDays, trend,
+                    bestRecent: Math.round(bestRecent), bestEarlier: Math.round(earlier.length ? Math.max(...earlier) : bestRecent),
+                    pct: tr.changePct,
+                    sessionsSincePeak: sincePeak, peakE1rm: Math.round(peak), lastE1rm: Math.round(all[0] ?? 0),
                     isOrm: ORM_IDS.has(pid) };
-    // A stall is no meaningful improvement (<1%) over the older sessions.
-    if (pct < 1) stalled.push(entry); else progressing.push(entry);
+    if (trend === 'gaining') progressing.push(entry);
+    else if (needsAttention(trend, phase)) stalled.push(entry);
+    else holding.push(entry);
   }
   stalled.sort((a,b) => a.pct - b.pct);
   progressing.sort((a,b) => b.pct - a.pct);
-  if (!stalled.length && !progressing.length) return null;
-  return { stalled, progressing, total: stalled.length + progressing.length };
+  holding.sort((a,b) => a.pct - b.pct);
+  if (!stalled.length && !progressing.length && !holding.length) return null;
+  return { stalled, progressing, holding, total: stalled.length + progressing.length + holding.length, phase };
 }
 
 
@@ -256,7 +276,9 @@ export function computeStrengthRetention(logs: SessionLog[], bwAt?: BwResolver |
       if (!ex.sets || !ex.sets.length) continue;
       const pid=ex.origId||ex.id;
       if (!ORM_IDS.has(pid)) continue;
-      const best=Math.max(...ex.sets.map(s=>epley(totalLoad(pid, s.weight, bwAt, l.date),s.reps||0)));
+      // Effort-adjusted: the RIR target falls through a block, so plain weight x reps would read
+      // later weeks as stronger even at the same strength.
+      const best=Math.max(...ex.sets.map(s=>setE1rm(pid, s, l, bwAt)));
       if (!best || !isFinite(best)) continue;
       const rec=(byEx[pid]=byEx[pid]||{name:ex.name,recent:0,prior:0});
       if (best>rec[win]) rec[win]=best;
@@ -265,7 +287,7 @@ export function computeStrengthRetention(logs: SessionLog[], bwAt?: BwResolver |
   const lifts: { name: string; pct: number; recent: number; prior: number }[] = [];
   for (const id in byEx) {
     const r=byEx[id];
-    if (r.recent>0 && r.prior>0) lifts.push({name:r.name, pct:+(((r.recent-r.prior)/r.prior)*100).toFixed(1), recent:Math.round(r.recent), prior:Math.round(r.prior)});
+    if (r && r.recent>0 && r.prior>0) lifts.push({name:r.name, pct:+(((r.recent-r.prior)/r.prior)*100).toFixed(1), recent:Math.round(r.recent), prior:Math.round(r.prior)});
   }
   if (!lifts.length) return null;
   const avgPct=+(lifts.reduce((a,l)=>a+l.pct,0)/lifts.length).toFixed(1);
@@ -281,31 +303,30 @@ export function computeDeloadRebound(logs: SessionLog[], bwAt?: BwResolver | nul
   const isDeloadLog = (l: SessionLog) => l.deload === true || (l.deload == null && DLW.has(l.week));
   const deloadWeeks: Record<string, { block: number; week: number }> = {};
   for (const l of logs) { if (isDeloadLog(l)) { const k=(l.block||1)+'-'+l.week; deloadWeeks[k]={block:l.block||1, week:l.week}; } }
-  // Best e1RM per LIFT (keyed by slot id), not one global maximum. Comparing a global max
-  // before against a global max after could pair a pre-deload RDL with a post-deload leg press
-  // and call the difference "rebound". Pairing by lift measures the same movement either side.
+  // Best effort-adjusted e1RM per LIFT (keyed by slot id), so the same movement is compared either
+  // side of the deload, and a lower RIR the week after can't masquerade as a rebound.
   const bestByEx = (arr: SessionLog[]) => {
     const m: Record<string, number> = {};
     for (const l of arr) for (const ex of (l.exercises||[])) {
       if (!ex.sets || !ex.sets.length) continue;
       const pid=ex.origId||ex.id;
       if (!ORM_IDS.has(pid)) continue;
-      const e=Math.max(...ex.sets.map(s=>epley(totalLoad(pid, s.weight, bwAt, l.date),s.reps||0)));
-      if (!(pid in m) || e>m[pid]) m[pid]=e;
+      const e=Math.max(...ex.sets.map(s=>setE1rm(pid, s, l, bwAt)));
+      if (!(pid in m) || e>(m[pid] ?? 0)) m[pid]=e;
     }
     return m;
   };
   const out: { block: number; week: number; pct: number; lifts: number }[] = [];
   for (const k in deloadWeeks) {
-    const { block, week } = deloadWeeks[k];
+    const dw = deloadWeeks[k];
+    if (!dw) continue;
+    const { block, week } = dw;
     const before = logs.filter(l => (l.block||1)===block && l.week===week-1 && !isDeloadLog(l));
     const after  = logs.filter(l => (l.block||1)===block && l.week===week+1 && !isDeloadLog(l));
     if (!before.length || !after.length) continue;
     const B=bestByEx(before), A=bestByEx(after);
-    // One paired % delta per lift present on BOTH sides, then average those — so a lift missing
-    // from either week is simply skipped rather than distorting the comparison.
     const deltas: number[] = [];
-    for (const pid in A) { if (B[pid]>0) deltas.push(((A[pid]-B[pid])/B[pid])*100); }
+    for (const pid in A) { const b = B[pid], a = A[pid]; if (b && b>0 && a) deltas.push(((a-b)/b)*100); }
     if (!deltas.length) continue;
     const pct = deltas.reduce((s,d)=>s+d,0)/deltas.length;
     out.push({ block, week, pct:+pct.toFixed(1), lifts:deltas.length });

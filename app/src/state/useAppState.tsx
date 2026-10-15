@@ -14,9 +14,10 @@ import { computeDeloadReadiness, computeReadiness } from '../lib/readiness';
 import { computeActualVolume, computeBurnCheck, computeDeloadRebound, computeDurations, computePainTrend, computeRirDrift, computeStalls, computeStrengthRetention, computeTrainingLoad, sessionPerformed } from '../lib/sessions';
 import { IDB, LS } from '../lib/storage';
 import { ensureIds, legacyId, live, mergeByKey, mergeLogs, newId, pruneTombstones, tombstoneWhere } from '../lib/sync';
-import { calcPlates, calcWarmups, dailyMedianWeights, epley, exMuscle, getPrevHist, getProgRec, getTarget, makeBwResolver, totalLoad, weekMuscleVolume, weeklyVolumeSeries } from '../lib/training';
+import { calcPlates, calcWarmups, dailyMedianWeights, exMuscle, getPrevHist, getProgRec, getTarget, makeBwResolver, totalLoad, weekMuscleVolume, weeklyVolumeSeries } from '../lib/training';
 import { mergeHistory, parseWhoopCycles, parseWhoopHistory, parseWhoopSleeps, parseWhoopWorkouts } from '../lib/whoop';
 import type { ActiveTarget, BPReading, BloodForm, BloodPanel, BodyMetric, CardioEntry, CheckinPhoto, ContextEntry, GlucoseReading, Measurement, NutritionEntry, ProtocolEntry, SessionLog, SetEntry, SubstituteEntry, VitalsEntry, WhoopDay, WhoopWorkout } from '../types';
+import { e1rmSet } from '../lib/strength';
 
 export function useAppState() {
 
@@ -1651,7 +1652,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const autoReg = useMemo(() => {
     const muscleEx = {};
     for (const id in EX_MUSCLE) { const p = EX_MUSCLE[id].p; (muscleEx[p] = muscleEx[p] || []).push(id); }
-    const top = ss => (ss && ss.length) ? Math.max(...ss.map(s => epley(s.weight||0, s.reps||0))) : 0;
+    const top = ss => (ss && ss.length) ? Math.max(...ss.map(s => e1rmSet(s.weight||0, s))) : 0;
     const out = {};
     for (const mus in MUSCLES) {
       let score = 0, dataN = 0;
@@ -2024,12 +2025,12 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     // to match stalls / retention / recovery-perf, which all use totalLoad. eid is the effective
     // movement: a swap to a non-bodyweight lift is not in BW_LOADED, so it scores on raw load.
     const _today = new Date().toISOString();
-    const e1 = (s) => epley(totalLoad(eid, s.weight, bwAt, _today), s.reps);
+    const e1 = (s) => e1rmSet(totalLoad(eid, s.weight, bwAt, _today), s);
     const best=sets.reduce((a,s)=> e1(s) > e1(a) ? s : a, sets[0]);
     return {name:(mapped&&mapped.name)||ex.name, orm:e1(best)};
   }).filter(Boolean):[];
   const progHist=progEx?getPrevHist(progEx,logs,20):[];
-  const _metricVal=(sets, dateStr)=>{ if(!sets||!sets.length) return 0; if(progMetric==='weight') return Math.max(...sets.map(s=>s.weight||0)); if(progMetric==='volume') return sets.reduce((a,s)=>a+(s.weight||0)*(s.reps||0),0); return Math.max(...sets.map(s=>epley(totalLoad(progEx, s.weight, bwAt, dateStr), s.reps||0))); };
+  const _metricVal=(sets, dateStr)=>{ if(!sets||!sets.length) return 0; if(progMetric==='weight') return Math.max(...sets.map(s=>s.weight||0)); if(progMetric==='volume') return sets.reduce((a,s)=>a+(s.weight||0)*(s.reps||0),0); return Math.max(...sets.map(s=>e1rmSet(totalLoad(progEx, s.weight, bwAt, dateStr), s))); };
   const progChartData=progHist.slice().reverse().map(h=>({x:fmtShort(h.date),y:Math.round(_metricVal(h.sets, h.date)),t:new Date(h.date).getTime()}));
   const prWeight=progChartData.length?Math.max(...progChartData.map(d=>d.y)):0;
   const lastWeight=progChartData.length?progChartData[progChartData.length-1].y:0;
@@ -2048,7 +2049,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
           if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) continue;
           const pid = ex.origId || ex.id;
           let best = 0;
-          for (const s of ex.sets) { if (!s || !(s.reps > 0)) continue; const e = epley(totalLoad(pid, s.weight, bwAt, l.date), s.reps); if (e > best) best = e; }
+          for (const s of ex.sets) { if (!s || !(s.reps > 0)) continue; const e = e1rmSet(totalLoad(pid, s.weight, bwAt, l.date), s); if (e > best) best = e; }
           if (best <= 0) continue;
           const key = ex.name || pid;
           const rec = byName[key] || { name: key, bestE1RM: 0, sessions: 0, lastDate: null };
@@ -2306,7 +2307,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     };
   }, [nutriCoach, bodyMetrics]);
 
-  const stalls=useMemo(()=>computeStalls(logs,3,bwAt),[logs,bwAt]);
+  const stalls=useMemo(()=>computeStalls(logs, 3, bwAt, effPhase),[logs,bwAt, effPhase]);
   // Single source of truth for stalls. The Program card previously used its own detector
   // (detectPlateaus) with different rules — deloads included, ORM-only, 4-session minimum —
   // which could contradict the Progress card about the same lift. Both now read computeStalls.

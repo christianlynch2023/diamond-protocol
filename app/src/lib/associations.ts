@@ -1,7 +1,8 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
 import { DLW } from '../data/programme';
-import { epley, totalLoad } from './training';
+import { totalLoad } from './training';
 import type { BwResolver, ContextEntry, PerfRow, SessionLog, WhoopDay } from '../types';
+import { e1rmSet } from './strength';
 
 // Does training on low recovery actually cost performance? Splits sessions by the WHOOP
 // recovery recorded that day and compares mean e1RM per lift, normalised so lifts with big
@@ -145,7 +146,7 @@ export function perfRows(logs: SessionLog[] | null | undefined, bucketFn: (l: Se
     for (const ex of (l.exercises||[])) {
       if (!ex || !Array.isArray(ex.sets) || !ex.sets.length) continue;
       const pid = ex.origId||ex.id;
-      const best = Math.max(...ex.sets.map(s => epley(totalLoad(pid, s.weight, bwAt, l.date), s.reps||0)));
+      const best = Math.max(...ex.sets.map(s => e1rmSet(totalLoad(pid, s.weight, bwAt, l.date), s)));
       if (!best || !isFinite(best)) continue;
       rows.push({ pid, e1rm: best, bucket, sid: l.id || l.date, date: l.date });
     }

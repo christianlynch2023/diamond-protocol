@@ -8,8 +8,9 @@ import React, { useState } from 'react';
 import { useApp } from '../appContext';
 import { effWR, intBadge } from '../data/programme';
 import { fmt, fmtShort } from '../lib/format';
-import { epley, totalLoad, volLoad } from '../lib/training';
+import { totalLoad, volLoad } from '../lib/training';
 import { restLeft, setRows } from '../lib/workout';
+import { e1rmEffort } from '../lib/strength';
 
 export default function WorkoutView() {
   const {
@@ -126,7 +127,7 @@ export default function WorkoutView() {
             </div>
           </div>
           {curEx.orm && parseInt(rp) > 0 && parseFloat(wt) > 0 && (
-            <div className="td2-meta">Estimated 1RM for this set: <b className="wo2-orm">{epley(totalLoad(curEx.id, parseFloat(wt), bwAt, new Date().toISOString()), parseInt(rp))} kg</b></div>
+            <div className="td2-meta">Estimated 1RM for this set: <b className="wo2-orm">{e1rmEffort(totalLoad(curEx.id, parseFloat(wt), bwAt, new Date().toISOString()), parseInt(rp), rir)} kg</b></div>
           )}
         </div>
 

@@ -13,3 +13,5 @@ import './fuel.test';
 import './workout.test';
 import './body.test';
 import './contrast.test';
+import './strength.test';
+import './analytics-accuracy.test';
