@@ -10,6 +10,7 @@ import { dayRecord, kcalOf, logToDay, weekView } from '../lib/fuel';
 import type { DayTarget, NutLike } from '../lib/fuel';
 import { isTrainingDay, localDateStr } from '../lib/today';
 import { Button, Card, Eyebrow, Segmented } from '../components/ui';
+import NutritionDetail from '../components/NutritionDetail';
 
 const makeId = (): string => {
   try { if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID(); } catch (_) { /* fall through */ }
@@ -164,6 +165,9 @@ export default function MealsView() {
             )}
             <div className="td2-meta">A locked target replaces your meal plan's numbers everywhere in the app until you lock a new one.</div>
           </Card>
+
+          <div className="nd2-head"><span className="hm-ttl">Log, targets and hydration</span></div>
+          <NutritionDetail />
 
           <div className="ar-card">
             <div className="hm-head"><span className="hm-ttl">Where you are</span><span className="hm-wk">goal {P.goalKg}kg</span></div>
