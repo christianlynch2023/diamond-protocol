@@ -40,6 +40,15 @@ describe('fuel: logging food', () => {
     const prev: NutLike[] = [{ id: 'a', date: '2026-10-15', calories: 1200 }];
     assert.equal(dayRecord(logToDay(prev, '2026-10-15', { p: 25, c: 0, f: 0 }, 'add', NOW, makeId), '2026-10-15')?.calories, 1300);
   });
+  it('logs or corrects a past day without touching today', () => {
+    const prev: NutLike[] = [{ id: 't', date: '2026-10-15', protein: 100, carbs: 50, fat: 20 }, { id: 'y', date: '2026-10-14', protein: 150, carbs: 90, fat: 40 }];
+    const added = logToDay(prev, '2026-10-14', { p: 30, c: 10, f: 5 }, 'add', NOW, makeId);
+    assert.deepEqual([dayRecord(added, '2026-10-14')?.protein, dayRecord(added, '2026-10-15')?.protein], [180, 100]);
+    assert.equal(dayRecord(added, '2026-10-14')?.id, 'y');
+    const fixed = logToDay(prev, '2026-10-12', { p: 190, c: 120, f: 60 }, 'set', NOW, makeId);
+    assert.equal(dayRecord(fixed, '2026-10-12')?.protein, 190);
+    assert.deepEqual(fixed.map(e => e.date), ['2026-10-15', '2026-10-14', '2026-10-12']);
+  });
   it('ignores an empty or negative entry and keeps newest-first order', () => {
     const prev: NutLike[] = [{ id: 'x', date: '2026-10-10', protein: 1 }];
     assert.deepEqual(logToDay(prev, '2026-10-15', { p: 0, c: 0, f: 0 }, 'add', NOW, makeId), prev);

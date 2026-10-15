@@ -1,6 +1,7 @@
-// Fuel tab (round 2, phase 4). Replaces the Meals screen; the file keeps its old name so nothing else moves.
-// Order: today's intake against target, the last seven days, the maintenance estimate and target in force,
-// then the meal plan exactly as before (where you are, plan, adjustment rules, habits).
+// Fuel tab. Everything nutrition lives here (round 2 phase 4, then the Body move and the Fuel tidy).
+// Order: today's intake (log or correct any day), daily targets and hydration, the last seven days,
+// maintenance estimate and lock, energy balance, protein trend, the full log, then the meal plan as before
+// (where you are, plan, adjustment rules, habits).
 // Targets follow the one rule used everywhere: a locked target, then the meal plan, then the live engine.
 import React, { useState } from 'react';
 import { useApp } from '../appContext';
@@ -10,7 +11,7 @@ import { dayRecord, kcalOf, logToDay, weekView } from '../lib/fuel';
 import type { DayTarget, NutLike } from '../lib/fuel';
 import { isTrainingDay, localDateStr } from '../lib/today';
 import { Button, Card, Eyebrow, Segmented } from '../components/ui';
-import NutritionDetail from '../components/NutritionDetail';
+import { FuelEnergy, FuelLog, FuelProtein, FuelTargets } from '../components/NutritionDetail';
 
 const makeId = (): string => {
   try { if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID(); } catch (_) { /* fall through */ }
@@ -25,6 +26,7 @@ export default function MealsView() {
   } = useApp();
   const [p, setP] = useState(''); const [c, setC] = useState(''); const [f, setF] = useState('');
   const [mode, setMode] = useState<'add' | 'set'>('add');
+  const [logDate, setLogDate] = useState('');
   const [open, setOpen] = useState(false);
 
   try {
@@ -49,9 +51,16 @@ export default function MealsView() {
     const save = () => {
       const g = { p: parseFloat(p) || 0, c: parseFloat(c) || 0, f: parseFloat(f) || 0 };
       if (g.p + g.c + g.f <= 0) return;
-      setNutrition(prev => logToDay(prev as NutLike[], todayStr, g, mode, Date.now(), makeId) as typeof prev);
-      setP(''); setC(''); setF(''); setOpen(false); setMode('add');
+      const day = logDate && logDate <= todayStr ? logDate : todayStr;
+      setNutrition(prev => logToDay(prev as NutLike[], day, g, mode, Date.now(), makeId) as typeof prev);
+      setP(''); setC(''); setF(''); setOpen(false); setMode('add'); setLogDate('');
     };
+    // Correcting a day starts from that day's saved totals.
+    const prefill = (date: string) => {
+      const r0 = dayRecord((nutrition || []) as NutLike[], date);
+      setP(r0 ? String(r0.protein || 0) : ''); setC(r0 ? String(r0.carbs || 0) : ''); setF(r0 ? String(r0.fat || 0) : '');
+    };
+    const pickDate = (d: string) => { const v = d && d <= todayStr ? d : todayStr; setLogDate(v); if (mode === 'set') prefill(v); };
     const bar = (label: string, have: number, want: number | undefined) => (
       <div className="fu-bar" key={label}>
         <span className="fu-bar-l">{label}</span>
@@ -112,12 +121,15 @@ export default function MealsView() {
             {bar('Fat', got.f, tToday?.fat)}
             {!open ? (
               <div className="td2-actions">
-                <Button kind="primary" icon="plus" onClick={() => { setMode('add'); setOpen(true); }}>Log food</Button>
-                <Button kind="ghost" onClick={() => { setMode('set'); setP(rec ? String(rec.protein || 0) : ''); setC(rec ? String(rec.carbs || 0) : ''); setF(rec ? String(rec.fat || 0) : ''); setOpen(true); }}>Correct today</Button>
+                <Button kind="primary" icon="plus" onClick={() => { setMode('add'); setLogDate(todayStr); setOpen(true); }}>Log food</Button>
+                <Button kind="ghost" onClick={() => { setMode('set'); setLogDate(todayStr); prefill(todayStr); setOpen(true); }}>Correct a day</Button>
               </div>
             ) : (
               <div className="fu-form">
-                <div className="td2-meta">{mode === 'add' ? 'Adds to today’s totals.' : 'Replaces today’s totals.'} Calories are worked out from the grams.</div>
+                <label className="fu-in fu-date"><span>Day</span>
+                  <input type="date" value={logDate || todayStr} max={todayStr} onChange={e => pickDate(e.target.value)} />
+                </label>
+                <div className="td2-meta">{mode === 'add' ? 'Adds to that day’s totals.' : 'Replaces that day’s totals.'} Calories are worked out from the grams.</div>
                 <div className="fu-inputs">
                   {[['Protein', p, setP], ['Carbs', c, setC], ['Fat', f, setF]].map(([l, v, set]) => (
                     <label key={l as string} className="fu-in"><span>{l as string} g</span>
@@ -127,11 +139,13 @@ export default function MealsView() {
                 </div>
                 <div className="td2-pair">
                   <Button kind="primary" onClick={save}>{mode === 'add' ? 'Add ' + kcalOf({ p: parseFloat(p) || 0, c: parseFloat(c) || 0, f: parseFloat(f) || 0 }) + ' kcal' : 'Save totals'}</Button>
-                  <Button kind="ghost" onClick={() => { setOpen(false); setP(''); setC(''); setF(''); }}>Cancel</Button>
+                  <Button kind="ghost" onClick={() => { setOpen(false); setP(''); setC(''); setF(''); setLogDate(''); }}>Cancel</Button>
                 </div>
               </div>
             )}
           </Card>
+
+          <FuelTargets />
 
           <Card>
             <div className="td2-cardhead"><Eyebrow>Last 7 days · intake against target</Eyebrow><span className="td2-meta">line = target</span></div>
@@ -166,8 +180,9 @@ export default function MealsView() {
             <div className="td2-meta">A locked target replaces your meal plan's numbers everywhere in the app until you lock a new one.</div>
           </Card>
 
-          <div className="nd2-head"><span className="hm-ttl">Log, targets and hydration</span></div>
-          <NutritionDetail />
+          <div className="nd2"><FuelEnergy /></div>
+          <div className="nd2"><FuelProtein /></div>
+          <div className="nd2"><FuelLog /></div>
 
           <div className="ar-card">
             <div className="hm-head"><span className="hm-ttl">Where you are</span><span className="hm-wk">goal {P.goalKg}kg</span></div>

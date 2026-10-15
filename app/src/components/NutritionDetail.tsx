@@ -1,18 +1,15 @@
-// Nutrition detail: moved from Body to Fuel (round 2 follow-up) so all nutrition lives in one place.
-// The code below is Body's former nutrition section, unchanged apart from dropping the target lock box and
-// maintenance line (both shown at the top of Fuel) and renaming "Smart targets".
+// Nutrition detail for Fuel, in four pieces Fuel places where they belong (Fuel tidy).
+// The JSX in each piece is the former Body nutrition code, carried over unchanged.
 import React from 'react';
 import { useApp } from '../appContext';
 import { SVGChart } from '../components/charts';
 import { fmtShort } from '../lib/format';
 
-export default function NutritionDetail() {
-  const { activeTarget, addNutrition, calStats, effTargets, goalPhase, hydration, mealPlan, mealSlot, nC, nDate, nF, nP, nutriCoach, nutriDayType, nutrition, openBodyEdit, protSeries, setMealSlot, setNC, setNDate, setNF, setNP, setNutriDayType, setNutrition, setShowAddNutri, setShowCalLog, showAddNutri, showCalLog, tombstone } = useApp();
+export function FuelTargets() {
+  const { activeTarget, effTargets, goalPhase, hydration, mealPlan, mealSlot, nutriCoach, nutriDayType, setMealSlot, setNutriDayType } = useApp();
   return (
-    <div className="nd2">
-            
-            <div className="body-sub">Daily macro totals — read them off your tracker and log them here to line fuel up with training</div>
-            <div className="nc">
+    <>
+      <div className="nc">
               <div className="nc-hd"><span className="nc-ttl">Daily targets and hydration</span>{nutriCoach.ok && <span className={'nc-conf '+nutriCoach.conf}>{nutriCoach.conf} confidence</span>}</div>
               {!nutriCoach.ok && nutriCoach.reason==='stale' && <div className="nc-note">Your most recent food/weight log is {nutriCoach.ageDays} days old, so these targets have expired. Log a few days of food and a weigh-in to recalculate.</div>}
               {!nutriCoach.ok && nutriCoach.reason==='stale_weight' && <div className="nc-note">Your most recent weigh-in is {nutriCoach.ageDays!=null?nutriCoach.ageDays+' days old':'missing'}, so targets can't be calculated from it. Log a fresh weigh-in.</div>}
@@ -143,7 +140,15 @@ export default function NutritionDetail() {
                 </div>
               )}
             </div>
-            {(nutriCoach.ok && nutriCoach.avgIntake!=null) ? (
+    </>
+  );
+}
+
+export function FuelEnergy() {
+  const { nutriCoach } = useApp();
+  return (
+    <>
+      {(nutriCoach.ok && nutriCoach.avgIntake!=null) ? (
               <div className="energy-bal">
                 <div className="eb-item"><div className="eb-v">{nutriCoach.avgIntake}</div><div className="eb-l">avg in</div></div>
                 <div className="eb-op">&#8722;</div>
@@ -152,49 +157,32 @@ export default function NutritionDetail() {
                 <div className="eb-item"><div className="eb-v" style={{color: (nutriCoach.avgIntake-nutriCoach.tdee)>=0?'var(--acc)':'var(--warn)'}}>{(nutriCoach.avgIntake-nutriCoach.tdee)>=0?'+':''}{nutriCoach.avgIntake-nutriCoach.tdee}</div><div className="eb-l">daily net</div></div>
               </div>
             ) : null}
-            {calStats && (
-              <div className="dash-cards">
-                <div className="dash-card">
-                  <div className="dc-lbl">7-day calories</div>
-                  <div className="dc-val">{calStats.avgCal}<span className="dc-u">kcal</span></div>
-                  <div className="dc-sub" style={{color: Math.abs(calStats.calDelta)<=100?'var(--t2)':calStats.calDelta<0?'var(--warn)':'var(--inf)'}}>
-                    {calStats.calDelta>=0?'+':''}{calStats.calDelta} vs {calStats.calTgt} weekly-avg target
-                  </div>
-                </div>
-                <div className="dash-card">
-                  <div className="dc-lbl">7-day protein</div>
-                  <div className="dc-val">{calStats.avgP}<span className="dc-u">g</span></div>
-                  <div className="dc-sub" style={{color: calStats.pDelta>=-10?'var(--ok)':'var(--warn)'}}>
-                    {calStats.pDelta>=0?'+':''}{calStats.pDelta} vs {calStats.pTgt}g target
-                  </div>
-                </div>
-              </div>
-            )}
-            {protSeries.length > 1 && (
+    </>
+  );
+}
+
+export function FuelProtein() {
+  const { nutrition, protSeries } = useApp();
+  return (
+    <>
+      {protSeries.length > 1 && (
               <div style={{marginBottom:10}}>
                 <div className="chart-lbl">Protein — last {Math.min(nutrition.length,21)} days (g)</div>
                 <SVGChart data={protSeries} height={110} color="#c4ff00"/>
               </div>
             )}
-            <button className="add-toggle" onClick={() => setShowAddNutri(v => !v)}>
-              <span>Log today's macros</span><span className="plus">{showAddNutri ? '\u2212' : '+'}</span>
-            </button>
-            {showAddNutri && (
-              <div className="body-form">
-                <div className="bf-row">
-                  <div className="bf-grp"><div className="bf-lbl">Protein (g)</div><input className="bf-in" type="number" inputMode="decimal" placeholder="0" value={nP} onChange={e => setNP(e.target.value)}/></div>
-                  <div className="bf-grp"><div className="bf-lbl">Carbs (g)</div><input className="bf-in" type="number" inputMode="decimal" placeholder="0" value={nC} onChange={e => setNC(e.target.value)}/></div>
-                  <div className="bf-grp"><div className="bf-lbl">Fat (g)</div><input className="bf-in" type="number" inputMode="decimal" placeholder="0" value={nF} onChange={e => setNF(e.target.value)}/></div>
-                </div>
-                {(nP || nC || nF) && <div className="cal-preview">= {Math.round((parseFloat(nP)||0)*4 + (parseFloat(nC)||0)*4 + (parseFloat(nF)||0)*9)} kcal</div>}
-                <div className="bf-grp"><div className="bf-lbl">Date</div><input className="bf-in" type="date" value={nDate} onChange={e=>setNDate(e.target.value)}/></div>
-                <button className="bf-save" onClick={addNutrition}>Save</button>
-              </div>
-            )}
-            <button className="add-toggle" onClick={()=>setShowCalLog(v=>!v)} style={{marginTop:8}}>
+    </>
+  );
+}
+
+export function FuelLog() {
+  const { nutrition, openBodyEdit, setNutrition, setShowCalLog, showCalLog, tombstone } = useApp();
+  return (
+    <>
+      <button className="add-toggle" onClick={()=>setShowCalLog(v=>!v)} style={{marginTop:8}}>
               <span>Full log ({nutrition.length})</span><span className="plus">{showCalLog?'−':'+'}</span>
             </button>
-            {showCalLog && <div className="body-list">
+      {showCalLog && <div className="body-list">
               {nutrition.slice(0, 21).map((n, i) => (
                 <div key={i} className="bl-row">
                   <span className="bl-date">{fmtShort(n.date)}</span>
@@ -206,6 +194,6 @@ export default function NutritionDetail() {
               ))}
               {nutrition.length === 0 && <div className="empty-msg">No macros logged yet.<br/>Log today's totals above.</div>}
             </div>}
-            </div>
+    </>
   );
 }
