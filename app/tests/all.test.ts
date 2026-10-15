@@ -18,3 +18,5 @@ import './analytics-accuracy.test';
 import './restore.test';
 import './logerror.test';
 import './errorreport.test';
+import './plates.test';
+import './equipment.test';

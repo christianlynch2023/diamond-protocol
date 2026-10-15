@@ -3,6 +3,7 @@ import React from 'react';
 import { useApp } from '../appContext';
 import { epley } from '../lib/training';
 import RestorePoints from '../components/RestorePoints';
+import EquipmentSettings from '../components/EquipmentSettings';
 
 export default function ToolsView() {
   const {
@@ -151,6 +152,7 @@ export default function ToolsView() {
               <button className="data-btn danger" onClick={() => setClearConfirm(true)}>Clear All Data</button>
             </div>
           <RestorePoints />
+          <EquipmentSettings />
             <div className="ver">Diamond Protocol v2.0 — data stored in localStorage</div>
           </div>
         </div>

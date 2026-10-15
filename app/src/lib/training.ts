@@ -219,12 +219,24 @@ export function getPrevHist(exId: string, logs: SessionLog[], limit = 3, exactOn
 }
 
 
-export function getIncrement(ex: { name?: string }): number {
+// Weight jumps per exercise. Your own setting (Settings > Tools and data > Weight jumps and equipment)
+// wins; otherwise the jump is guessed from the exercise name, as before.
+let INC_OVERRIDES: Record<string, number> = {};
+export function setIncrementOverrides(m: Record<string, number> | null | undefined): void {
+  const next: Record<string, number> = {};
+  for (const [k, v] of Object.entries(m || {})) if (typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= 50) next[k] = v;
+  INC_OVERRIDES = next;
+}
+export function getDefaultIncrement(ex: { name?: string }): number {
   const n = (ex.name || '').toLowerCase();
   if (n.includes('pull-up') || n.includes('chin')) return 1.25;
   if (n.includes('db ') || n.includes('dumbbell')) return 2;
   if (/(lateral|fly|crunch|curl|ext|raise|face pull|adductor|pulldown|cross)/.test(n)) return 1;
   return 2.5;
+}
+export function getIncrement(ex: { name?: string; id?: string }): number {
+  const own = ex.id ? INC_OVERRIDES[ex.id] : undefined;
+  return typeof own === 'number' ? own : getDefaultIncrement(ex);
 }
 
 export function getTarget(ex: ExerciseDef, logs: SessionLog[], week: number, phase: string, histId?: string, dl: boolean = (_deloadNow == null ? DLW.has(week) : _deloadNow)) {

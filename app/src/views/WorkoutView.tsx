@@ -8,9 +8,11 @@ import React, { useState } from 'react';
 import { useApp } from '../appContext';
 import { effWR, intBadge } from '../data/programme';
 import { fmt, fmtShort } from '../lib/format';
-import { totalLoad, volLoad } from '../lib/training';
-import { restLeft, setRows } from '../lib/workout';
+import { getIncrement, totalLoad, volLoad } from '../lib/training';
 import { e1rmEffort } from '../lib/strength';
+import { equipmentFor } from '../lib/equipment';
+import { guessKind, platesPerSide } from '../lib/plates';
+import { restLeft, setRows } from '../lib/workout';
 
 export default function WorkoutView() {
   const {
@@ -36,6 +38,11 @@ export default function WorkoutView() {
     const it = s.intensifier; setIntPartials(it && it.partialReps ? String(it.partialReps) : ''); setIntMyoStr(it && it.myoReps ? it.myoReps.join(',') : ''); setIntFail(!!(it && it.kind === 'failure'));
   };
   const left = restLeft(dashOff, CIRC);
+  // Your real weight jump for this exercise (Settings > Tools and data), and plates per side if it's plate-loaded.
+  const step = getIncrement(curEx);
+  const kit = equipmentFor(curEx.id);
+  const isPlates = (kit.kind || guessKind(curEx.name || '')) === 'plates';
+  const plates = isPlates ? platesPerSide(parseFloat(wt), kit.base || 0) : null;
 
   return (
     <div className="fullscreen wo2">
@@ -104,10 +111,12 @@ export default function WorkoutView() {
             <div className="inp-grp">
               <div className="inp-lbl">Weight kg</div>
               <div className="nw">
-                <button className="nb" aria-label="Less weight" onClick={() => setWt(v => Math.max(0, parseFloat(v || 0) - 2.5))}>&#8722;</button>
+                <button className="nb" aria-label="Less weight" onClick={() => setWt(v => Math.max(0, Math.round((parseFloat(v || 0) - step) * 100) / 100))}>&#8722;</button>
                 <input className="ni" type="number" inputMode="decimal" value={wt} onChange={e => setWt(e.target.value)} />
-                <button className="nb" aria-label="More weight" onClick={() => setWt(v => parseFloat(v || 0) + 2.5)}>+</button>
+                <button className="nb" aria-label="More weight" onClick={() => setWt(v => Math.round((parseFloat(v || 0) + step) * 100) / 100)}>+</button>
               </div>
+              {plates && <div className="wo2-plates">{plates.side.length ? 'Per side: ' + plates.side.join(' · ') : (kit.base ? 'Empty bar or sled' : '')}{plates.leftover ? ' (+' + plates.leftover + ' kg unmatched)' : ''}</div>}
+              <div className="wo2-step">± {step} kg</div>
             </div>
             <div className="inp-grp">
               <div className="inp-lbl">Reps</div>
