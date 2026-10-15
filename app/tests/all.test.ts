@@ -15,3 +15,6 @@ import './body.test';
 import './contrast.test';
 import './strength.test';
 import './analytics-accuracy.test';
+import './restore.test';
+import './logerror.test';
+import './errorreport.test';

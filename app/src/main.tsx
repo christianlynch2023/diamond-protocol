@@ -14,6 +14,10 @@ import './theme.css';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App, RootBoundary } from './App';
+import { installErrorReporting } from './lib/errorReport';
+
+// Report crashes outside the screen boundaries too (event handlers, timers, failed promises).
+installErrorReporting();
 
 createRoot(document.getElementById('root')).render(
   <RootBoundary>

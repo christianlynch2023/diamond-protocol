@@ -272,3 +272,13 @@ button, input, select, textarea { font-variant-numeric: tabular-nums; }
 .bn2-fuel button { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--acc); text-decoration: underline; cursor: pointer; }
 .nd2-head { margin-top: 8px; }
 .nd2 { display: flex; flex-direction: column; gap: 10px; }
+
+/* ---- Restore points (Settings > Tools and data) ---- */
+.rp2 { margin: 12px 15px; }
+.rp2-list { display: flex; flex-direction: column; border: 1px solid var(--bdr); border-radius: var(--r-tile); overflow: hidden; }
+.rp2-row { min-height: 48px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 0; border-top: 1px solid var(--line2); background: var(--sur); color: var(--t); font-family: var(--font-text); font-size: 15px; font-weight: 500; text-align: left; cursor: pointer; }
+.rp2-row:first-child { border-top: 0; }
+.rp2-row:disabled { opacity: .5; }
+.rp2-confirm { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-tile); border: 1px solid rgba(255, 90, 79, .45); background: rgba(255, 90, 79, .05); }
+.rp2-q { font-size: 15px; font-weight: 600; color: var(--t); }
+.rp2-msg { font-size: 13px; line-height: 18px; color: var(--t2); }

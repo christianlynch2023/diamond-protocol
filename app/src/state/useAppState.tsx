@@ -856,14 +856,9 @@ export function useAppState() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   };
 
-  const importData = () => {
-    const input=document.createElement('input'); input.type='file'; input.accept='.json';
-    input.onchange = e => {
-      const file=(e.target as HTMLInputElement).files[0]; if(!file)return;
-      const reader=new FileReader();
-      reader.onload = ev => {
-        try {
-          const data=JSON.parse(ev.target.result as string);
+  // Applies a parsed backup: a file the user picks, or a cloud restore point. Validates every record;
+// arrays missing from the backup are left untouched; bloods merge rather than replace.
+const applyBackup = (data: any) => {
           // Validate this is actually a Diamond backup BEFORE touching state — import replaces
           // the live arrays, so a random or malformed file would silently wipe good data.
           const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
@@ -925,6 +920,16 @@ export function useAppState() {
           const onlyBloods = bloodsMerged != null && Object.keys(data).filter(k => KNOWN.includes(k)).every(k => k === 'bloodsLog');
           const bldMsg = bloodsMerged != null ? `${bloodsMerged} blood panel${bloodsMerged===1?'':'s'} imported. Existing panels were kept.` : '';
           alert((onlyBloods ? bldMsg : `Restored ${importedLogs} sessions plus body, nutrition, BP, cardio and protocol history.` + (bldMsg ? '\n\n' + bldMsg : '')) + (rej ? `\n\nSkipped invalid or duplicate records: ${rej}.` : ''));
+};
+const importData = () => {
+    const input=document.createElement('input'); input.type='file'; input.accept='.json';
+    input.onchange = e => {
+      const file=(e.target as HTMLInputElement).files[0]; if(!file)return;
+      const reader=new FileReader();
+      reader.onload = ev => {
+        try {
+          const data=JSON.parse(ev.target.result as string);
+          applyBackup(data);
         } catch(err) { alert('Could not read file. Make sure it is a valid Diamond Protocol backup.'); }
       };
       reader.readAsText(file);
@@ -2597,7 +2602,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
-  return {
+  return { applyBackup,
     BODY_TYPES, BUILD_ID, CIRC, KEY_SITES, R, _metricLbl, _prLbl, _unit, acceptTarget, activeInts, activeTarget,
     actualVol, addBP, addBldRow, addBodyMetric, addCardio, addCheckin, addContext, addExercise, addGlucose,
     addMeasurement, addNutrition, addProtocol, addSet, alcoholImpact, allDone, analyseProgress, applySwap, autoReg,
