@@ -3,6 +3,7 @@
 // sled weight already included in what you log. The progression engine then adds your real jump, the
 // workout steppers move by it, and plate-loaded lifts show plates per side.
 import { useMemo, useState } from 'react';
+import { useApp } from '../appContext';
 import { ALL_EX } from '../data/programme';
 import { getDefaultIncrement } from '../lib/training';
 import { equipment, saveEquipment } from '../lib/equipment';
@@ -12,6 +13,7 @@ import type { EquipMap, Kind } from '../lib/plates';
 const KIND_LABEL: Record<Kind, string> = { stack: 'Stack', plates: 'Plates', dumbbells: 'Dumbbells', bodyweight: 'Bodyweight' };
 
 export default function EquipmentSettings() {
+  const { touchCfg } = useApp();
   const [open, setOpen] = useState(false);
   const [m, setM] = useState<EquipMap>(() => ({ ...equipment() }));
   const list = useMemo(() => {
@@ -27,6 +29,7 @@ export default function EquipmentSettings() {
     if (!Object.keys(cur).length) delete next[id];
     saveEquipment(next);
     setM({ ...equipment() });
+    touchCfg();   // marks settings as changed, so cloud sync carries them to your other devices
   };
   const custom = Object.keys(m).length;
 
@@ -64,7 +67,7 @@ export default function EquipmentSettings() {
               );
             })}
           </div>
-          <div className="td2-meta">Saved on this device as you type. Blank means the default shown.</div>
+          <div className="td2-meta">Saved as you type and synced with your settings. Blank means the default shown.</div>
         </>
       )}
     </div>

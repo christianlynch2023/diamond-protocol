@@ -18,6 +18,7 @@ import { calcPlates, calcWarmups, dailyMedianWeights, exMuscle, getPrevHist, get
 import { mergeHistory, parseWhoopCycles, parseWhoopHistory, parseWhoopSleeps, parseWhoopWorkouts } from '../lib/whoop';
 import type { ActiveTarget, BPReading, BloodForm, BloodPanel, BodyMetric, CardioEntry, CheckinPhoto, ContextEntry, GlucoseReading, Measurement, NutritionEntry, ProtocolEntry, SessionLog, SetEntry, SubstituteEntry, VitalsEntry, WhoopDay, WhoopWorkout } from '../types';
 import { e1rmSet } from '../lib/strength';
+import { adoptEquipment, equipmentForSync } from '../lib/equipment';
 
 export function useAppState() {
 
@@ -797,7 +798,7 @@ export function useAppState() {
   };
 
   const exportData = () => {
-    const data={version:'2.4',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase},activeTarget,bodyMetrics,measurements,checkins:checkins.map(c=>({...c,img:imgOf(c)})),nutrition,cardioLog,bpLog,glucoseLog,protocolLog,contextLog,vitalsLog,bloodsLog,whoopHistory,whoopWorkouts,deloadSkips};
+    const data={version:'2.4',exported:new Date().toISOString(),logs,config:{week,recovery,block,highVol,phase:goalPhase, equipment: equipmentForSync()},activeTarget,bodyMetrics,measurements,checkins:checkins.map(c=>({...c,img:imgOf(c)})),nutrition,cardioLog,bpLog,glucoseLog,protocolLog,contextLog,vitalsLog,bloodsLog,whoopHistory,whoopWorkouts,deloadSkips};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`diamond-${new Date().toISOString().split('T')[0]}.json`;
@@ -914,7 +915,7 @@ const applyBackup = (data: any) => {
           if (Array.isArray(data.whoopHistory)) setWhoopHistory(clean('whoop history', data.whoopHistory));
           if (Array.isArray(data.whoopWorkouts)) setWhoopWorkouts(clean('whoop workouts', data.whoopWorkouts));
           if (data.deloadSkips && typeof data.deloadSkips==='object' && !Array.isArray(data.deloadSkips)) setDeloadSkips(data.deloadSkips);
-          if (data.config) { if(data.config.week!=null)setWeek(data.config.week); if(data.config.recovery!=null)setRecovery(data.config.recovery); if(data.config.block!=null)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase!=null)setGoalPhase(data.config.phase); touchCfg(); }  // explicit user restore = a config edit
+          if (data.config) { if (data.config.equipment != null) adoptEquipment(data.config.equipment); if(data.config.week!=null)setWeek(data.config.week); if(data.config.recovery!=null)setRecovery(data.config.recovery); if(data.config.block!=null)setBlock(data.config.block); if(data.config.highVol!=null)setHighVol(data.config.highVol); if(data.config.phase!=null)setGoalPhase(data.config.phase); touchCfg(); }  // explicit user restore = a config edit
           if (data.activeTarget && Number.isFinite(data.activeTarget.cals)) setActiveTarget(data.activeTarget);   // restore the locked calorie target
           const rej = Object.entries(rejected).map(([k,v])=>`${v} ${k}`).join(', ');
           const onlyBloods = bloodsMerged != null && Object.keys(data).filter(k => KNOWN.includes(k)).every(k => k === 'bloodsLog');
@@ -1499,6 +1500,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         const cloudCfgAt = data.config && data.config.updatedAt != null ? data.config.updatedAt : 0;
         const cloudCfgNewer = !!data.config && cloudCfgAt > (cfgUpdatedAt || 0);
         if (cloudCfgNewer) {
+          if (data.config.equipment != null) adoptEquipment(data.config.equipment);
           if (data.config.week != null) setWeek(data.config.week);
           if (data.config.recovery != null) setRecovery(data.config.recovery);
           if (data.config.block != null) setBlock(data.config.block);
@@ -1514,7 +1516,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
         const mergedTarget = cloudTgtNewer ? data.activeTarget : activeTarget;
         if (cloudTgtNewer) setActiveTarget(data.activeTarget);
         // Push the merged superset back so the cloud gets any offline sessions too
-        const snapshot = JSON.stringify({ logs: mergedLogs, config: cloudCfgNewer ? { week: data.config.week, recovery: data.config.recovery, block: data.config.block, highVol: data.config.highVol, phase: data.config.phase, updatedAt: cloudCfgAt } : { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt||Date.now()) }, activeTarget: mergedTarget, bodyMetrics: pruneTombstones(mergedBody), protocolLog: pruneTombstones(mergedProt), measurements: pruneTombstones(mergedMeas), nutrition: pruneTombstones(mergedNutri), cardioLog: pruneTombstones(mergedCardio), bpLog: pruneTombstones(mergedBP), glucoseLog: pruneTombstones(mergedGl), contextLog: pruneTombstones(mergedCtx), vitalsLog: pruneTombstones(mergedVit), bloodsLog: pruneTombstones(mergedBld), whoopHistory: mergedWhoop, deloadSkips: mergedSkips, updatedAt: Date.now() });
+        const snapshot = JSON.stringify({ logs: mergedLogs, config: cloudCfgNewer ? { week: data.config.week, recovery: data.config.recovery, block: data.config.block, highVol: data.config.highVol, phase: data.config.phase, updatedAt: cloudCfgAt, equipment: equipmentForSync() } : { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt||Date.now()), equipment: equipmentForSync() }, activeTarget: mergedTarget, bodyMetrics: pruneTombstones(mergedBody), protocolLog: pruneTombstones(mergedProt), measurements: pruneTombstones(mergedMeas), nutrition: pruneTombstones(mergedNutri), cardioLog: pruneTombstones(mergedCardio), bpLog: pruneTombstones(mergedBP), glucoseLog: pruneTombstones(mergedGl), contextLog: pruneTombstones(mergedCtx), vitalsLog: pruneTombstones(mergedVit), bloodsLog: pruneTombstones(mergedBld), whoopHistory: mergedWhoop, deloadSkips: mergedSkips, updatedAt: Date.now() });
         // Must await and check: an un-awaited, unchecked POST let the UI report 'synced'
         // while the merged superset was never actually written to the cloud.
         try {
@@ -1534,7 +1536,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (!c) return;
     setCloudStatus('syncing');
     try {
-      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, activeTarget, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), vitalsLog: pruneTombstones(vitalsLogRaw), bloodsLog: pruneTombstones(bloodsLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
+      const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0), equipment: equipmentForSync() }, activeTarget, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), vitalsLog: pruneTombstones(vitalsLogRaw), bloodsLog: pruneTombstones(bloodsLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
       const r = await fetch('/.netlify/functions/sync-data', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-code': c }, body: snapshot });
       if (!r.ok) { setCloudStatus('error'); return; }
       setCloudStatus('synced');
@@ -1571,7 +1573,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     clearTimeout(syncTimer.current);
     if (!syncMounted.current) { syncMounted.current = true; return; }
     if (skipPush.current) { skipPush.current = false; return; }
-    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0) }, activeTarget, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), vitalsLog: pruneTombstones(vitalsLogRaw), bloodsLog: pruneTombstones(bloodsLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
+    const snapshot = JSON.stringify({ logs, config: { week, recovery, block, highVol, phase: goalPhase, updatedAt: (cfgUpdatedAt || 0), equipment: equipmentForSync() }, activeTarget, bodyMetrics: pruneTombstones(bodyMetricsRaw), protocolLog: pruneTombstones(protocolLogRaw), measurements: pruneTombstones(measurementsRaw), nutrition: pruneTombstones(nutritionRaw), cardioLog: pruneTombstones(cardioLogRaw), bpLog: pruneTombstones(bpLogRaw), glucoseLog: pruneTombstones(glucoseLogRaw), contextLog: pruneTombstones(contextLogRaw), vitalsLog: pruneTombstones(vitalsLogRaw), bloodsLog: pruneTombstones(bloodsLogRaw), whoopHistory, deloadSkips, updatedAt: Date.now() });
     syncTimer.current = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
@@ -2602,7 +2604,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
   const plateRes=calcPlates(plateTgt);
   const warmups=calcWarmups(warmWt);
 
-  return { applyBackup,
+  return { touchCfg, applyBackup,
     BODY_TYPES, BUILD_ID, CIRC, KEY_SITES, R, _metricLbl, _prLbl, _unit, acceptTarget, activeInts, activeTarget,
     actualVol, addBP, addBldRow, addBodyMetric, addCardio, addCheckin, addContext, addExercise, addGlucose,
     addMeasurement, addNutrition, addProtocol, addSet, alcoholImpact, allDone, analyseProgress, applySwap, autoReg,

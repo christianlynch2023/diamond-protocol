@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.app.json && tsc -p ../netlify/tsconfig.json && npm test && vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.app.json && tsc -p ../netlify/tsconfig.json",
-    "test": "tsx --test tests/all.test.ts"
+    "test": "tsx --test tests/all.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource/barlow": "^5.3.0",
@@ -17,6 +18,7 @@
     "react-dom": "18.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^5.2.0",
