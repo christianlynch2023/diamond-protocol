@@ -6,6 +6,7 @@ import { ALL_EX, MUSCLES } from '../data/programme';
 import { fmtShort } from '../lib/format';
 import { bpCategory } from '../lib/health';
 import WeeklyReview from '../components/WeeklyReview';
+import BlockReview from '../components/BlockReview';
 
 export default function ProgressView() {
   const {
@@ -43,6 +44,7 @@ export default function ProgressView() {
           })()}
           {/* Round 1: the On track strip was removed; it only repeated Week in review's green rows. */}
           <WeeklyReview />
+          <BlockReview />
           <div className="grp-head" onClick={()=>toggleGrp('strength')}><span className="grp-ttl">Strength</span><span className={'sec-chev'+(grpOpen('strength')?' op':'')}>▾</span></div>
           {grpOpen('strength') && <>
 

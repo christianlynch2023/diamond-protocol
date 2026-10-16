@@ -310,3 +310,12 @@ button, input, select, textarea { font-variant-numeric: tabular-nums; }
 .wr2-act { display: flex; gap: 10px; font-size: 14px; line-height: 20px; color: var(--t); }
 .wr2-act.miss { color: var(--t); }
 .wr2-n { flex: 0 0 22px; height: 22px; border-radius: 11px; background: var(--acc); color: #0a0c10; font-family: var(--font-fig); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+
+/* ---- Block review ---- */
+.br2-top { margin-top: 0; padding-top: 0; border-top: 0; }
+.br2-lifts { display: flex; flex-direction: column; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--bdr); }
+.br2-lift { display: grid; grid-template-columns: minmax(0, 1fr) auto 56px; gap: 8px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line2); }
+.br2-lift:first-of-type { border-top: 0; }
+.br2-n { font-size: 13px; color: var(--t); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br2-v { font-family: var(--font-fig); font-size: 14px; color: var(--t2); white-space: nowrap; }
+.br2-p { font-family: var(--font-fig); font-size: 14px; font-weight: 600; text-align: right; }
