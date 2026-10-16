@@ -1,7 +1,8 @@
 // Restore points in cloud sync: one dated copy per day, the latest 14 kept, erased with the snapshot.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSyncHandler, rpIndexKey, rpKey, syncKey, RESTORE_KEEP } from '../../netlify/lib/sync';
+import syncLib from '../../netlify/lib/sync';
+const { createSyncHandler, rpIndexKey, rpKey, syncKey, RESTORE_KEEP } = syncLib as typeof import('../../netlify/lib/sync');   // netlify/ is CommonJS: exports arrive on the default import
 import type { BlobStore } from '../../netlify/lib/sync';
 
 const CODE = 'test-code-1234';

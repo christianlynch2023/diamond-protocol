@@ -1,7 +1,8 @@
 // Error reporting: the log-error function keeps a short, scrubbed crash summary and nothing else.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createLogErrorHandler, MAX_BODY, scrub } from '../../netlify/lib/logerror';
+import logLib from '../../netlify/lib/logerror';
+const { createLogErrorHandler, MAX_BODY, scrub } = logLib as typeof import('../../netlify/lib/logerror');   // netlify/ is CommonJS: exports arrive on the default import
 
 const run = async (body: unknown, httpMethod = 'POST') => {
   const lines: string[] = [];

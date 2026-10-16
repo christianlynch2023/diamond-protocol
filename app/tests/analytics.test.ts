@@ -48,7 +48,8 @@ describe('analytics: deload rebound', () => {
     assert.equal(r.events.length, 1);
     const e = r.events[0];
     assert.deepEqual([e.block, e.week, e.lifts], [1, 4, 2]);        // the Progress row shows "+x% · 2 lifts"
-    assert.ok(Math.abs(e.pct - 4.8) < 0.11, `pct ${e.pct}`);
+    // Both lifts rose exactly 5% in load at the same reps and programmed effort, so the true rebound is 5.0%. (The old formula's whole-kilo rounding gave 4.8.)
+    assert.ok(Math.abs(e.pct - 5.0) < 0.11, `pct ${e.pct}`);
   });
 });
 
