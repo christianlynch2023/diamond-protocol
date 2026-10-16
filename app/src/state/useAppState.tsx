@@ -2591,7 +2591,7 @@ Write a concise end-of-block review in 3-4 short paragraphs. Cover: (1) what the
     if (stalls && stalls.total>0) {
       items.push({ k:'Stalled lifts', v:`${stalls.stalled.length} of ${stalls.total}`,
         verdict: stalls.stalled.length===0 ? 'good' : stalls.stalled.length<=2 ? 'ok' : 'miss',
-        note: stalls.stalled.length ? stalls.stalled.slice(0,2).map(s=>s.name).join(', ') : 'everything progressing' });
+        note: stalls.stalled.length ? stalls.stalled.slice(0,2).map(s=>s.name).join(', ') : 'none need attention' });
     }
 
     if (!items.length) return null;

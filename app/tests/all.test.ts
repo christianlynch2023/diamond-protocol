@@ -20,3 +20,4 @@ import './logerror.test';
 import './errorreport.test';
 import './plates.test';
 import './equipment.test';
+import './weekly.test';

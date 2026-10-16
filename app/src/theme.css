@@ -296,3 +296,17 @@ button, input, select, textarea { font-variant-numeric: tabular-nums; }
 .eq2-in input { width: 92px; min-height: 40px; border-radius: 10px; border: 1px solid #2a3442; background: var(--crd); color: var(--t); padding: 0 8px; font-family: var(--font-fig); font-size: 16px; font-weight: 600; box-sizing: border-box; }
 .wo2-plates { margin-top: 6px; font-family: var(--font-fig); font-size: 14px; color: var(--t); }
 .wo2-step { margin-top: 2px; font-size: 12px; color: var(--t2); }
+
+/* ---- Week in review (upgraded) ---- */
+.wr2-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; column-gap: 8px; row-gap: 2px; padding: 8px 0; border-top: 1px solid var(--bdr); align-items: baseline; }
+.wr2-row:first-of-type { border-top: 0; }
+.wr2-mark { font-weight: 800; font-size: 14px; }
+.wr2-k { font-size: 14px; font-weight: 600; color: var(--t); }
+.wr2-v { font-family: var(--font-fig); font-size: 15px; font-weight: 600; color: var(--t); text-align: right; white-space: nowrap; }
+.wr2-note { grid-column: 2 / 4; font-size: 12px; line-height: 16px; color: var(--t2); }
+.wr2-extra { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--bdr); font-size: 13px; line-height: 18px; color: var(--t2); }
+.wr2-extra b { color: var(--t); font-weight: 600; margin-right: 4px; }
+.wr2-focus { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding: 12px; border-radius: var(--r-tile); background: var(--sur); border: 1px solid var(--bdr); }
+.wr2-act { display: flex; gap: 10px; font-size: 14px; line-height: 20px; color: var(--t); }
+.wr2-act.miss { color: var(--t); }
+.wr2-n { flex: 0 0 22px; height: 22px; border-radius: 11px; background: var(--acc); color: #0a0c10; font-family: var(--font-fig); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }

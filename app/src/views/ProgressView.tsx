@@ -5,6 +5,7 @@ import { RecoveryFuelStrip, SVGBars, SVGChart, SVGScatter } from '../components/
 import { ALL_EX, MUSCLES } from '../data/programme';
 import { fmtShort } from '../lib/format';
 import { bpCategory } from '../lib/health';
+import WeeklyReview from '../components/WeeklyReview';
 
 export default function ProgressView() {
   const {
@@ -41,26 +42,7 @@ export default function ProgressView() {
             } catch(e) { return null; }
           })()}
           {/* Round 1: the On track strip was removed; it only repeated Week in review's green rows. */}
-          {weekReview && (
-            <div className="ar-card">
-              <div className="hm-head"><span className="hm-ttl">Week in review</span><span className="hm-wk">last 7 days</span></div>
-              {weekReview.items.map((it,i)=>(
-                <div key={i} className="wr-row">
-                  {/* Glyph as well as colour. A coloured dot alone fails for red-green
-                      deficiency (~8% of men) and in bright sunlight mid-session. */}
-                  <span className={'wr-dot '+it.verdict}>{it.verdict==='good'?'\u2713':it.verdict==='ok'?'!':'\u2715'}</span>
-                  <span className="wr-k">{it.k}</span>
-                  <span className="wr-v">{it.v}</span>
-                  <span className="wr-note">{it.note}</span>
-                </div>
-              ))}
-              <div className="av-note" style={{marginTop:10,marginBottom:0}}>
-                {weekReview.misses.length===0
-                  ? 'Nothing off-target this week. Hold the line.'
-                  : <>Attention: <b>{weekReview.misses.join(', ')}</b>. Fix the highest one first &#8212; the rest often follow.</>}
-              </div>
-            </div>
-          )}
+          <WeeklyReview />
           <div className="grp-head" onClick={()=>toggleGrp('strength')}><span className="grp-ttl">Strength</span><span className={'sec-chev'+(grpOpen('strength')?' op':'')}>▾</span></div>
           {grpOpen('strength') && <>
 
