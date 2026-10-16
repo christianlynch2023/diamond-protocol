@@ -1,6 +1,7 @@
 // Split out of App.jsx in Phase 2. Behaviour unchanged.
 import { DLW, EX_MUSCLE, _deloadNow } from '../data/programme';
 import type { BodyMetric, BwResolver, ExerciseDef, MuscleMap, ProgRec, SessionLog, SetEntry, SetPlanStep } from '../types';
+import { resetFromHistory } from './reset';
 
 export const epley = (w: number, r: number): number => r<=1 ? w : Math.round(w*(1+r/30));
 
@@ -254,6 +255,10 @@ export function getTarget(ex: ExerciseDef, logs: SessionLog[], week: number, pha
   if (dl) {
     return { weight: Math.round((topWeight * 0.85) / 2.5) * 2.5, reps: Math.round((ex.rMin + ex.rMax) / 2), note: 'Deload — keep several reps in reserve' };
   }
+  // Reset after repeated misses (agreed Oct 2026, lib/reset.ts): first set under the bottom of its range at
+  // the same load two sessions running -> drop 5-10% and rebuild, instead of "keep weight" indefinitely.
+  const reset = resetFromHistory(getPrevHist(_hid, logs, 2, true), ex, incr);
+  if (reset) return reset;
   if (phase === 'cut' && rec.type !== 'inc') {
     return { weight: topWeight, reps: ex.rMax, note: 'Cut — hold load, retain muscle' };
   }

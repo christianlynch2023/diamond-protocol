@@ -21,3 +21,5 @@ import './errorreport.test';
 import './plates.test';
 import './equipment.test';
 import './weekly.test';
+import './reset.test';
+import './reset-engine.test';
