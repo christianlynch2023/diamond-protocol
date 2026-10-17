@@ -1,4 +1,5 @@
 import BodySummary from '../components/BodySummary';
+import HealthWatch from '../components/HealthWatch';
 // BodyView: moved out of App.jsx in Phase 2b. Behaviour unchanged.
 import React from 'react';
 import { useApp } from '../appContext';
@@ -12,7 +13,7 @@ export default function BodyView() {
   const { KEY_SITES, addBP, addBldRow, addBodyMetric, addCardio, addCheckin, addContext, addGlucose, addMeasurement, addProtocol, analyseProgress, biomarkers, bldForm, bloodCompare, bloodMarkerIndex, bloodsLog, bodyDash, bodyMetrics, bpDate, bpDia, bpLog, bpPulse, bpSeries, bpStats, bpSys, bwRate, cDate, cMin, cNote, cType, cancelBloodPanel, cardioLog, cardioMins, cardioSessions, cardioTrend, chartEvents, checkins, ciAddPose, ciAnalysing, ciAnalysis, ciCompareA, ciCompareB, ciPose, clearVitalField, contextLog, ctxDate, ctxNote, ctxReasons, ctxTags, ctxUnits, decayModel, delBldRow, delCheckin, deleteBloodPanel, editBloodPanel, expandedSite, glDate, glSeries, glStats, glVal, glucoseLog, goalPhase, imgOf, latestBP, latestBySite, latestGl, mDate, mSite, mVal, mViewSite, measSeries, measurements, newWt, newWtNote, openBodyEdit, pCmp, pDate, pDose, pNote, pUnit, protocolLog, saveBloodPanel, saveTempBody, secOpen, setBldForm, setBodyMetrics, setBpDate, setBpDia, setBpLog, setBpPulse, setBpSys, setCDate, setCMin, setCNote, setCType, setCardioLog, setCiAddPose, setCiCompareA, setCiCompareB, setCiPose, setContextLog, setCtxDate, setCtxNote, setCtxTags, setCtxUnits, setExpandedSite, setGlDate, setGlVal, setGlucoseLog, setMDate, setMSite, setMVal, setMViewSite, setMeasurements, setNewWt, setNewWtNote, setPCmp, setPDate, setPDose, setPNote, setPUnit, setProtocolLog, setShowAddBP, setShowAddBody, setShowAddCardio, setShowAddCtx, setShowAddGl, setShowAddMeas, setShowAddProt, setShowAddTemp, setShowBpLog, setShowCtxLog, setShowGlLog, setShowTempLog, setShowWoodLog, setShowWtLog, setTDate, setTVal, setWDate, setWtDate, showAddBP, showAddBody, showAddCardio, showAddCtx, showAddGl, showAddMeas, showAddProt, showAddTemp, showBpLog, showCtxLog, showGlLog, showTempLog, showWoodLog, showWtLog, startBloodPanel, tDate, tVal, tempBand, tempChartSeries, tempLogList, toggleSec, tombstone, updBldRow, upsertVitalsDated, vitalsLog, wDate, whoopCardio, woodLogList, wtDate, setView } = useApp();
   return (
         <div className="screen">
-          <div className="topbar"><span className="logo">Body</span></div><BodySummary />
+          <div className="topbar"><span className="logo">Body</span></div><BodySummary /><HealthWatch />
 
           <div className="body-sec">
             <div className="sec-head" onClick={()=>toggleSec('weight')}><div className="body-ttl">Body Weight</div><span className={'sec-chev'+(secOpen('weight')?' op':'')}>▾</span></div>

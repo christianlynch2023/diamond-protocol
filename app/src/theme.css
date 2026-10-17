@@ -319,3 +319,23 @@ button, input, select, textarea { font-variant-numeric: tabular-nums; }
 .br2-n { font-size: 13px; color: var(--t); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .br2-v { font-family: var(--font-fig); font-size: 14px; color: var(--t2); white-space: nowrap; }
 .br2-p { font-family: var(--font-fig); font-size: 14px; font-weight: 600; text-align: right; }
+
+/* ---- Health watch (Body) ---- */
+.hw2 { margin: 10px 15px 4px; }
+.hw2-retest { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: var(--r-tile); background: var(--sur); border: 1px solid var(--bdr); font-size: 13px; line-height: 18px; color: var(--t2); }
+.hw2-retest b { color: var(--t); font-size: 14px; }
+.hw2-retest.due { border-color: rgba(255, 176, 32, .5); background: rgba(255, 176, 32, .06); }
+.hw2-retest.due b { color: var(--warn); }
+.hw2-inc { font-size: 12px; color: var(--t2); }
+.hw2-bp { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--t); }
+.hw2-list { display: flex; flex-direction: column; }
+.hw2-row { display: flex; flex-direction: column; gap: 3px; padding: 9px 0; border-top: 1px solid var(--line2); }
+.hw2-row:first-child { border-top: 0; }
+.hw2-line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: baseline; }
+.hw2-n { font-size: 14px; font-weight: 600; color: var(--t); }
+.hw2-v { font-family: var(--font-fig); font-size: 15px; font-weight: 600; color: var(--t); white-space: nowrap; }
+.hw2-t { color: var(--t2); }
+.hw2-s { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border: 1px solid; border-radius: 10px; white-space: nowrap; }
+.hw2-why { font-size: 12px; line-height: 17px; color: var(--t2); }
+.hw2-lv { color: var(--t2); opacity: .9; }
+.hw2-note { font-size: 11px; line-height: 15px; color: var(--t2); padding-top: 8px; border-top: 1px solid var(--bdr); }

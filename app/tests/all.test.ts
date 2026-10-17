@@ -24,3 +24,4 @@ import './weekly.test';
 import './reset.test';
 import './reset-engine.test';
 import './coach-block.test';
+import './healthwatch.test';
